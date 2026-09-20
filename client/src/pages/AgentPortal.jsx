@@ -478,13 +478,38 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     }
   }, [availableDatesList]);
 
-  // 3. Scroll Calendar Strip
+  // 3. Scroll Calendar Strip & Auto-center selected date in the middle
   const scrollCalendar = (direction) => {
     if (calendarScrollRef.current) {
       const scrollAmount = direction === 'left' ? -260 : 260;
       calendarScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
     }
   };
+
+  const centerSelectedDate = (targetDate) => {
+    const d = targetDate || onwardDate;
+    if (!calendarScrollRef.current || !d) return;
+    const container = calendarScrollRef.current;
+    const btn = container.querySelector(`[data-date="${d}"]`);
+    if (btn) {
+      const containerWidth = container.clientWidth;
+      const btnLeft = btn.offsetLeft;
+      const btnWidth = btn.clientWidth;
+      const scrollLeft = btnLeft - (containerWidth / 2) + (btnWidth / 2);
+      container.scrollTo({
+        left: Math.max(0, scrollLeft),
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // Automatically scroll selected date to the middle whenever onwardDate or availableDatesList changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      centerSelectedDate(onwardDate);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [onwardDate, availableDatesList]);
 
   // 4. Filtered Flights matching current search & sidebar filters
   const displayedFlights = useMemo(() => {
@@ -1780,7 +1805,7 @@ Please confirm availability and share status.`;
                   {/* Scrollable Date Tabs */}
                   <div 
                     ref={calendarScrollRef}
-                    className="flex-1 flex items-center overflow-x-auto scrollbar-none divide-x divide-slate-200"
+                    className="flex-1 flex items-center overflow-x-auto scrollbar-none py-1.5 px-2 space-x-1.5 scroll-smooth"
                   >
                     {availableDatesList.map(item => {
                       const isSelected = item.date === onwardDate;
@@ -1788,27 +1813,35 @@ Please confirm availability and share status.`;
                       return (
                         <button
                           key={item.date}
+                          data-date={item.date}
                           type="button"
-                          onClick={() => setOnwardDate(item.date)}
-                          className={`min-w-[110px] sm:min-w-[125px] py-2 px-2 text-center transition flex flex-col items-center justify-center cursor-pointer relative ${
+                          onClick={() => {
+                            setOnwardDate(item.date);
+                            centerSelectedDate(item.date);
+                          }}
+                          className={`min-w-[115px] sm:min-w-[130px] py-2 px-2 text-center transition-all duration-200 flex flex-col items-center justify-center cursor-pointer relative rounded-xl shrink-0 select-none ${
                             isSelected
-                              ? 'bg-orange-50/70 font-bold'
-                              : 'bg-white hover:bg-slate-50 text-slate-700'
+                              ? 'bg-gradient-to-b from-orange-500 via-orange-600 to-amber-600 text-white shadow-lg shadow-orange-500/40 ring-2 ring-orange-400 font-bold scale-[1.04] z-10'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 hover:border-slate-300 shadow-2xs'
                           }`}
                         >
-                          <span className={`text-[11px] leading-tight ${isSelected ? 'text-slate-900 font-extrabold' : 'text-slate-500 font-medium'}`}>
+                          <span className={`text-[10px] uppercase tracking-wider font-extrabold leading-tight ${isSelected ? 'text-orange-100' : 'text-slate-400'}`}>
                             {item.dayName}
                           </span>
-                          <span className={`text-xs font-black tracking-tight mt-0.5 ${isSelected ? 'text-orange-600' : 'text-slate-800'}`}>
+                          <span className={`text-xs font-black tracking-tight mt-0.5 ${isSelected ? 'text-white drop-shadow-xs' : 'text-slate-800'}`}>
                             {item.label}
                           </span>
-                          <span className={`text-[10px] font-extrabold mt-0.5 ${isSelected ? 'text-[#0b3b82]' : 'text-slate-400'}`}>
+                          <span className={`text-[10px] font-black mt-0.5 px-2.5 py-0.5 rounded-full ${
+                            isSelected 
+                              ? 'bg-white/25 text-white shadow-2xs border border-white/30' 
+                              : 'text-blue-900 bg-blue-50 font-bold'
+                          }`}>
                             {displayFare > 0 ? `₹${displayFare.toLocaleString('en-IN')}` : '--'}
                           </span>
 
-                          {/* Active Orange Underline Bar */}
+                          {/* Active Bottom Glow Pill */}
                           {isSelected && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-orange-600 rounded-t" />
+                            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-5 h-1 bg-amber-300 rounded-full shadow-xs" />
                           )}
                         </button>
                       );
