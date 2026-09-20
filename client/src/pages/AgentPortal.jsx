@@ -7,7 +7,7 @@ import {
   Lock, ArrowUpDown, ChevronLeft, ChevronRight, X, User,
   Menu, Share2, Mail, Users, CheckSquare,
   AlertCircle, Briefcase, Coffee, Info, ChevronDown, Loader2, Building2, MapPin,
-  Download, Upload, FileText, Ticket, Bell
+  Download, Upload, FileText, Ticket, Bell, XCircle
 } from 'lucide-react';
 import { api } from '../utils/api';
 
@@ -310,6 +310,10 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     );
     if (!confirmCancel) return;
 
+    const o = trackedBooking.origin || origin;
+    const d = trackedBooking.destination || destination;
+    const dt = trackedBooking.travel_date || onwardDate;
+
     try {
       setFareResponding(true);
       await api.respondToRevisedFare(trackedBooking.request_ref, 'DECLINE');
@@ -318,9 +322,16 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     } finally {
       setFareResponding(false);
       setShowTrackerModal(false);
-      if (trackedBooking.origin) setOrigin(trackedBooking.origin);
-      if (trackedBooking.destination) setDestination(trackedBooking.destination);
-      if (trackedBooking.travel_date) setOnwardDate(trackedBooking.travel_date);
+      setTrackedBooking(null);
+      lastPolledStatusRef.current = 'CANCELLED';
+      setActiveBookingRef(null);
+      setActiveBookingData(null);
+      try {
+        localStorage.removeItem('travelx_active_request_ref');
+      } catch (_) {}
+      if (o) setOrigin(o);
+      if (d) setDestination(d);
+      if (dt) setOnwardDate(dt);
       setHasSearched(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
