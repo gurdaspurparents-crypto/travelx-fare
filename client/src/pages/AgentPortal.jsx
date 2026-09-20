@@ -92,6 +92,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   const [searchInfants, setSearchInfants] = useState(0);
   const [travelClass, setTravelClass] = useState('Economy');
   const [hasSearched, setHasSearched] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Dropdown open states
   const [showOriginDropdown, setShowOriginDropdown] = useState(false);
@@ -207,7 +208,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   const calendarScrollRef = useRef(null);
 
   // 1. Fetch live data
-  const loadPortalData = async (isRetry = false) => {
+  const loadPortalData = async (isRetry = false, retryAttempt = 0) => {
     try {
       setLoading(true);
       setError(null);
@@ -225,21 +226,39 @@ export default function AgentPortal({ onSwitchToAdmin }) {
           }));
         }
       } else {
-        if (!isRetry) {
-          setTimeout(() => loadPortalData(true), 2000);
+        if (retryAttempt < 3) {
+          setTimeout(() => loadPortalData(true, retryAttempt + 1), 2000);
           return;
         }
-        setError('Server is warming up or busy. Please click Refresh below.');
+        setError('Server is warming up or busy. Please click "Reload Rates" below.');
       }
     } catch (err) {
       console.error('Error fetching public fares:', err);
-      if (!isRetry) {
-        setTimeout(() => loadPortalData(true), 2000);
+      if (retryAttempt < 3) {
+        setTimeout(() => loadPortalData(true, retryAttempt + 1), 2000);
         return;
       }
-      setError('Connection error. Please verify connection and click Refresh.');
+      setError('Connection error. Please verify connection and click "Reload Rates" below.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSearchSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setHasSearched(true);
+    setIsSearching(true);
+    try {
+      if (dailyFlights.length === 0) {
+        await loadPortalData(true);
+      }
+      if (onwardDate) {
+        centerSelectedDate(onwardDate);
+      }
+    } catch (err) {
+      console.error('Search submit error:', err);
+    } finally {
+      setTimeout(() => setIsSearching(false), 400);
     }
   };
 
@@ -333,6 +352,10 @@ export default function AgentPortal({ onSwitchToAdmin }) {
       if (d) setDestination(d);
       if (dt) setOnwardDate(dt);
       setHasSearched(true);
+      if (dailyFlights.length === 0) {
+        loadPortalData(true);
+      }
+      setTimeout(() => centerSelectedDate(dt), 150);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -1683,11 +1706,21 @@ Please confirm availability and share status.`;
               <div className="md:col-span-1">
                 <button
                   type="button"
-                  onClick={() => setHasSearched(true)}
-                  className="w-full h-14 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center space-x-1.5 transition-all cursor-pointer active:scale-98"
+                  onClick={handleSearchSubmit}
+                  disabled={isSearching}
+                  className="w-full h-14 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center space-x-1.5 transition-all cursor-pointer active:scale-98 disabled:opacity-80"
                 >
-                  <Search className="w-4 h-4" />
-                  <span className="hidden sm:inline">Search</span>
+                  {isSearching ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="hidden sm:inline">Searching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      <span className="hidden sm:inline">Search</span>
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -1709,6 +1742,9 @@ Please confirm availability and share status.`;
                     setOrigin(s.origin);
                     setDestination(s.dest);
                     setHasSearched(true);
+                    if (dailyFlights.length === 0) {
+                      loadPortalData(true);
+                    }
                   }}
                   className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer flex items-center space-x-2 border ${
                     isSelected
@@ -1990,47 +2026,66 @@ Please confirm availability and share status.`;
                   {/* Scrollable Date Tabs */}
                   <div 
                     ref={calendarScrollRef}
-                    className="flex-1 flex items-center overflow-x-auto scrollbar-none py-1.5 px-2 space-x-1.5 scroll-smooth"
+                    className="flex-1 flex items-center overflow-x-auto scrollbar-none py-1.5 px-2 space-x-1.5 scroll-smooth min-h-[58px]"
                   >
-                    {availableDatesList.map(item => {
-                      const isSelected = item.date === onwardDate;
-                      const displayFare = getDisplayPrice(item.minFare);
-                      return (
+                    {loading && availableDatesList.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center py-2 text-xs text-slate-500 font-bold space-x-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                        <span>Loading live flight dates for {origin} ➔ {destination}...</span>
+                      </div>
+                    ) : availableDatesList.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center py-2 px-3 text-xs text-slate-600 font-bold space-x-3 flex-wrap gap-2">
+                        <span>No flight dates loaded yet for {origin} ➔ {destination}</span>
                         <button
-                          key={item.date}
-                          data-date={item.date}
                           type="button"
-                          onClick={() => {
-                            setOnwardDate(item.date);
-                            centerSelectedDate(item.date);
-                          }}
-                          className={`min-w-[115px] sm:min-w-[130px] py-2 px-2 text-center transition-all duration-200 flex flex-col items-center justify-center cursor-pointer relative rounded-xl shrink-0 select-none ${
-                            isSelected
-                              ? 'bg-gradient-to-b from-orange-500 via-orange-600 to-amber-600 text-white shadow-lg shadow-orange-500/40 ring-2 ring-orange-400 font-bold scale-[1.04] z-10'
-                              : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 hover:border-slate-300 shadow-2xs'
-                          }`}
+                          onClick={() => loadPortalData(true)}
+                          className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-lg text-xs font-black flex items-center space-x-1.5 cursor-pointer shadow-xs transition active:scale-95"
                         >
-                          <span className={`text-[10px] uppercase tracking-wider font-extrabold leading-tight ${isSelected ? 'text-orange-100' : 'text-slate-400'}`}>
-                            {item.dayName}
-                          </span>
-                          <span className={`text-xs font-black tracking-tight mt-0.5 ${isSelected ? 'text-white drop-shadow-xs' : 'text-slate-800'}`}>
-                            {item.label}
-                          </span>
-                          <span className={`text-[10px] font-black mt-0.5 px-2.5 py-0.5 rounded-full ${
-                            isSelected 
-                              ? 'bg-white/25 text-white shadow-2xs border border-white/30' 
-                              : 'text-blue-900 bg-blue-50 font-bold'
-                          }`}>
-                            {displayFare > 0 ? `₹${displayFare.toLocaleString('en-IN')}` : '--'}
-                          </span>
-
-                          {/* Active Bottom Glow Pill */}
-                          {isSelected && (
-                            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-5 h-1 bg-amber-300 rounded-full shadow-xs" />
-                          )}
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Load Rates</span>
                         </button>
-                      );
-                    })}
+                      </div>
+                    ) : (
+                      availableDatesList.map(item => {
+                        const isSelected = item.date === onwardDate;
+                        const displayFare = getDisplayPrice(item.minFare);
+                        return (
+                          <button
+                            key={item.date}
+                            data-date={item.date}
+                            type="button"
+                            onClick={() => {
+                              setOnwardDate(item.date);
+                              centerSelectedDate(item.date);
+                            }}
+                            className={`min-w-[115px] sm:min-w-[130px] py-2 px-2 text-center transition-all duration-200 flex flex-col items-center justify-center cursor-pointer relative rounded-xl shrink-0 select-none ${
+                              isSelected
+                                ? 'bg-gradient-to-b from-orange-500 via-orange-600 to-amber-600 text-white shadow-lg shadow-orange-500/40 ring-2 ring-orange-400 font-bold scale-[1.04] z-10'
+                                : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 hover:border-slate-300 shadow-2xs'
+                            }`}
+                          >
+                            <span className={`text-[10px] uppercase tracking-wider font-extrabold leading-tight ${isSelected ? 'text-orange-100' : 'text-slate-400'}`}>
+                              {item.dayName}
+                            </span>
+                            <span className={`text-xs font-black tracking-tight mt-0.5 ${isSelected ? 'text-white drop-shadow-xs' : 'text-slate-800'}`}>
+                              {item.label}
+                            </span>
+                            <span className={`text-[10px] font-black mt-0.5 px-2.5 py-0.5 rounded-full ${
+                              isSelected 
+                                ? 'bg-white/25 text-white shadow-2xs border border-white/30' 
+                                : 'text-blue-900 bg-blue-50 font-bold'
+                            }`}>
+                              {displayFare > 0 ? `₹${displayFare.toLocaleString('en-IN')}` : '--'}
+                            </span>
+
+                            {/* Active Bottom Glow Pill */}
+                            {isSelected && (
+                              <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-5 h-1 bg-amber-300 rounded-full shadow-xs" />
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
 
                   {/* Right Arrow Button */}
@@ -2129,7 +2184,36 @@ Please confirm availability and share status.`;
               </div>
 
               {/* 3. FLIGHT RESULT CARDS LIST (Exact Match: Image 3) */}
-              {displayedFlights.length === 0 ? (
+              {dailyFlights.length === 0 ? (
+                <div className="bg-white rounded-b-lg border border-slate-200 p-8 text-center space-y-4">
+                  <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto border border-orange-200 shadow-2xs">
+                    {loading ? (
+                      <Loader2 className="w-7 h-7 text-orange-600 animate-spin" />
+                    ) : (
+                      <Plane className="w-7 h-7 text-orange-600 -rotate-45" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-black text-base text-slate-900">
+                      {loading ? 'Connecting to Live Flight Inventory...' : `No Flights Loaded for ${origin} ➔ ${destination}`}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      {loading 
+                        ? 'Fetching the latest guaranteed B2B seats and group rates...' 
+                        : 'Click the button below to fetch live B2B group inventory and rates.'}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => loadPortalData(true)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs rounded-xl shadow-md cursor-pointer transition active:scale-98 inline-flex items-center space-x-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    <span>{loading ? 'Refreshing Rates...' : 'Reload Live Rates Now'}</span>
+                  </button>
+                </div>
+              ) : displayedFlights.length === 0 ? (
                 <div className="bg-white rounded-b-lg border border-slate-200 p-8 text-center space-y-4">
                   <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-2xs">
                     <Plane className="w-7 h-7 text-amber-600 -rotate-45" />

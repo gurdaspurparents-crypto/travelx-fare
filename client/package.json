@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node -e \"const fs=require('fs'); if(fs.existsSync('dist/index.html') && !process.env.FORCE_BUILD){ console.log('✓ Using prebuilt client dist assets'); } else { require('child_process').execSync('vite build', {stdio:'inherit'}); }\"",
+    "build": "node ../build.js",
     "build:force": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

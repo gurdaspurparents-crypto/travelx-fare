@@ -5,7 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "build": "cd client && npm run build",
+    "build": "node build.js",
     "build:force": "cd client && npm run build:force",
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build",
@@ -25,8 +25,5 @@
     "express": "^4.21.2",
     "multer": "^2.4.0",
     "xlsx": "^0.18.5"
-  },
-  "engines": {
-    "node": ">=20.19.0"
   }
 }
