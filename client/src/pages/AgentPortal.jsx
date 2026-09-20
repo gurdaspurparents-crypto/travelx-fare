@@ -171,6 +171,14 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   const [selectedPassportFiles, setSelectedPassportFiles] = useState([]);
   const [passportUploading, setPassportUploading] = useState(false);
   const [passportUploadSuccess, setPassportUploadSuccess] = useState(false);
+  const [acceptedFares, setAcceptedFares] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('travelx_accepted_fares') || '{}');
+    } catch (_) {
+      return {};
+    }
+  });
+  const [fareResponding, setFareResponding] = useState(false);
 
   // Active Booking Reference for Background Response Polling & "Updates" Navbar Tab
   const [activeBookingRef, setActiveBookingRef] = useState(() => {
@@ -243,6 +251,59 @@ export default function AgentPortal({ onSwitchToAdmin }) {
       setTrackedBooking(null);
     } finally {
       setTrackLoading(false);
+    }
+  };
+
+  const isFareAccepted = useMemo(() => {
+    if (!trackedBooking) return false;
+    if (acceptedFares[trackedBooking.request_ref]) return true;
+    if (trackedBooking.admin_notes && trackedBooking.admin_notes.includes('Agent Accepted Revised Fare')) return true;
+    return false;
+  }, [trackedBooking, acceptedFares]);
+
+  const handleAcceptRevisedFare = async () => {
+    if (!trackedBooking) return;
+    try {
+      setFareResponding(true);
+      const res = await api.respondToRevisedFare(trackedBooking.request_ref, 'ACCEPT');
+      if (res && res.success) {
+        const next = { ...acceptedFares, [trackedBooking.request_ref]: true };
+        setAcceptedFares(next);
+        try {
+          localStorage.setItem('travelx_accepted_fares', JSON.stringify(next));
+        } catch (_) {}
+        await handleFetchTracking(trackedBooking.request_ref);
+      } else {
+        alert(res?.error || 'Failed to accept revised fare');
+      }
+    } catch (err) {
+      console.error('Error accepting fare:', err);
+      alert('Connection error');
+    } finally {
+      setFareResponding(false);
+    }
+  };
+
+  const handleDeclineAndNewSearch = async () => {
+    if (!trackedBooking) return;
+    const confirmCancel = window.confirm(
+      'Are you sure you want to decline this revised fare? The booking request will be cancelled and you will be returned to search alternate flights.'
+    );
+    if (!confirmCancel) return;
+
+    try {
+      setFareResponding(true);
+      await api.respondToRevisedFare(trackedBooking.request_ref, 'DECLINE');
+    } catch (err) {
+      console.error('Error declining fare:', err);
+    } finally {
+      setFareResponding(false);
+      setShowTrackerModal(false);
+      if (trackedBooking.origin) setOrigin(trackedBooking.origin);
+      if (trackedBooking.destination) setDestination(trackedBooking.destination);
+      if (trackedBooking.travel_date) setOnwardDate(trackedBooking.travel_date);
+      setHasSearched(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -3300,6 +3361,103 @@ Please confirm availability and share status.`;
                     </div>
                   )}
 
+                  {/* ───────────────────────────────────────────────────────── */}
+                  {/* PROMINENT FARE REVISED DECISION CARD                      */}
+                  {/* ───────────────────────────────────────────────────────── */}
+                  {trackedBooking.status === 'FARE_REVISED' && (
+                    <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/15 to-amber-500/10 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                      {/* Alert Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                            <AlertCircle className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                              ⚠️ Sorry, Airline Fare Changed!
+                            </h3>
+                            <p className="text-xs text-slate-600 font-medium mt-0.5">
+                              The airline / group inventory desk has updated the seat rate for this flight.
+                            </p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500 text-white shrink-0 shadow-2xs uppercase tracking-wider">
+                          Action Required
+                        </span>
+                      </div>
+
+                      {/* Side-by-Side Rates Comparison */}
+                      <div className="bg-white rounded-xl p-3 border border-amber-200/90 shadow-2xs grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center text-center">
+                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block leading-tight">Previous Quoted</span>
+                          <span className="text-base font-bold text-slate-400 line-through">
+                            ₹{Number(trackedBooking.quoted_rate).toLocaleString('en-IN')}/pax
+                          </span>
+                        </div>
+
+                        <div className="p-2.5 bg-gradient-to-b from-amber-50 to-orange-50 rounded-xl border-2 border-amber-400 ring-2 ring-amber-400/20 shadow-xs">
+                          <span className="text-[10px] font-black text-amber-800 uppercase block leading-tight">New Revised Rate</span>
+                          <span className="text-xl font-black text-orange-600">
+                            ₹{Number(trackedBooking.revised_fare).toLocaleString('en-IN')}<span className="text-xs font-bold text-slate-600">/pax</span>
+                          </span>
+                        </div>
+
+                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block leading-tight">Updated Total ({trackedBooking.pax_count} Pax)</span>
+                          <span className="text-lg font-black text-slate-900">
+                            ₹{Number(trackedBooking.total_amount || (trackedBooking.revised_fare * trackedBooking.pax_count)).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Decision Question & Action Buttons */}
+                      <div className="pt-2 border-t border-amber-200/70 space-y-2.5">
+                        <p className="text-xs font-black text-slate-800">
+                          Do you want to continue booking with this new revised rate?
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {/* YES BUTTON */}
+                          <button
+                            type="button"
+                            disabled={fareResponding}
+                            onClick={handleAcceptRevisedFare}
+                            className={`py-3 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-md active:scale-98 ${
+                              isFareAccepted
+                                ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-emerald-600/30'
+                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-600/25'
+                            }`}
+                          >
+                            {fareResponding ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4" />
+                            )}
+                            <span>{isFareAccepted ? '✓ Revised Fare Accepted' : `Yes, Continue with ₹${Number(trackedBooking.revised_fare).toLocaleString('en-IN')}`}</span>
+                          </button>
+
+                          {/* NO BUTTON */}
+                          <button
+                            type="button"
+                            disabled={fareResponding}
+                            onClick={handleDeclineAndNewSearch}
+                            className="py-3 px-4 rounded-xl font-black text-xs sm:text-sm bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 hover:border-slate-400 flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs active:scale-98"
+                          >
+                            <Search className="w-4 h-4 text-orange-600" />
+                            <span>No, Cancel & Search Again</span>
+                          </button>
+                        </div>
+
+                        {isFareAccepted && (
+                          <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-xl text-xs text-emerald-900 font-bold flex items-center space-x-2 animate-in fade-in duration-200">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                            <span>New fare accepted! Please proceed to Step 3 below to upload passenger passports.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* 4-Step Interactive Lifecycle Card */}
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
@@ -3407,8 +3565,16 @@ Please confirm availability and share status.`;
                           </div>
                         )}
 
-                        {/* Upload Dropzone (Enabled when Available or Revised or Docs) */}
-                        {['AVAILABLE', 'FARE_REVISED', 'DOCS_SUBMITTED'].includes(trackedBooking.status) && (
+                        {/* If Fare Revised and not yet accepted, pause passport upload with helpful prompt */}
+                        {trackedBooking.status === 'FARE_REVISED' && !isFareAccepted && (
+                          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center space-x-2 font-medium">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Passport submission will unlock once you accept the revised fare above.</span>
+                          </div>
+                        )}
+
+                        {/* Upload Dropzone (Enabled when Available, or Revised & Accepted, or Docs Submitted) */}
+                        {((trackedBooking.status === 'AVAILABLE') || (trackedBooking.status === 'FARE_REVISED' && isFareAccepted) || (trackedBooking.status === 'DOCS_SUBMITTED')) && (
                           <form onSubmit={handleUploadPassportsSubmit} className="space-y-2 pt-1">
                             <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-3 bg-white text-center cursor-pointer transition">
                               <input

@@ -46,6 +46,7 @@ app.post('/api/public/agent/register', bookingController.registerOrUpdateAgent);
 app.post('/api/public/bookings/create', bookingController.createBookingRequest);
 app.get('/api/public/bookings/track/:ref', bookingController.trackBooking);
 app.post('/api/public/bookings/:ref/passports', bookingController.uploadPassportsMiddleware, bookingController.uploadPassports);
+app.post('/api/public/bookings/:ref/fare-response', bookingController.respondToRevisedFare);
 app.get('/api/public/bookings/:ref/ticket-download', bookingController.downloadTicket);
 
 // Admin Booking Requests & B2B Agent Directory APIs

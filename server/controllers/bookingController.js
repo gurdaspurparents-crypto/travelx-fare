@@ -659,6 +659,55 @@ exports.trackBooking = (req, res) => {
 };
 
 /**
+ * Public: Agent Responds to Airline Fare Revision (Accept or Decline)
+ */
+exports.respondToRevisedFare = (req, res) => {
+  try {
+    const { ref } = req.params;
+    const { action } = req.body; // 'ACCEPT' | 'DECLINE'
+
+    if (!ref || !ref.trim()) {
+      return res.status(400).json({ success: false, error: 'Reference ID is required' });
+    }
+
+    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(request_ref) = UPPER(?)').get(ref.trim());
+    if (!booking) {
+      return res.status(404).json({ success: false, error: 'Booking reference not found' });
+    }
+
+    if (action === 'ACCEPT') {
+      const noteAppend = ` • [Agent Accepted Revised Fare ₹${Number(booking.revised_fare || booking.quoted_rate).toLocaleString('en-IN')}]`;
+      db.prepare(`
+        UPDATE booking_requests
+        SET admin_notes = COALESCE(admin_notes, '') || ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(noteAppend, booking.id);
+
+      const updated = db.prepare('SELECT * FROM booking_requests WHERE id = ?').get(booking.id);
+      return res.json({ success: true, message: 'Revised fare accepted by agent', action: 'ACCEPT', booking: updated });
+    } else if (action === 'DECLINE') {
+      const noteAppend = ` • [Agent Declined Revised Fare - Request Cancelled]`;
+      db.prepare(`
+        UPDATE booking_requests
+        SET status = 'CANCELLED',
+            admin_notes = COALESCE(admin_notes, '') || ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(noteAppend, booking.id);
+
+      const updated = db.prepare('SELECT * FROM booking_requests WHERE id = ?').get(booking.id);
+      return res.json({ success: true, message: 'Booking cancelled upon agent decline', action: 'DECLINE', booking: updated });
+    }
+
+    return res.status(400).json({ success: false, error: 'Invalid action. Expected ACCEPT or DECLINE.' });
+  } catch (err) {
+    console.error('Error responding to revised fare:', err);
+    return res.status(500).json({ success: false, error: 'Failed to record fare response' });
+  }
+};
+
+/**
  * Public: Agent Uploads Passenger Passports
  */
 exports.uploadPassports = (req, res) => {

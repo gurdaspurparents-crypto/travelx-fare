@@ -467,6 +467,14 @@ export const api = {
     });
     return res.json();
   },
+  respondToRevisedFare: async (ref, action) => {
+    const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}/fare-response`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    return res.json();
+  },
   uploadTicket: async (id, formData) => {
     const res = await fetch(`/api/bookings/${id}/ticket`, {
       method: 'POST',
