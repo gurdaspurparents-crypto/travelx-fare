@@ -453,8 +453,17 @@ exports.getBookingRequests = (req, res) => {
     const params = [];
 
     if (status && status !== 'ALL') {
-      query += ` AND b.status = ?`;
-      params.push(status.toUpperCase());
+      const upStatus = status.toUpperCase();
+      if (upStatus === 'CANCELLED') {
+        query += ` AND b.status IN ('CANCELLED', 'SOLD_OUT', 'FARE_DECLINED')`;
+      } else if (upStatus === 'AVAILABLE') {
+        query += ` AND b.status IN ('AVAILABLE', 'FARE_REVISED')`;
+      } else if (upStatus === 'DOCS_SUBMITTED') {
+        query += ` AND b.status IN ('DOCS_SUBMITTED', 'TICKET_PROCESSING')`;
+      } else {
+        query += ` AND b.status = ?`;
+        params.push(upStatus);
+      }
     }
 
     if (search && search.trim()) {
@@ -472,8 +481,11 @@ exports.getBookingRequests = (req, res) => {
     const totalCount = db.prepare('SELECT COUNT(*) as count FROM booking_requests').get().count;
     const pendingCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'PENDING'").get().count;
     const availableCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status IN ('AVAILABLE', 'FARE_REVISED')").get().count;
-    const docsSubmittedCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'DOCS_SUBMITTED'").get().count;
+    const docsSubmittedCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status IN ('DOCS_SUBMITTED', 'TICKET_PROCESSING')").get().count;
     const confirmedCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'CONFIRMED'").get().count;
+    const declinedCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'FARE_DECLINED'").get().count;
+    const fareAcceptedCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'FARE_ACCEPTED'").get().count;
+    const cancelledCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE status IN ('CANCELLED', 'SOLD_OUT', 'FARE_DECLINED')").get().count;
     const todayCount = db.prepare("SELECT COUNT(*) as count FROM booking_requests WHERE date(created_at) = date('now', 'localtime')").get().count;
 
     return res.json({
@@ -485,6 +497,9 @@ exports.getBookingRequests = (req, res) => {
         available: availableCount,
         docs_submitted: docsSubmittedCount,
         confirmed: confirmedCount,
+        declined: declinedCount,
+        fare_accepted: fareAcceptedCount,
+        cancelled: cancelledCount,
         today: todayCount
       }
     });
@@ -505,7 +520,7 @@ exports.updateBookingStatus = (req, res) => {
     const { id } = req.params;
     const { status, remarks, pnr_code, revised_fare, admin_notes } = req.body;
 
-    const validStatuses = ['PENDING', 'AVAILABLE', 'FARE_REVISED', 'FARE_ACCEPTED', 'FARE_DECLINED', 'SOLD_OUT', 'DOCS_SUBMITTED', 'TICKET_ISSUED', 'CONFIRMED', 'CONTACTED', 'CANCELLED'];
+    const validStatuses = ['PENDING', 'AVAILABLE', 'FARE_REVISED', 'FARE_ACCEPTED', 'FARE_DECLINED', 'SOLD_OUT', 'DOCS_SUBMITTED', 'TICKET_PROCESSING', 'TICKET_ISSUED', 'CONFIRMED', 'CONTACTED', 'CANCELLED'];
     if (status && !validStatuses.includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid status' });
     }

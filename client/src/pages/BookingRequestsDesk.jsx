@@ -20,7 +20,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   const [activeSubTab, setActiveSubTab] = useState('requests'); // 'requests' | 'directory'
   const [bookings, setBookings] = useState([]);
   const [agents, setAgents] = useState([]);
-  const [stats, setStats] = useState({ total: 0, pending: 0, available: 0, docs_submitted: 0, confirmed: 0, today: 0 });
+  const [stats, setStats] = useState({ total: 0, pending: 0, available: 0, docs_submitted: 0, confirmed: 0, declined: 0, fare_accepted: 0, cancelled: 0, today: 0 });
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -131,14 +131,14 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   };
 
   // Show native OS desktop notification (pops up on Windows even when browser is minimized!)
-  const showDesktopNotification = (b) => {
+  const showDesktopNotification = (b, customTitle = null, customBody = null) => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     
     if (Notification.permission === 'default') {
       Notification.requestPermission().then(perm => {
         if (perm === 'granted') {
           setDesktopNotifsEnabled(true);
-          showDesktopNotification(b);
+          showDesktopNotification(b, customTitle, customBody);
         }
       });
       return;
@@ -146,10 +146,13 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
 
     if (Notification.permission === 'granted') {
       try {
-        const notif = new Notification(`⚡ New Booking Query! #${b.request_ref}`, {
-          body: `${b.agency_name} • ${b.origin} ➔ ${b.destination} (${b.travel_date})\n${formatPaxBreakdown(b)} • Quoted: ₹${Number(b.quoted_rate).toLocaleString('en-IN')}\n👉 Click to review & reply now!`,
+        const notifTitle = customTitle || `⚡ New Booking Query! #${b.request_ref}`;
+        const notifBody = customBody || `${b.agency_name} • ${b.origin} ➔ ${b.destination} (${b.travel_date})\n${formatPaxBreakdown(b)} • Quoted: ₹${Number(b.quoted_rate).toLocaleString('en-IN')}\n👉 Click to review & reply now!`;
+
+        const notif = new Notification(notifTitle, {
+          body: notifBody,
           icon: '/favicon.ico',
-          tag: `booking-new-${b.id}`,
+          tag: `booking-${b.id}-${b.status}-${Date.now()}`,
           requireInteraction: true // Stays visible on Windows screen until clicked!
         });
 
@@ -157,7 +160,8 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
           window.focus();
           if (onSwitchToEnquiries) onSwitchToEnquiries();
           setActiveSubTab('requests');
-          handleOpenReviewModal(b);
+          if (b.status === 'PENDING') handleOpenReviewModal(b);
+          else if (b.status === 'DOCS_SUBMITTED') setViewingPassportsBooking(b);
           notif.close();
         };
       } catch (e) {
@@ -223,6 +227,38 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
     }
   };
 
+  // Play attention-grabbing alert chime when an agent declines revised fare
+  const playDeclineChime = () => {
+    if (!soundEnabled) return;
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const now = audioCtx.currentTime;
+
+      const playTone = (startTime, freq, duration) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, startTime);
+        gain.gain.setValueAtTime(0.3, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+
+      // 3-Tone Descending Warning Chime (Agent Declined)
+      playTone(now, 493.88, 0.22); // B4
+      playTone(now + 0.18, 392.00, 0.30); // G4
+      playTone(now + 0.42, 293.66, 0.45); // D4
+    } catch (e) {
+      console.warn('Audio play error:', e);
+    }
+  };
+
   const loadBookings = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
@@ -258,11 +294,47 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
           }
         }
 
-        // 2. Check for real-time status changes (e.g. Passports Uploaded / Ticket Issued)
+        // 2. Check for real-time status changes (Passports Uploaded, Fare Declined, Fare Accepted, Ticket Issued)
         if (Object.keys(previousBookingsStatusMapRef.current).length > 0) {
           for (const b of fetchedBookings) {
             const prevStatus = previousBookingsStatusMapRef.current[b.id];
             
+            // Event 1: Agent DECLINED the revised fare!
+            if (prevStatus && prevStatus !== 'FARE_DECLINED' && b.status === 'FARE_DECLINED') {
+              playDeclineChime();
+              showDesktopNotification(
+                b,
+                `❌ Agent Declined Revised Fare! #${b.request_ref}`,
+                `${b.agency_name} (${b.agent_mobile}) has DECLINED revised fare ₹${Number(b.revised_fare || b.quoted_rate).toLocaleString('en-IN')}/pax for ${b.origin} ➔ ${b.destination}. Request cancelled.`
+              );
+              startTitleFlashing(`DECLINED #${b.request_ref}`);
+              setAdminEventModal({
+                type: 'FARE_DECLINED',
+                booking: b,
+                title: '❌ REVISED FARE DECLINED BY AGENT!',
+                subtitle: `Agent ${b.agency_name} (${b.agent_mobile}) has DECLINED the revised fare of ₹${Number(b.revised_fare || b.quoted_rate).toLocaleString('en-IN')}/pax for ${b.origin} ➔ ${b.destination}. The booking request has been cancelled.`
+              });
+              break;
+            }
+
+            // Event 2: Agent ACCEPTED the revised fare!
+            if (prevStatus && prevStatus !== 'FARE_ACCEPTED' && b.status === 'FARE_ACCEPTED') {
+              playNotificationChime();
+              showDesktopNotification(
+                b,
+                `✅ Revised Fare Accepted! #${b.request_ref}`,
+                `${b.agency_name} (${b.agent_mobile}) accepted revised rate ₹${Number(b.revised_fare || b.quoted_rate).toLocaleString('en-IN')}/pax for ${b.origin} ➔ ${b.destination}. Passports pending!`
+              );
+              startTitleFlashing(`ACCEPTED #${b.request_ref}`);
+              setAdminEventModal({
+                type: 'FARE_ACCEPTED',
+                booking: b,
+                title: '✅ REVISED FARE ACCEPTED BY AGENT!',
+                subtitle: `Agent ${b.agency_name} (${b.agent_mobile}) agreed to the revised fare of ₹${Number(b.revised_fare || b.quoted_rate).toLocaleString('en-IN')}/pax for ${b.origin} ➔ ${b.destination}. Follow up to collect passenger passports.`
+              });
+              break;
+            }
+
             // Event A: Agent uploaded passports (DOCS_SUBMITTED)
             if (prevStatus && prevStatus !== 'DOCS_SUBMITTED' && b.status === 'DOCS_SUBMITTED') {
               playNotificationChime();
@@ -680,6 +752,13 @@ TravelX Special Fares`;
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
   };
 
+  const getAgentNegotiateWhatsAppUrl = (b) => {
+    const phone = String(b.agent_mobile || '').replace(/\D/g, '');
+    const cleanPhone = phone.length === 10 ? `91${phone}` : phone;
+    const text = `Hi ${b.agency_name}, regarding booking #${b.request_ref} (${b.origin} ➔ ${b.destination} on ${b.travel_date}): We noticed you declined the revised fare. Would you like to check alternate dates or another airline at a lower rate? Reply here to discuss!`;
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  };
+
   const getAgentTicketWhatsAppUrl = (b) => {
     const phone = String(b.agent_mobile || '').replace(/\D/g, '');
     const cleanPhone = phone.length === 10 ? `91${phone}` : phone;
@@ -1025,6 +1104,7 @@ Thank you for booking with TravelX!`;
               { id: 'AVAILABLE', label: 'Available', count: stats.available },
               { id: 'DOCS_SUBMITTED', label: 'Passports Ready', count: stats.docs_submitted, alert: stats.docs_submitted > 0, alertColor: 'bg-teal-500' },
               { id: 'CONFIRMED', label: 'Confirmed', count: stats.confirmed },
+              { id: 'FARE_DECLINED', label: 'Declined', count: stats.declined, alert: stats.declined > 0, alertColor: 'bg-rose-500' },
               { id: 'CANCELLED', label: 'Cancelled / Sold Out' }
             ].map(tab => {
               const isSelected = statusFilter === tab.id;
@@ -1289,6 +1369,12 @@ Thank you for booking with TravelX!`;
                               <span>DOCS SUBMITTED</span>
                             </span>
                           )}
+                          {b.status === 'TICKET_PROCESSING' && (
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-sky-100 text-sky-900 border border-sky-300">
+                              <Loader2 className="w-3 h-3 text-sky-700 animate-spin" />
+                              <span>UNDER ISSUANCE</span>
+                            </span>
+                          )}
                           {b.status === 'CONFIRMED' && (
                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
                               <CheckCircle2 className="w-3 h-3 text-emerald-700" />
@@ -1460,6 +1546,7 @@ Thank you for booking with TravelX!`;
                               <option value="FARE_REVISED">Fare Revised</option>
                               <option value="SOLD_OUT">Sold Out</option>
                               <option value="DOCS_SUBMITTED">Docs Submitted</option>
+                              <option value="TICKET_PROCESSING">Under Issuance ✈️</option>
                               <option value="CONFIRMED">Confirmed</option>
                               <option value="CONTACTED">Contacted</option>
                               <option value="CANCELLED">Cancelled</option>
@@ -2774,6 +2861,10 @@ Thank you for booking with TravelX!`;
                 ? 'bg-gradient-to-r from-teal-700 to-emerald-800'
                 : adminEventModal.type === 'CONFIRMED'
                 ? 'bg-gradient-to-r from-emerald-600 to-teal-700'
+                : adminEventModal.type === 'FARE_DECLINED'
+                ? 'bg-gradient-to-r from-rose-700 to-red-900'
+                : adminEventModal.type === 'FARE_ACCEPTED'
+                ? 'bg-gradient-to-r from-emerald-600 to-green-800'
                 : 'bg-gradient-to-r from-[#0b3b82] to-blue-900'
             }`}>
               <div className="flex items-center space-x-3">
@@ -2782,6 +2873,10 @@ Thank you for booking with TravelX!`;
                     <FileText className="w-6 h-6 text-teal-200 animate-bounce" />
                   ) : adminEventModal.type === 'CONFIRMED' ? (
                     <Ticket className="w-6 h-6 text-emerald-200" />
+                  ) : adminEventModal.type === 'FARE_DECLINED' ? (
+                    <XCircle className="w-6 h-6 text-rose-200 animate-pulse" />
+                  ) : adminEventModal.type === 'FARE_ACCEPTED' ? (
+                    <CheckCircle2 className="w-6 h-6 text-emerald-200 animate-bounce" />
                   ) : (
                     <Clock className="w-6 h-6 text-amber-200 animate-pulse" />
                   )}
@@ -2851,6 +2946,32 @@ Thank you for booking with TravelX!`;
                 </div>
               )}
 
+              {/* Fare Declined Warning */}
+              {adminEventModal.type === 'FARE_DECLINED' && (
+                <div className="p-3.5 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-2">
+                  <div className="flex items-center space-x-2 text-rose-900 font-black text-xs">
+                    <XCircle className="w-4 h-4 text-rose-600" />
+                    <span>Agent Declined ₹{Number(adminEventModal.booking.revised_fare || adminEventModal.booking.quoted_rate).toLocaleString('en-IN')}/pax</span>
+                  </div>
+                  <p className="text-[11px] text-rose-700 pl-6 leading-relaxed">
+                    The agent has rejected the revised fare. You can negotiate via WhatsApp or offer an alternate flight/date.
+                  </p>
+                </div>
+              )}
+
+              {/* Fare Accepted Success */}
+              {adminEventModal.type === 'FARE_ACCEPTED' && (
+                <div className="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl space-y-2">
+                  <div className="flex items-center space-x-2 text-emerald-900 font-black text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Agent Accepted ₹{Number(adminEventModal.booking.revised_fare || adminEventModal.booking.quoted_rate).toLocaleString('en-IN')}/pax</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 pl-6 leading-relaxed">
+                    Revised fare agreed! Follow up with the agent to collect passenger passports for ticket issuance.
+                  </p>
+                </div>
+              )}
+
               {/* Quick Actions Footer */}
               <div className="pt-2 flex flex-col sm:flex-row items-center gap-2 border-t border-slate-100">
                 <button
@@ -2916,6 +3037,32 @@ Thank you for booking with TravelX!`;
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Review & Confirm Available</span>
                   </button>
+                )}
+
+                {adminEventModal.type === 'FARE_DECLINED' && (
+                  <a
+                    href={getAgentNegotiateWhatsAppUrl(adminEventModal.booking)}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setAdminEventModal(null)}
+                    className="flex-1 w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-bold rounded-xl text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-md"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Negotiate on WhatsApp</span>
+                  </a>
+                )}
+
+                {adminEventModal.type === 'FARE_ACCEPTED' && (
+                  <a
+                    href={getWhatsAppReplyUrl(adminEventModal.booking)}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setAdminEventModal(null)}
+                    className="flex-1 w-full py-2.5 bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-700 hover:to-green-800 text-white font-bold rounded-xl text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-md"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Follow Up for Passports</span>
+                  </a>
                 )}
               </div>
             </div>
