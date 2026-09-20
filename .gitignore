@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Production build (Render will build this)
+# client/dist/
+
+# Uploaded sensitive passenger documents & tickets
+server/uploads/passports/*
+!server/uploads/passports/.gitkeep
+server/uploads/tickets/*
+!server/uploads/tickets/.gitkeep
+
+# Environment variables & keys
+.env
+.env.local
+.env.*.local
+
+# Logs & DB temporary locks
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.db-shm
+*.db-wal
+
+# OS Files
+Thumbs.db
+.DS_Store
+
+# Scratch
+scratch/

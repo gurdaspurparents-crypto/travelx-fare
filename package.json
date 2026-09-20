@@ -1,0 +1,28 @@
+{
+  "name": "travelx-special-fare-manager",
+  "version": "1.0.0",
+  "description": "Smart Manual Input + Automatic Fare Comparison System for Travelx",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "build": "cd client && npm install && npm run build",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "test": "node tests/backend.test.js"
+  },
+  "keywords": [
+    "travelx",
+    "airline-fares",
+    "b2b-comparison",
+    "whatsapp-broadcast"
+  ],
+  "author": "Google DeepMind / Travelx",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "multer": "^2.4.0",
+    "xlsx": "^0.18.5"
+  }
+}

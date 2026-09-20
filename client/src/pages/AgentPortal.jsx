@@ -1,0 +1,3497 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { 
+  Plane, Search, MessageSquare, Copy, Check, Filter, 
+  Clock, ShieldAlert, Sparkles, Phone, ArrowRight, 
+  ExternalLink, SlidersHorizontal, Eye, EyeOff, Plus, Minus,
+  Calendar, Layers, CheckCircle2, CheckCircle, RefreshCw, Smartphone,
+  Lock, ArrowUpDown, ChevronLeft, ChevronRight, X, User,
+  Menu, Share2, Mail, Users, CheckSquare,
+  AlertCircle, Briefcase, Coffee, Info, ChevronDown, Loader2, Building2, MapPin,
+  Download, Upload, FileText, Ticket, Bell
+} from 'lucide-react';
+import { api } from '../utils/api';
+
+const INDIAN_STATES = [
+  'Punjab', 'Delhi NCR', 'Haryana', 'Chandigarh UT', 'Rajasthan', 
+  'Uttar Pradesh', 'Himachal Pradesh', 'Jammu & Kashmir', 'Uttarakhand', 
+  'Maharashtra', 'Gujarat', 'West Bengal', 'Karnataka', 'Telangana', 
+  'Tamil Nadu', 'Kerala', 'Bihar', 'Madhya Pradesh', 'Other'
+];
+
+const ALLOWED_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH'];
+
+const SECTOR_OPTIONS = [
+  { origin: 'ATQ', originCity: 'Amritsar', dest: 'DXB', destCity: 'Dubai', label: '(ATQ) Amritsar ➔ (DXB) Dubai' },
+  { origin: 'ATQ', originCity: 'Amritsar', dest: 'SHJ', destCity: 'Sharjah', label: '(ATQ) Amritsar ➔ (SHJ) Sharjah' },
+  { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' },
+];
+
+const ORIGINS = [
+  { code: 'ATQ', city: 'Amritsar', label: '(ATQ) Amritsar' },
+  { code: 'IXC', city: 'Chandigarh', label: '(IXC) Chandigarh' }
+];
+
+const DESTINATIONS = {
+  'ATQ': [
+    { code: 'DXB', city: 'Dubai', label: '(DXB) Dubai' },
+    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' }
+  ],
+  'IXC': [
+    { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' }
+  ]
+};
+
+const formatBaggage = (bag) => {
+  if (!bag) return '30+7 KG';
+  const clean = String(bag).trim();
+  const lower = clean.toLowerCase();
+  if (lower === '20kg' || lower === '20 kg' || lower === '20') return '30+7 KG';
+  if (lower === '30kg' || lower === '30 kg' || lower === '30') return '30+7 KG';
+  if (lower === '30 + 07 kg' || lower === '30 + 7 kg' || lower === '30+07 kg' || lower === '30+07kg' || lower === '30+7kg') return '30+7 KG';
+  return clean;
+};
+
+export default function AgentPortal({ onSwitchToAdmin }) {
+  // Master API Data
+  const [fares, setFares] = useState([]);
+  const [dailyFlights, setDailyFlights] = useState([]);
+  const [agencyConfig, setAgencyConfig] = useState({
+    name: 'TravelX',
+    subName: 'B2B Special Fares',
+    agentCode: 'TRAVELX (TX10011)',
+    agentBadge: 'TX B2B',
+    tagline: 'Comfort • Trust • Journey.',
+    balance: '100000(0)',
+    whatsapp: '919888888888',
+    phone: '+91 98888 88888',
+    email: 'desk@travelx.co.in'
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Search Bar State (Image 1 & 2)
+  const [tripType, setTripType] = useState('ONE_WAY'); // 'ONE_WAY' | 'ROUND_TRIP'
+  const [origin, setOrigin] = useState('ATQ');
+  const [destination, setDestination] = useState('DXB');
+  const [onwardDate, setOnwardDate] = useState('2026-09-25');
+  const [returnDate, setReturnDate] = useState('');
+  const [travellers, setTravellers] = useState(1);
+  const [searchAdults, setSearchAdults] = useState(1);
+  const [searchChildren, setSearchChildren] = useState(0);
+  const [searchInfants, setSearchInfants] = useState(0);
+  const [travelClass, setTravelClass] = useState('Economy');
+  const [hasSearched, setHasSearched] = useState(true);
+
+  // Dropdown open states
+  const [showOriginDropdown, setShowOriginDropdown] = useState(false);
+  const [showDestDropdown, setShowDestDropdown] = useState(false);
+  const [showMenuDropdown, setShowMenuDropdown] = useState(false);
+  const [showTravellerDropdown, setShowTravellerDropdown] = useState(false);
+  const travellerDropdownRef = useRef(null);
+
+  // Customer Mode (Agent custom profit markup toggle)
+  const [customerMode, setCustomerMode] = useState(false);
+  const [customMarkup, setCustomMarkup] = useState(1000);
+
+  // Filters State (Image 3 Left Sidebar)
+  const [filterRefundable, setFilterRefundable] = useState('ALL'); // 'ALL' | 'REFUNDABLE' | 'NON_REFUNDABLE'
+  const [filterStops, setFilterStops] = useState('0'); // 'ALL' | '0' | '1' | '2+'
+  const [filterTimeSlot, setFilterTimeSlot] = useState('ALL'); // 'ALL' | '00-06' | '06-12' | '12-18' | '18-00'
+  const [selectedAirlines, setSelectedAirlines] = useState([]);
+  const [showIncentive, setShowIncentive] = useState(false);
+
+  // Flight Details Modal Drawer
+  const [detailFlight, setDetailFlight] = useState(null);
+
+  // Admin PIN Switch Modal
+  const [showAdminPinModal, setShowAdminPinModal] = useState(false);
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminPinError, setAdminPinError] = useState(false);
+
+  // Copy status
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Agent Identification Session (stored in localStorage or URL query params)
+  const [agentProfile, setAgentProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('travelx_b2b_agent');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlMobile = params.get('mobile') || params.get('phone');
+      const urlAgency = params.get('agent') || params.get('agency');
+      const urlCity = params.get('city');
+      if (urlMobile || urlAgency) {
+        const p = {
+          mobile: (urlMobile || '').replace(/\D/g, '').slice(-10),
+          agencyName: urlAgency || '',
+          agentName: '',
+          city: urlCity || ''
+        };
+        try {
+          localStorage.setItem('travelx_b2b_agent', JSON.stringify(p));
+        } catch (e) {}
+        return p;
+      }
+    }
+    return null;
+  });
+
+  // Booking Modal States
+  const [bookingFlight, setBookingFlight] = useState(null);
+  const [bookingPax, setBookingPax] = useState(1);
+  const [bookingAdults, setBookingAdults] = useState(1);
+  const [bookingChildren, setBookingChildren] = useState(0);
+  const [bookingInfants, setBookingInfants] = useState(0);
+  const [bookingForm, setBookingForm] = useState({
+    mobile: '',
+    agencyName: '',
+    agentName: '',
+    email: '',
+    address: '',
+    city: '',
+    state: 'Punjab',
+    pincode: '',
+    remarks: ''
+  });
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [bookingSuccessResult, setBookingSuccessResult] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [copiedRef, setCopiedRef] = useState(false);
+
+  // Live Booking Tracker Modal States
+  const [showTrackerModal, setShowTrackerModal] = useState(false);
+  const [trackInputRef, setTrackInputRef] = useState('');
+  const [trackedBooking, setTrackedBooking] = useState(null);
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackError, setTrackError] = useState(null);
+  const [selectedPassportFiles, setSelectedPassportFiles] = useState([]);
+  const [passportUploading, setPassportUploading] = useState(false);
+  const [passportUploadSuccess, setPassportUploadSuccess] = useState(false);
+
+  // Active Booking Reference for Background Response Polling & "Updates" Navbar Tab
+  const [activeBookingRef, setActiveBookingRef] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('travelx_active_request_ref') || null;
+      } catch (e) {}
+    }
+    return null;
+  });
+  const [activeBookingData, setActiveBookingData] = useState(null);
+  const lastPolledStatusRef = useRef(null);
+
+  // Calendar Carousel Scroll Ref
+  const calendarScrollRef = useRef(null);
+
+  // 1. Fetch live data
+  const loadPortalData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await api.getPublicFares();
+      if (res && res.success) {
+        setFares(res.fares || []);
+        setDailyFlights(res.dailyFlights || []);
+        if (res.agency) {
+          setAgencyConfig(prev => ({ 
+            ...prev, 
+            ...res.agency,
+            name: 'TravelX',
+            agentCode: 'TRAVELX (TX10011)',
+            agentBadge: 'TX B2B'
+          }));
+        }
+      } else {
+        setError('Unable to load live flight rates. Please refresh.');
+      }
+    } catch (err) {
+      console.error('Error fetching public fares:', err);
+      setError('Connection error. Please check your internet connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFetchTracking = async (targetRef) => {
+    const cleanRef = String(targetRef || trackInputRef || '').trim().toUpperCase();
+    if (!cleanRef) return;
+    try {
+      setTrackLoading(true);
+      setTrackError(null);
+      setShowTrackerModal(true);
+      const res = await api.trackBooking(cleanRef);
+      if (res && res.success && res.booking) {
+        setTrackedBooking(res.booking);
+        setTrackInputRef(res.booking.request_ref);
+        setActiveBookingRef(res.booking.request_ref);
+        setActiveBookingData(res.booking);
+        lastPolledStatusRef.current = res.booking.status;
+        try {
+          localStorage.setItem('travelx_active_request_ref', res.booking.request_ref);
+        } catch (e) {}
+      } else {
+        setTrackError(res?.error || 'Booking reference not found. Please verify your reference ID.');
+        setTrackedBooking(null);
+      }
+    } catch (err) {
+      console.error('Error tracking booking:', err);
+      setTrackError('Failed to load tracking details. Please try again.');
+      setTrackedBooking(null);
+    } finally {
+      setTrackLoading(false);
+    }
+  };
+
+  const handleUploadPassportsSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!trackedBooking || selectedPassportFiles.length === 0) {
+      alert('Please select passenger passport images or PDF files first.');
+      return;
+    }
+    try {
+      setPassportUploading(true);
+      const formData = new FormData();
+      for (let i = 0; i < selectedPassportFiles.length; i++) {
+        formData.append('passports', selectedPassportFiles[i]);
+      }
+      const res = await api.uploadPassports(trackedBooking.request_ref, formData);
+      if (res && res.success) {
+        setPassportUploadSuccess(true);
+        setSelectedPassportFiles([]);
+        await handleFetchTracking(trackedBooking.request_ref);
+        setTimeout(() => setPassportUploadSuccess(false), 5000);
+      } else {
+        alert(res?.error || 'Failed to upload passports');
+      }
+    } catch (err) {
+      console.error('Error uploading passports:', err);
+      alert('Connection error uploading passports');
+    } finally {
+      setPassportUploading(false);
+    }
+  };
+
+  const playNotificationSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch (e) {
+      // Audio might be prevented by browser policy before first gesture
+    }
+  };
+
+  // Live Auto-Refresh Polling for Tracked Booking (every 4.5s)
+  useEffect(() => {
+    if (!showTrackerModal || !trackedBooking?.request_ref) return;
+    if (['CONFIRMED', 'CANCELLED', 'SOLD_OUT'].includes(trackedBooking.status)) return;
+
+    const currentRef = trackedBooking.request_ref;
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.trackBooking(currentRef);
+        if (res && res.success && res.booking) {
+          setTrackedBooking(prev => {
+            if (!prev) return res.booking;
+            if (prev.status !== res.booking.status) {
+              playNotificationSound();
+            }
+            return res.booking;
+          });
+        }
+      } catch (err) {
+        // silent fail on network jitter
+      }
+    }, 4500);
+
+    return () => clearInterval(interval);
+  }, [showTrackerModal, trackedBooking?.request_ref, trackedBooking?.status]);
+
+  // Live Auto-Refresh Polling when Agent is on Booking Success / Dispatched screen (every 3.5s)
+  useEffect(() => {
+    if (!bookingSuccessResult?.booking?.request_ref) return;
+    const currentRef = bookingSuccessResult.booking.request_ref;
+    if (['CONFIRMED', 'CANCELLED', 'SOLD_OUT'].includes(bookingSuccessResult.booking.status)) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.trackBooking(currentRef);
+        if (res && res.success && res.booking) {
+          setBookingSuccessResult(prev => {
+            if (!prev) return null;
+            if (prev.booking?.status !== res.booking.status) {
+              playNotificationSound();
+            }
+            return {
+              ...prev,
+              booking: {
+                ...prev.booking,
+                ...res.booking
+              }
+            };
+          });
+        }
+      } catch (err) {
+        // silent fail on network jitter
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [bookingSuccessResult?.booking?.request_ref, bookingSuccessResult?.booking?.status]);
+
+  // Background Monitor for Active Booking:
+  // When agent is browsing the main screen, poll active booking every 3.5s.
+  // When Admin updates status (e.g. from PENDING to AVAILABLE / FARE_REVISED / SOLD_OUT / CONFIRMED):
+  // 1. Play audio chime
+  // 2. Automatically open the Tracker / Passport Upload popup modal!
+  useEffect(() => {
+    if (!activeBookingRef) return;
+
+    if (!activeBookingData) {
+      api.trackBooking(activeBookingRef).then(res => {
+        if (res && res.success && res.booking) {
+          setActiveBookingData(res.booking);
+          lastPolledStatusRef.current = res.booking.status;
+        }
+      }).catch(() => {});
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.trackBooking(activeBookingRef);
+        if (res && res.success && res.booking) {
+          const newStatus = res.booking.status;
+          const oldStatus = lastPolledStatusRef.current;
+
+          // If status changed from PENDING to a response state (AVAILABLE, FARE_REVISED, SOLD_OUT, etc.)
+          if (oldStatus && oldStatus !== newStatus) {
+            playNotificationSound();
+            // Automatically launch the popup modal on agent's screen!
+            setTrackedBooking(res.booking);
+            setTrackInputRef(res.booking.request_ref);
+            setShowTrackerModal(true);
+          }
+
+          lastPolledStatusRef.current = newStatus;
+          setActiveBookingData(res.booking);
+        }
+      } catch (err) {
+        // silent fail on network jitter
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [activeBookingRef]);
+
+  useEffect(() => {
+    loadPortalData();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get('track');
+      if (t) {
+        setTrackInputRef(t.trim().toUpperCase());
+        handleFetchTracking(t.trim().toUpperCase());
+      }
+    }
+  }, []);
+
+  // Close traveller dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (travellerDropdownRef.current && !travellerDropdownRef.current.contains(e.target)) {
+        setShowTravellerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Helper: Display price with Customer Markup if active
+  const getDisplayPrice = (basePrice) => {
+    const p = Number(basePrice) || 0;
+    return customerMode ? p + Number(customMarkup || 0) : p;
+  };
+
+  // Helper: Swap Origin and Destination
+  const handleSwapAirports = () => {
+    const oldO = origin;
+    const oldD = destination;
+    setOrigin(oldD);
+    setDestination(oldO);
+  };
+
+  // 2. Derive unique available dates for current sector (ATQ-DXB, etc.)
+  const currentSectorKey = `${origin}-${destination}`;
+
+  const availableDatesList = useMemo(() => {
+    const flightsForSector = dailyFlights.filter(f => f.sector_code === currentSectorKey);
+    const dateMap = new Map();
+
+    flightsForSector.forEach(f => {
+      const dStr = f.travel_date;
+      if (!dateMap.has(dStr)) {
+        dateMap.set(dStr, {
+          date: dStr,
+          dayName: f.day_name,
+          label: f.day_label,
+          minFare: f.final_rate
+        });
+      } else {
+        const cur = dateMap.get(dStr);
+        if (f.final_rate < cur.minFare) {
+          cur.minFare = f.final_rate;
+        }
+      }
+    });
+
+    const list = Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    return list;
+  }, [dailyFlights, currentSectorKey]);
+
+  // Set default onwardDate if current date is not in list
+  useEffect(() => {
+    if (availableDatesList.length > 0) {
+      const exists = availableDatesList.some(d => d.date === onwardDate);
+      if (!exists && availableDatesList[0]) {
+        const target25 = availableDatesList.find(d => d.date.includes('-09-25'));
+        if (target25) {
+          setOnwardDate(target25.date);
+        } else {
+          setOnwardDate(availableDatesList[0].date);
+        }
+      }
+    }
+  }, [availableDatesList]);
+
+  // 3. Scroll Calendar Strip
+  const scrollCalendar = (direction) => {
+    if (calendarScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -260 : 260;
+      calendarScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  // 4. Filtered Flights matching current search & sidebar filters
+  const displayedFlights = useMemo(() => {
+    return dailyFlights.filter(f => {
+      // Sector filter
+      if (f.sector_code !== currentSectorKey) return false;
+
+      // Date filter
+      if (f.travel_date !== onwardDate) return false;
+
+      // Refundable filter
+      if (filterRefundable === 'REFUNDABLE' && f.is_refundable !== 'Refundable') return false;
+      if (filterRefundable === 'NON_REFUNDABLE' && f.is_refundable === 'Refundable') return false;
+
+      // Stops filter
+      if (filterStops === '0' && f.stops !== 'Non Stop') return false;
+      if (filterStops === '1' && f.stops !== '1 Stop') return false;
+
+      // Time slot filter
+      if (filterTimeSlot !== 'ALL') {
+        const hour = parseInt((f.departure_time || '00:00').split(':')[0], 10);
+        if (filterTimeSlot === '00-06' && (hour < 0 || hour >= 6)) return false;
+        if (filterTimeSlot === '06-12' && (hour < 6 || hour >= 12)) return false;
+        if (filterTimeSlot === '12-18' && (hour < 12 || hour >= 18)) return false;
+        if (filterTimeSlot === '18-00' && (hour < 18 || hour >= 24)) return false;
+      }
+
+      // Airline filter
+      if (selectedAirlines.length > 0 && !selectedAirlines.includes(f.airline_code)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [dailyFlights, currentSectorKey, onwardDate, filterRefundable, filterStops, filterTimeSlot, selectedAirlines]);
+
+  // Open Profile Modal with synced data
+  const handleOpenProfileModal = () => {
+    setBookingForm({
+      mobile: agentProfile?.mobile || '',
+      agencyName: agentProfile?.agencyName || '',
+      agentName: agentProfile?.agentName || '',
+      email: agentProfile?.email || '',
+      address: agentProfile?.address || '',
+      city: agentProfile?.city || '',
+      state: agentProfile?.state || 'Punjab',
+      pincode: agentProfile?.pincode || '',
+      remarks: ''
+    });
+    setShowProfileModal(true);
+  };
+
+  // 5. Open Booking Modal (1-Click if recognized, or 10s setup if new)
+  const handleOpenBookingModal = (flight) => {
+    setBookingFlight(flight);
+    const initialAdults = Math.max(1, searchAdults || 1);
+    const initialChildren = Math.max(0, searchChildren || 0);
+    const initialInfants = Math.max(0, searchInfants || 0);
+    setBookingAdults(initialAdults);
+    setBookingChildren(initialChildren);
+    setBookingInfants(initialInfants);
+    setBookingPax(initialAdults + initialChildren + initialInfants);
+    setBookingSuccessResult(null);
+    if (agentProfile && agentProfile.agencyName) {
+      setBookingForm({
+        mobile: agentProfile.mobile || '',
+        agencyName: agentProfile.agencyName || '',
+        agentName: agentProfile.agentName || '',
+        email: agentProfile.email || '',
+        address: agentProfile.address || '',
+        city: agentProfile.city || '',
+        state: agentProfile.state || 'Punjab',
+        pincode: agentProfile.pincode || '',
+        remarks: ''
+      });
+    } else {
+      setBookingForm({
+        mobile: '',
+        agencyName: '',
+        agentName: '',
+        email: '',
+        address: '',
+        city: '',
+        state: 'Punjab',
+        pincode: '',
+        remarks: ''
+      });
+    }
+  };
+
+  const handleMobileLookup = async (mob) => {
+    const clean = String(mob).replace(/\D/g, '').slice(-10);
+    if (clean.length === 10) {
+      try {
+        setLookupLoading(true);
+        const res = await api.lookupAgent(clean);
+        if (res && res.success && res.exists && res.agent) {
+          setBookingForm(prev => ({
+            ...prev,
+            agencyName: res.agent.agency_name || prev.agencyName,
+            agentName: res.agent.agent_name || prev.agentName,
+            email: res.agent.email || prev.email,
+            address: res.agent.address || prev.address,
+            city: res.agent.city || prev.city,
+            state: res.agent.state || prev.state || 'Punjab',
+            pincode: res.agent.pincode || prev.pincode
+          }));
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLookupLoading(false);
+      }
+    }
+  };
+
+  const handleSubmitBooking = async (e) => {
+    if (e) e.preventDefault();
+    if (!bookingFlight) return;
+
+    const cleanMob = String(bookingForm.mobile).replace(/\D/g, '').slice(-10);
+    if (!cleanMob || cleanMob.length < 10) {
+      alert('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    if (!bookingForm.agencyName || !bookingForm.agencyName.trim()) {
+      alert('Please enter your Agency Name');
+      return;
+    }
+
+    try {
+      setIsSubmittingBooking(true);
+      const rate = getDisplayPrice(bookingFlight.final_rate);
+      const totalPax = bookingAdults + bookingChildren + bookingInfants;
+      const totalSeats = bookingAdults + bookingChildren;
+      const totalAmount = totalSeats * rate; // Seats only; infant fee confirmed at airline actuals
+
+      const payload = {
+        mobile: cleanMob,
+        agency_name: bookingForm.agencyName.trim(),
+        agent_name: bookingForm.agentName ? bookingForm.agentName.trim() : '',
+        email: bookingForm.email ? bookingForm.email.trim() : '',
+        address: bookingForm.address ? bookingForm.address.trim() : '',
+        city: bookingForm.city ? bookingForm.city.trim() : '',
+        state: bookingForm.state ? bookingForm.state.trim() : '',
+        pincode: bookingForm.pincode ? bookingForm.pincode.trim() : '',
+        origin: bookingFlight.origin,
+        destination: bookingFlight.destination,
+        route_label: bookingFlight.route_label,
+        airline_code: bookingFlight.airline_code,
+        airline_name: bookingFlight.airline_name,
+        flight_number: bookingFlight.flight_number,
+        travel_date: bookingFlight.travel_date,
+        departure_time: bookingFlight.departure_time,
+        arrival_time: bookingFlight.arrival_time,
+        duration: bookingFlight.duration,
+        quoted_rate: rate,
+        pax_count: totalPax,
+        pax_adults: bookingAdults,
+        pax_children: bookingChildren,
+        pax_infants: bookingInfants,
+        infant_fare: null,
+        total_amount: totalAmount,
+        baggage: formatBaggage(bookingFlight.baggage),
+        remarks: bookingForm.remarks
+      };
+
+      const res = await api.createBookingRequest(payload);
+      if (res && res.success) {
+        const newProfile = {
+          mobile: cleanMob,
+          agencyName: bookingForm.agencyName.trim(),
+          agentName: bookingForm.agentName ? bookingForm.agentName.trim() : '',
+          email: bookingForm.email ? bookingForm.email.trim() : '',
+          address: bookingForm.address ? bookingForm.address.trim() : '',
+          city: bookingForm.city ? bookingForm.city.trim() : '',
+          state: bookingForm.state ? bookingForm.state.trim() : '',
+          pincode: bookingForm.pincode ? bookingForm.pincode.trim() : ''
+        };
+        setAgentProfile(newProfile);
+        try {
+          localStorage.setItem('travelx_b2b_agent', JSON.stringify(newProfile));
+        } catch (e) {}
+        setBookingSuccessResult(res);
+        if (res.booking?.request_ref) {
+          setActiveBookingRef(res.booking.request_ref);
+          setActiveBookingData(res.booking);
+          lastPolledStatusRef.current = res.booking.status || 'PENDING';
+          try {
+            localStorage.setItem('travelx_active_request_ref', res.booking.request_ref);
+          } catch (e) {}
+        }
+      } else {
+        alert(res?.error || 'Failed to submit seat hold request');
+      }
+    } catch (err) {
+      console.error('Error submitting booking:', err);
+      alert('Connection error. Please try again.');
+    } finally {
+      setIsSubmittingBooking(false);
+    }
+  };
+
+  // Save / Update Agent Profile in modal
+  const handleSaveProfile = async (e) => {
+    if (e) e.preventDefault();
+    const cleanMob = String(bookingForm.mobile || (agentProfile?.mobile || '')).replace(/\D/g, '').slice(-10);
+    const agency = (bookingForm.agencyName || (agentProfile?.agencyName || '')).trim();
+    if (!cleanMob || cleanMob.length < 10) {
+      alert('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    if (!agency) {
+      alert('Please enter your Agency Name');
+      return;
+    }
+    const profile = {
+      mobile: cleanMob,
+      agencyName: agency,
+      agentName: (bookingForm.agentName || (agentProfile?.agentName || '')).trim(),
+      email: (bookingForm.email || (agentProfile?.email || '')).trim(),
+      address: (bookingForm.address || (agentProfile?.address || '')).trim(),
+      city: (bookingForm.city || (agentProfile?.city || '')).trim(),
+      state: (bookingForm.state || (agentProfile?.state || '')).trim(),
+      pincode: (bookingForm.pincode || (agentProfile?.pincode || '')).trim()
+    };
+    try {
+      await api.registerAgent({
+        mobile: profile.mobile,
+        agency_name: profile.agencyName,
+        agent_name: profile.agentName,
+        email: profile.email,
+        address: profile.address,
+        city: profile.city,
+        state: profile.state,
+        pincode: profile.pincode
+      });
+    } catch (err) {
+      console.error(err);
+    }
+    setAgentProfile(profile);
+    try {
+      localStorage.setItem('travelx_b2b_agent', JSON.stringify(profile));
+    } catch (e) {}
+    setShowProfileModal(false);
+  };
+
+  // Clear Saved Agent Session
+  const handleClearProfile = () => {
+    setAgentProfile(null);
+    try {
+      localStorage.removeItem('travelx_b2b_agent');
+    } catch (e) {}
+    setBookingForm({
+      mobile: '',
+      agencyName: '',
+      agentName: '',
+      email: '',
+      address: '',
+      city: '',
+      state: 'Punjab',
+      pincode: '',
+      remarks: ''
+    });
+    setShowProfileModal(false);
+  };
+
+  // Copy Reference ID
+  const handleCopyRef = (refText) => {
+    navigator.clipboard.writeText(refText);
+    setCopiedRef(true);
+    setTimeout(() => setCopiedRef(false), 2000);
+  };
+
+  // WhatsApp helper from booking celebration screen
+  const handleWhatsAppBookingConfirm = (booking, flight) => {
+    const phone = (agencyConfig.whatsapp || '919888888888').replace(/\D/g, '');
+    const paxDetails = [];
+    if (booking.pax_adults) paxDetails.push(`${booking.pax_adults} Adult${booking.pax_adults > 1 ? 's' : ''}`);
+    if (booking.pax_children) paxDetails.push(`${booking.pax_children} Child${booking.pax_children > 1 ? 'ren' : ''}`);
+    if (booking.pax_infants) paxDetails.push(`${booking.pax_infants} Infant${booking.pax_infants > 1 ? 's' : ''}`);
+    const paxStr = paxDetails.length > 0 
+      ? `${booking.pax_count} Pax (${paxDetails.join(', ')})` 
+      : `${booking.pax_count} Pax`;
+
+    const msg = `✈️ *TRAVELX SEAT AVAILABILITY REQUEST #${booking.request_ref}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Agency:* ${booking.agency_name} (${booking.agent_mobile})
+• *Sector:* ${booking.origin} ➔ ${booking.destination}
+• *Flight:* ${booking.airline_name} (${booking.flight_number})
+• *Date:* ${booking.travel_date} (${booking.departure_time} - ${booking.arrival_time})
+• *Passengers:* ${paxStr}
+• *Quoted Net:* ₹${Number(booking.quoted_rate).toLocaleString('en-IN')}/- (Total: ₹${Number(booking.total_amount).toLocaleString('en-IN')})
+${booking.remarks ? `• *Remarks:* ${booking.remarks}\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━
+Please confirm availability and share status for Reference *#${booking.request_ref}*.`;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
+
+  // WhatsApp Booking Fallback Generator
+  const handleBookFlight = (flight) => {
+    const rate = getDisplayPrice(flight.final_rate);
+    const paxDetails = [];
+    if (searchAdults) paxDetails.push(`${searchAdults} Adult${searchAdults > 1 ? 's' : ''}`);
+    if (searchChildren) paxDetails.push(`${searchChildren} Child${searchChildren > 1 ? 'ren' : ''}`);
+    if (searchInfants) paxDetails.push(`${searchInfants} Infant${searchInfants > 1 ? 's' : ''}`);
+    const totalP = searchAdults + searchChildren + searchInfants;
+    const paxStr = paxDetails.length > 0 ? `${totalP} Pax (${paxDetails.join(', ')})` : `${totalP} Pax`;
+
+    const message = `✈️ *TRAVELX FIXED DEPARTURE SEAT AVAILABILITY REQUEST*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Sector:* ${flight.origin_city} (${flight.origin}) ➔ ${flight.destination_city} (${flight.destination})
+• *Flight:* ${flight.airline_name} (${flight.flight_number})
+• *Travel Date:* ${flight.day_label} (${flight.formatted_date})
+• *Timings:* ${flight.departure_time} ➔ ${flight.arrival_time} (Non-Stop)
+• *Rate Quoted:* ₹${rate.toLocaleString('en-IN')}/- Net per pax
+• *Baggage:* ${formatBaggage(flight.baggage)}
+• *Fare Rule:* 100% Non-Refundable & Non-Changeable
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+*Agent Details:*
+• Agent Name: 
+• Agency Code: ${agencyConfig.agentCode || 'TRAVELX (TX10011)'}
+• Total Passengers: ${paxStr}
+
+Please confirm availability and share status.`;
+
+    const phone = (agencyConfig.whatsapp || '919888888888').replace(/\D/g, '');
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
+  // 6. Share Itinerary
+  const handleShareQuote = (flight) => {
+    const rate = getDisplayPrice(flight.final_rate);
+    const text = `✈️ *TRAVELX SPECIAL FIXED DEPARTURE AIR FARE*
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Route:* ${flight.origin_city} ➔ ${flight.destination_city}
+• *Airline:* ${flight.airline_name} ${flight.flight_number}
+• *Date:* ${flight.day_label}
+• *Time:* ${flight.departure_time} - ${flight.arrival_time} (Non-Stop)
+• *Rate:* *₹${rate.toLocaleString('en-IN')}/-* All-Inclusive
+• *Baggage:* ${formatBaggage(flight.baggage)}
+• *Terms:* Non-Refundable & Non-Changeable
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📲 Contact TravelX desk for instant seat issuance!`;
+
+    navigator.clipboard.writeText(text);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  // 7. Admin PIN verify
+  const handleVerifyAdminPin = (e) => {
+    e.preventDefault();
+    if (adminPinInput === '7860' || adminPinInput === 'admin') {
+      setShowAdminPinModal(false);
+      setAdminPinInput('');
+      setAdminPinError(false);
+      if (onSwitchToAdmin) onSwitchToAdmin();
+    } else {
+      setAdminPinError(true);
+    }
+  };
+
+  // Airline Logos & Colors helper using official downloaded PNG logos
+  const renderAirlineIcon = (code, name, customClass = "w-11 h-11") => {
+    const fallbackColor = 
+      code === 'IX' ? 'from-orange-500 to-amber-600' :
+      code === '6E' ? 'from-blue-700 to-indigo-800' :
+      code === 'SG' ? 'from-red-600 to-rose-700' :
+      code === 'AI' ? 'from-red-700 to-red-900' :
+      'from-slate-700 to-slate-900';
+
+    return (
+      <div className={`${customClass} rounded-xl bg-white border border-slate-200/90 p-1 flex items-center justify-center shadow-xs shrink-0 relative overflow-hidden group`}>
+        <img
+          src={`/airlines/${code}.png`}
+          alt={name || code}
+          className="w-full h-full object-contain p-0.5"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            if (e.currentTarget.nextElementSibling) {
+              e.currentTarget.nextElementSibling.style.display = 'flex';
+            }
+          }}
+        />
+        <div 
+          style={{ display: 'none' }}
+          className={`w-full h-full rounded-lg bg-gradient-to-br ${fallbackColor} items-center justify-center text-white font-black tracking-tighter text-xs`}
+        >
+          {code}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
+      
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 1. TOP BRAND HEADER: TRAVELX                                  */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <header className="bg-white border-b border-slate-200 shadow-2xs sticky top-0 z-40">
+        <div className="max-w-[1700px] mx-auto px-3 sm:px-6 py-2 flex items-center justify-between">
+          
+          {/* Left Brand Identity: TravelX */}
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setHasSearched(false)}>
+            {/* Logo Graphic */}
+            <div className="flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-sky-500 to-orange-500 p-0.5 shadow-sm flex items-center justify-center">
+                <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
+                  <Plane className="w-5 h-5 text-blue-700 -rotate-45" />
+                </div>
+              </div>
+            </div>
+
+            {/* Brand Title & Tagline */}
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight font-sans">
+                  TravelX
+                </span>
+                <span className="hidden md:inline-block text-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs uppercase">
+                  B2B PORTAL
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium tracking-wide">
+                Comfort • Trust • Journey.
+              </p>
+            </div>
+          </div>
+
+          {/* Right Agent Dashboard Controls */}
+          <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
+            
+            {/* Agent Profile Chip or Quick Login */}
+            {agentProfile && agentProfile.agencyName ? (
+              <div 
+                onClick={handleOpenProfileModal}
+                className="flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-950 cursor-pointer transition shadow-2xs group"
+                title="Click to view or edit agency profile"
+              >
+                <div className="w-5 h-5 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-[10px]">
+                  <User className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="font-extrabold text-xs text-blue-950 leading-none">
+                    {agentProfile.agencyName}
+                  </span>
+                  <span className="text-[10px] text-blue-600 font-medium">
+                    {agentProfile.city ? `${agentProfile.city} • ` : ''}{agentProfile.mobile}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleOpenProfileModal}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer text-xs"
+              >
+                <User className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Agent Login</span>
+              </button>
+            )}
+
+            {/* Updates Tab (Active Booking & Live Status Alerts) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (activeBookingRef) {
+                  handleFetchTracking(activeBookingRef);
+                } else {
+                  setShowTrackerModal(true);
+                }
+              }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full font-extrabold transition shadow-2xs cursor-pointer text-xs ${
+                activeBookingData?.status === 'AVAILABLE'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse ring-2 ring-emerald-300'
+                  : activeBookingData?.status === 'FARE_REVISED'
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md ring-2 ring-indigo-300'
+                  : activeBookingData?.status === 'CONFIRMED'
+                  ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-md'
+                  : activeBookingData?.status === 'PENDING'
+                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+              }`}
+              title={activeBookingRef ? `Active Booking #${activeBookingRef} (${activeBookingData?.status || 'Pending'})` : 'Live Booking Updates'}
+            >
+              <div className="relative">
+                <Bell className="w-3.5 h-3.5" />
+                {activeBookingData && activeBookingData.status !== 'CONFIRMED' && (
+                  <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
+                    activeBookingData.status === 'AVAILABLE'
+                      ? 'bg-white animate-ping'
+                      : 'bg-amber-500'
+                  }`} />
+                )}
+              </div>
+              <span>Updates</span>
+              {activeBookingData && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  activeBookingData.status === 'AVAILABLE'
+                    ? 'bg-white text-emerald-800'
+                    : activeBookingData.status === 'PENDING'
+                    ? 'bg-amber-200 text-amber-950'
+                    : 'bg-white/20 text-white'
+                }`}>
+                  {activeBookingData.status === 'AVAILABLE' 
+                    ? 'Seat Available!' 
+                    : activeBookingData.status === 'FARE_REVISED'
+                    ? 'Fare Revised'
+                    : activeBookingData.status === 'DOCS_SUBMITTED'
+                    ? 'Passports Sent'
+                    : activeBookingData.status === 'CONFIRMED'
+                    ? 'Ticket Ready'
+                    : 'Pending'}
+                </span>
+              )}
+            </button>
+
+            {/* Track Booking Button */}
+            <button
+              type="button"
+              onClick={() => setShowTrackerModal(true)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 font-extrabold border border-amber-300 transition shadow-2xs cursor-pointer"
+              title="Track existing booking, upload passports, or download ticket"
+            >
+              <Search className="w-3.5 h-3.5 text-amber-600" />
+              <span>Track Booking</span>
+            </button>
+
+            {/* Booking Desk Contact */}
+            <a 
+              href={`https://wa.me/${(agencyConfig.whatsapp || '919888888888').replace(/\D/g, '')}?text=${encodeURIComponent('Hello TravelX, I need assistance with fixed departure rates.')}`} 
+              target="_blank" 
+              rel="noreferrer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 transition shadow-2xs cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">Booking Desk</span>
+            </a>
+
+            {/* Menu Dropdown Toggle */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMenuDropdown(!showMenuDropdown)}
+                className="p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                title="Menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showMenuDropdown && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-2 border-b border-slate-100">
+                    <p className="text-xs font-bold text-slate-900">TravelX B2B Portal</p>
+                    <p className="text-[10px] text-slate-500">Live Fixed Departure Engine</p>
+                  </div>
+
+                  {/* Customer Markup Mode Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerMode(!customerMode);
+                      setShowMenuDropdown(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between hover:bg-slate-50 text-slate-700"
+                  >
+                    <span className="flex items-center space-x-2">
+                      <Eye className="w-4 h-4 text-purple-600" />
+                      <span>Customer Mode (+Markup)</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${customerMode ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      {customerMode ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+
+                  {/* Refresh Data */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loadPortalData();
+                      setShowMenuDropdown(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center space-x-2 hover:bg-slate-50 text-slate-700"
+                  >
+                    <RefreshCw className="w-4 h-4 text-emerald-600" />
+                    <span>Refresh Live Rates</span>
+                  </button>
+
+                  <div className="my-1 border-t border-slate-100"></div>
+
+                  {/* Admin Switch */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenuDropdown(false);
+                      setShowAdminPinModal(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center space-x-2 hover:bg-rose-50 text-slate-700 hover:text-rose-700"
+                  >
+                    <Lock className="w-4 h-4 text-rose-600" />
+                    <span>Admin Desk Access (PIN 7860)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Customer Mode Alert Strip */}
+      {customerMode && (
+        <div className="bg-purple-900 text-white py-1.5 px-4 text-xs flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+            <span className="font-semibold">
+              Customer Mode Active: Showing walk-in passenger prices with +₹{customMarkup} margin included.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCustomerMode(false)}
+            className="text-[11px] underline text-purple-200 hover:text-white"
+          >
+            Turn Off
+          </button>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 2. FIXED DEPARTURE SEARCH BAR (Image 1 & 2)                   */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <section className="bg-slate-100/95 pt-2.5 pb-2 px-3 sm:px-6 sticky top-[53px] z-30 shadow-xs backdrop-blur-md border-b border-slate-200/60">
+        <div className="max-w-[1700px] mx-auto">
+          
+          {/* Trip Type Tabs */}
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={() => setTripType('ONE_WAY')}
+              className={`px-6 py-2 text-xs font-extrabold tracking-wider rounded-t-md transition-all shadow-xs cursor-pointer ${
+                tripType === 'ONE_WAY'
+                  ? 'bg-orange-600 text-white ring-1 ring-orange-700/50'
+                  : 'bg-blue-950 text-slate-300 hover:text-white'
+              }`}
+            >
+              ONE WAY
+            </button>
+            <button
+              type="button"
+              onClick={() => setTripType('ROUND_TRIP')}
+              className={`px-6 py-2 text-xs font-extrabold tracking-wider rounded-t-md transition-all cursor-pointer ${
+                tripType === 'ROUND_TRIP'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-blue-950 text-slate-300 hover:text-white'
+              }`}
+            >
+              ROUND TRIP
+            </button>
+          </div>
+
+          {/* Deep Navy Blue Flight Search Bar (#0b3b82) */}
+          <div className="bg-[#0b3b82] rounded-r-md rounded-b-md p-2.5 shadow-md">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-1.5 items-center">
+              
+              {/* Origin Box (3 Cols) */}
+              <div className="relative md:col-span-3">
+                <div 
+                  onClick={() => {
+                    setShowOriginDropdown(!showOriginDropdown);
+                    setShowDestDropdown(false);
+                  }}
+                  className="bg-white rounded-xs h-10 px-3 flex items-center justify-between cursor-pointer border border-slate-300 hover:border-orange-500 shadow-xs transition"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-semibold leading-none">Origin</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-900">
+                      ({origin}) {origin === 'ATQ' ? 'Amritsar' : origin === 'IXC' ? 'Chandigarh' : origin}
+                    </span>
+                  </div>
+                  {origin && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowOriginDropdown(true);
+                      }}
+                      className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Origin Dropdown */}
+                {showOriginDropdown && (
+                  <div className="absolute left-0 top-11 w-full bg-white rounded-md shadow-xl border border-slate-200 z-50 py-1">
+                    {ORIGINS.map(o => (
+                      <div
+                        key={o.code}
+                        onClick={() => {
+                          setOrigin(o.code);
+                          if (o.code === 'ATQ') setDestination('DXB');
+                          else if (o.code === 'IXC') setDestination('AUH');
+                          setShowOriginDropdown(false);
+                        }}
+                        className={`px-3 py-2 text-xs font-bold hover:bg-blue-50 cursor-pointer flex items-center justify-between ${
+                          origin === o.code ? 'bg-blue-100 text-blue-900' : 'text-slate-700'
+                        }`}
+                      >
+                        <span>({o.code}) {o.city}</span>
+                        {origin === o.code && <Check className="w-3.5 h-3.5 text-blue-700" />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Swap Button */}
+              <div className="hidden md:flex md:col-span-1 items-center justify-center">
+                <button
+                  type="button"
+                  onClick={handleSwapAirports}
+                  className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-700 shadow-xs hover:rotate-180 transition-transform duration-300 cursor-pointer"
+                  title="Swap Sectors"
+                >
+                  <ArrowUpDown className="w-4 h-4 text-blue-900" />
+                </button>
+              </div>
+
+              {/* Destination Box (3 Cols) */}
+              <div className="relative md:col-span-3">
+                <div 
+                  onClick={() => {
+                    setShowDestDropdown(!showDestDropdown);
+                    setShowOriginDropdown(false);
+                  }}
+                  className="bg-white rounded-xs h-10 px-3 flex items-center justify-between cursor-pointer border border-slate-300 hover:border-orange-500 shadow-xs transition"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-semibold leading-none">Destination</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-900">
+                      ({destination}) {destination === 'DXB' ? 'Dubai' : destination === 'SHJ' ? 'Sharjah' : destination === 'AUH' ? 'Abu Dhabi' : destination}
+                    </span>
+                  </div>
+                  {destination && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDestDropdown(true);
+                      }}
+                      className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Destination Dropdown */}
+                {showDestDropdown && (
+                  <div className="absolute left-0 top-11 w-full bg-white rounded-md shadow-xl border border-slate-200 z-50 py-1">
+                    {(DESTINATIONS[origin] || DESTINATIONS['ATQ']).map(d => (
+                      <div
+                        key={d.code}
+                        onClick={() => {
+                          setDestination(d.code);
+                          setShowDestDropdown(false);
+                        }}
+                        className={`px-3 py-2 text-xs font-bold hover:bg-blue-50 cursor-pointer flex items-center justify-between ${
+                          destination === d.code ? 'bg-blue-100 text-blue-900' : 'text-slate-700'
+                        }`}
+                      >
+                        <span>({d.code}) {d.city}</span>
+                        {destination === d.code && <Check className="w-3.5 h-3.5 text-blue-700" />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Onward Date Box (2 Cols) */}
+              <div className="md:col-span-2">
+                <div className="bg-white rounded-xs h-10 px-2.5 flex items-center justify-between border border-slate-300 shadow-xs">
+                  <div className="flex flex-col w-full">
+                    <span className="text-[10px] text-slate-400 font-semibold leading-none">Onward Date</span>
+                    <input
+                      type="date"
+                      value={onwardDate}
+                      min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setOnwardDate(e.target.value)}
+                      className="text-xs font-bold text-slate-900 bg-transparent outline-none w-full cursor-pointer"
+                    />
+                  </div>
+                  <Plane className="w-4 h-4 text-slate-400 -rotate-45 shrink-0 ml-1" />
+                </div>
+              </div>
+
+              {/* Return Date Box (Disabled in One Way) (1.5 Cols) */}
+              <div className="md:col-span-1">
+                <div className={`rounded-xs h-10 px-2 flex items-center justify-between border ${tripType === 'ROUND_TRIP' ? 'bg-white border-slate-300' : 'bg-slate-200/80 border-slate-300 text-slate-400 opacity-60'}`}>
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-[9px] font-semibold leading-none">Return On</span>
+                    <span className="text-[11px] font-medium truncate">
+                      {tripType === 'ROUND_TRIP' && returnDate ? returnDate : 'Return'}
+                    </span>
+                  </div>
+                  <Plane className="w-3.5 h-3.5 -rotate-45 shrink-0" />
+                </div>
+              </div>
+
+              {/* Travellers Selector (1.5 Cols) */}
+              <div className="relative md:col-span-1.5" ref={travellerDropdownRef}>
+                <div
+                  onClick={() => {
+                    setShowTravellerDropdown(!showTravellerDropdown);
+                    setShowOriginDropdown(false);
+                    setShowDestDropdown(false);
+                  }}
+                  className="bg-white rounded-xs h-10 px-2.5 flex flex-col justify-center border border-slate-300 hover:border-orange-500 shadow-xs cursor-pointer select-none transition"
+                >
+                  <span className="text-xs font-bold text-slate-900 leading-tight truncate">
+                    {searchAdults + searchChildren + searchInfants} {searchAdults + searchChildren + searchInfants === 1 ? 'Traveller' : 'Travellers'}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium truncate">
+                    {searchAdults} Adt{searchChildren ? `, ${searchChildren} Chd` : ''}{searchInfants ? `, ${searchInfants} Inf` : ''} • Economy
+                  </span>
+                </div>
+
+                {/* Front Page Travellers Popover */}
+                {showTravellerDropdown && (
+                  <div className="absolute right-0 top-11 w-72 sm:w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 p-4 space-y-3 animate-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <div className="flex items-center space-x-1.5">
+                        <Users className="w-4 h-4 text-[#0b3b82]" />
+                        <span className="text-xs font-black text-slate-900">
+                          Passengers ({searchAdults + searchChildren + searchInfants} Pax)
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Economy
+                      </span>
+                    </div>
+
+                    {/* 1. Adults */}
+                    <div className="flex items-center justify-between py-1">
+                      <div className="pr-2">
+                        <div className="text-xs font-extrabold text-slate-900">Adults</div>
+                        <div className="text-[11px] text-slate-500 font-medium">12+ years</div>
+                      </div>
+                      <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-300 rounded-lg p-1 shrink-0 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = Math.max(1, searchAdults - 1);
+                            setSearchAdults(next);
+                            const nextInfants = Math.min(searchInfants, next);
+                            if (nextInfants !== searchInfants) setSearchInfants(nextInfants);
+                            setTravellers(next + searchChildren + nextInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-white hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer border border-slate-200"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-8 text-center font-black text-sm text-slate-900">
+                          {searchAdults}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = Math.min(9, searchAdults + 1);
+                            setSearchAdults(next);
+                            setTravellers(next + searchChildren + searchInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-[#0b3b82] hover:bg-blue-900 text-white font-bold transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 2. Children */}
+                    <div className="flex items-center justify-between border-t border-slate-100 py-1 pt-2.5">
+                      <div className="pr-2">
+                        <div className="text-xs font-extrabold text-slate-900">Children</div>
+                        <div className="text-[11px] text-slate-500 font-medium">2-11 years</div>
+                      </div>
+                      <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-300 rounded-lg p-1 shrink-0 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = Math.max(0, searchChildren - 1);
+                            setSearchChildren(next);
+                            setTravellers(searchAdults + next + searchInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-white hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer border border-slate-200"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-8 text-center font-black text-sm text-slate-900">
+                          {searchChildren}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = Math.min(8, searchChildren + 1);
+                            setSearchChildren(next);
+                            setTravellers(searchAdults + next + searchInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-[#0b3b82] hover:bg-blue-900 text-white font-bold transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 3. Infants */}
+                    <div className="flex items-center justify-between border-t border-slate-100 py-1 pt-2.5">
+                      <div className="pr-2">
+                        <div className="text-xs font-extrabold text-slate-900">Infants</div>
+                        <div className="text-[11px] text-slate-500 font-medium">Under 2 years (lap infant)</div>
+                      </div>
+                      <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-300 rounded-lg p-1 shrink-0 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = Math.max(0, searchInfants - 1);
+                            setSearchInfants(next);
+                            setTravellers(searchAdults + searchChildren + next);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-white hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer border border-slate-200"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-8 text-center font-black text-sm text-slate-900">
+                          {searchInfants}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = Math.min(searchAdults, searchInfants + 1);
+                            setSearchInfants(next);
+                            setTravellers(searchAdults + searchChildren + next);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-[#0b3b82] hover:bg-blue-900 text-white font-bold transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Done Button & Summary */}
+                    <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-500">
+                        Total: {searchAdults + searchChildren + searchInfants} Pax
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowTravellerDropdown(false);
+                        }}
+                        className="px-5 py-1.5 bg-[#0b3b82] hover:bg-blue-900 text-white text-xs font-black rounded-lg transition cursor-pointer shadow-xs"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Search Button (Orange) (1 Col) */}
+              <div className="md:col-span-1">
+                <button
+                  type="button"
+                  onClick={() => setHasSearched(true)}
+                  className="w-full h-10 bg-[#f27200] hover:bg-orange-600 text-white font-black text-xs sm:text-sm rounded-xs shadow-xs flex items-center justify-center space-x-1 transition cursor-pointer"
+                >
+                  <span>Search</span>
+                  <Search className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 3. HERO SECTION (Image 1 & 2) - Fixed Departure Available      */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {!hasSearched && (
+        <div className="max-w-[1700px] mx-auto px-3 sm:px-6 py-4">
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-b from-sky-300 via-sky-200 to-blue-100 border border-sky-200 shadow-sm min-h-[360px] flex flex-col items-center justify-center text-center p-6">
+            
+            {/* Background Decor */}
+            <div className="absolute inset-0 opacity-20 pointer-events-none flex items-center justify-center overflow-hidden">
+              <div className="text-[140px] font-serif font-black text-sky-900 select-none">
+                TRAVELX • AIR FARES
+              </div>
+            </div>
+
+            <div className="relative z-10 space-y-3 max-w-2xl">
+              <div className="inline-flex items-center space-x-2 bg-white/80 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-bold text-blue-900 shadow-xs">
+                <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                <span>TravelX Verified Non-Stop Air Tickets • Instant PNR Booking</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-5xl font-black text-blue-950 tracking-tight drop-shadow-xs font-serif uppercase">
+                FIXED DEPARTURE <br />
+                <span className="text-orange-600">AVAILABLE</span>
+              </h1>
+
+              <p className="text-xs sm:text-sm text-slate-700 font-medium">
+                Select your sector above and click <span className="font-bold text-orange-700">Search</span> to view live guaranteed seat inventory, non-stop flight timings, and best B2B wholesale rates.
+              </p>
+
+              {/* Quick Sector Shortcut Cards */}
+              <div className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+                {SECTOR_OPTIONS.map(s => (
+                  <button
+                    key={`${s.origin}-${s.dest}`}
+                    type="button"
+                    onClick={() => {
+                      setOrigin(s.origin);
+                      setDestination(s.dest);
+                      setHasSearched(true);
+                    }}
+                    className="p-3 bg-white/90 hover:bg-white rounded-xl shadow-xs border border-sky-200 hover:border-orange-400 transition text-left cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-900 group-hover:text-orange-600">
+                      <span>{s.origin} ➔ {s.dest}</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {s.originCity} to {s.destCity}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 4. SEARCH RESULTS AREA (Exact Match: Image 3)                 */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {hasSearched && (
+        <main className="flex-1 max-w-[1700px] w-full mx-auto px-3 sm:px-6 py-3 flex flex-col gap-3">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+            
+            {/* ───────────────────────────────────────────────────────── */}
+            {/* LEFT SIDEBAR: FILTERS (Image 3 Left Side)                */}
+            {/* ───────────────────────────────────────────────────────── */}
+            <aside className="lg:col-span-3 bg-white rounded-lg border border-slate-200 shadow-2xs p-3.5 space-y-4">
+              
+              {/* Header: Found count + Reset */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <span className="text-xs font-black text-slate-900">
+                  {displayedFlights.length} Flights found
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterRefundable('ALL');
+                    setFilterStops('0');
+                    setFilterTimeSlot('ALL');
+                    setSelectedAirlines([]);
+                  }}
+                  className="text-[11px] font-bold text-blue-700 hover:underline cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              </div>
+
+
+              {/* Filter 2: Stops */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-700">Stops</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setFilterStops('0')}
+                    className={`py-1.5 px-1 text-center rounded border text-xs font-bold cursor-pointer transition ${
+                      filterStops === '0'
+                        ? 'border-blue-900 bg-blue-50 text-blue-950 ring-1 ring-blue-900'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div>0</div>
+                    <div className="text-[10px] font-medium text-slate-500">Non-Stop</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFilterStops('1')}
+                    className={`py-1.5 px-1 text-center rounded border text-xs font-bold cursor-pointer transition ${
+                      filterStops === '1'
+                        ? 'border-blue-900 bg-blue-50 text-blue-950 ring-1 ring-blue-900'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div>1</div>
+                    <div className="text-[10px] font-medium text-slate-500">Stop</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFilterStops('2+')}
+                    className={`py-1.5 px-1 text-center rounded border text-xs font-bold cursor-pointer transition ${
+                      filterStops === '2+'
+                        ? 'border-blue-900 bg-blue-50 text-blue-950 ring-1 ring-blue-900'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div>2+</div>
+                    <div className="text-[10px] font-medium text-slate-500">Stop</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter 3: Departure Time Slot */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-700">Departure</label>
+                <div className="grid grid-cols-4 gap-1 text-center text-xs">
+                  {[
+                    { key: '00-06', label: '00-06', icon: '🌅' },
+                    { key: '06-12', label: '06-12', icon: '☀️' },
+                    { key: '12-18', label: '12-18', icon: '🌤️' },
+                    { key: '18-00', label: '18-00', icon: '🌙' },
+                  ].map(slot => (
+                    <button
+                      key={slot.key}
+                      type="button"
+                      onClick={() => setFilterTimeSlot(filterTimeSlot === slot.key ? 'ALL' : slot.key)}
+                      className={`p-1.5 rounded border flex flex-col items-center justify-center cursor-pointer transition ${
+                        filterTimeSlot === slot.key
+                          ? 'border-blue-800 bg-blue-50 text-blue-950 ring-1 ring-blue-800 font-bold'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-sm">{slot.icon}</span>
+                      <span className="text-[10px] mt-0.5">{slot.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Filter 4: Airlines */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[11px] font-bold text-slate-700">Airlines</label>
+                <div className="space-y-1.5 text-xs text-slate-700">
+                  {[
+                    { code: 'IX', name: 'Air India Express' },
+                    { code: '6E', name: 'IndiGo' },
+                    { code: 'SG', name: 'SpiceJet' }
+                  ].map(a => {
+                    const isChecked = selectedAirlines.includes(a.code);
+                    return (
+                      <label 
+                        key={a.code} 
+                        className={`flex items-center space-x-2.5 p-1.5 rounded-lg border cursor-pointer transition ${
+                          isChecked ? 'bg-blue-50/80 border-blue-300 ring-1 ring-blue-300' : 'border-slate-100 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedAirlines(selectedAirlines.filter(c => c !== a.code));
+                            } else {
+                              setSelectedAirlines([...selectedAirlines, a.code]);
+                            }
+                          }}
+                          className="rounded text-blue-600 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                        />
+                        {renderAirlineIcon(a.code, a.name, "w-6 h-6")}
+                        <span className="font-bold text-xs text-slate-800 flex-1">{a.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quick Sector Selector inside filter */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Switch Sector</label>
+                <div className="mt-1.5 space-y-1">
+                  {SECTOR_OPTIONS.map(s => {
+                    const isCurrent = origin === s.origin && destination === s.dest;
+                    return (
+                      <button
+                        key={`${s.origin}-${s.dest}`}
+                        type="button"
+                        onClick={() => {
+                          setOrigin(s.origin);
+                          setDestination(s.dest);
+                        }}
+                        className={`w-full text-left px-2 py-1.5 rounded text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          isCurrent
+                            ? 'bg-blue-900 text-white'
+                            : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{s.origin} ➔ {s.dest}</span>
+                        <span className="text-[10px] opacity-80">{s.destCity}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </aside>
+
+            {/* ───────────────────────────────────────────────────────── */}
+            {/* RIGHT MAIN: DATE CAROUSEL + FLIGHT RESULTS (Image 3)      */}
+            {/* ───────────────────────────────────────────────────────── */}
+            <section className="lg:col-span-9 space-y-2.5">
+              
+              {/* 1. HORIZONTAL DATE CAROUSEL STRIP (Exact Match: Image 3) */}
+              <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="flex items-center">
+                  
+                  {/* Left Arrow Button */}
+                  <button
+                    type="button"
+                    onClick={() => scrollCalendar('left')}
+                    className="w-8 h-12 bg-[#0b3b82] hover:bg-blue-900 text-white flex items-center justify-center shrink-0 cursor-pointer transition"
+                    title="Previous Dates"
+                  >
+                    <ChevronLeft className="w-5 h-5 font-bold" />
+                  </button>
+
+                  {/* Scrollable Date Tabs */}
+                  <div 
+                    ref={calendarScrollRef}
+                    className="flex-1 flex items-center overflow-x-auto scrollbar-none divide-x divide-slate-200"
+                  >
+                    {availableDatesList.map(item => {
+                      const isSelected = item.date === onwardDate;
+                      const displayFare = getDisplayPrice(item.minFare);
+                      return (
+                        <button
+                          key={item.date}
+                          type="button"
+                          onClick={() => setOnwardDate(item.date)}
+                          className={`min-w-[110px] sm:min-w-[125px] py-2 px-2 text-center transition flex flex-col items-center justify-center cursor-pointer relative ${
+                            isSelected
+                              ? 'bg-orange-50/70 font-bold'
+                              : 'bg-white hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <span className={`text-[11px] leading-tight ${isSelected ? 'text-slate-900 font-extrabold' : 'text-slate-500 font-medium'}`}>
+                            {item.dayName}
+                          </span>
+                          <span className={`text-xs font-black tracking-tight mt-0.5 ${isSelected ? 'text-orange-600' : 'text-slate-800'}`}>
+                            {item.label}
+                          </span>
+                          <span className={`text-[10px] font-extrabold mt-0.5 ${isSelected ? 'text-[#0b3b82]' : 'text-slate-400'}`}>
+                            {displayFare > 0 ? `₹${displayFare.toLocaleString('en-IN')}` : '--'}
+                          </span>
+
+                          {/* Active Orange Underline Bar */}
+                          {isSelected && (
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-orange-600 rounded-t" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Right Arrow Button */}
+                  <button
+                    type="button"
+                    onClick={() => scrollCalendar('right')}
+                    className="w-8 h-12 bg-[#0b3b82] hover:bg-blue-900 text-white flex items-center justify-center shrink-0 cursor-pointer transition"
+                    title="Next Dates"
+                  >
+                    <ChevronRight className="w-5 h-5 font-bold" />
+                  </button>
+                </div>
+
+                {/* Sub-bar below calendar: Navigation links & Share actions */}
+                <div className="bg-slate-50 border-t border-slate-200 px-3 py-1.5 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2">
+                  <div className="flex items-center space-x-2 font-medium">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idx = availableDatesList.findIndex(d => d.date === onwardDate);
+                        if (idx > 0) setOnwardDate(availableDatesList[idx - 1].date);
+                      }}
+                      className="hover:text-blue-700 cursor-pointer"
+                    >
+                      « Previous Day
+                    </button>
+                    <span>|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idx = availableDatesList.findIndex(d => d.date === onwardDate);
+                        if (idx !== -1 && idx < availableDatesList.length - 1) {
+                          setOnwardDate(availableDatesList[idx + 1].date);
+                        }
+                      }}
+                      className="hover:text-blue-700 cursor-pointer"
+                    >
+                      Next Day »
+                    </button>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    {/* Show Incentive Toggle */}
+                    <label className="flex items-center space-x-1.5 cursor-pointer text-[11px] font-semibold text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={showIncentive}
+                        onChange={(e) => setShowIncentive(e.target.checked)}
+                        className="rounded text-blue-600"
+                      />
+                      <span>Show Incentive</span>
+                    </label>
+
+                    {/* Share By WhatsApp / Email */}
+                    <div className="flex items-center space-x-1 text-[11px]">
+                      <span>Share By :-</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (displayedFlights.length > 0) handleShareQuote(displayedFlights[0]);
+                        }}
+                        className="p-1 text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                        title="Share on WhatsApp"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (displayedFlights.length > 0) handleShareQuote(displayedFlights[0]);
+                        }}
+                        className="p-1 text-rose-600 hover:text-rose-700 cursor-pointer"
+                        title="Share by Email"
+                      >
+                        <Mail className="w-4 h-4" />
+                      </button>
+                      {copySuccess && (
+                        <span className="text-emerald-600 font-bold text-[10px] animate-fade-in">
+                          Copied!
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. RESULTS TABLE HEADER (Image 3) */}
+              <div className="bg-white border border-slate-200 rounded-t-lg px-4 py-2 flex items-center justify-between text-[11px] font-extrabold text-slate-700 uppercase tracking-wider shadow-2xs">
+                <div>SORT BY:</div>
+                <div className="hidden sm:grid grid-cols-4 gap-8 text-center text-slate-500 font-bold">
+                  <span>DEPARTURE</span>
+                  <span>DURATION</span>
+                  <span>ARRIVAL</span>
+                  <span>PRICE</span>
+                </div>
+              </div>
+
+              {/* 3. FLIGHT RESULT CARDS LIST (Exact Match: Image 3) */}
+              {displayedFlights.length === 0 ? (
+                <div className="bg-white rounded-b-lg border border-slate-200 p-8 text-center space-y-3">
+                  <Plane className="w-10 h-10 text-slate-300 mx-auto" />
+                  <p className="font-bold text-sm text-slate-800">
+                    No fixed departures found on this date.
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Try selecting another date from the calendar strip above or check the next day.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {displayedFlights.map(flight => {
+                    const price = getDisplayPrice(flight.final_rate);
+                    return (
+                      <div 
+                        key={flight.id} 
+                        className="bg-white rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all overflow-hidden"
+                      >
+                        {/* Main Flight Row */}
+                        <div className="p-4 sm:p-4.5 grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-center">
+                          
+                          {/* Col 1: Airline Logo, Name & Flight Number (3.5 Cols) */}
+                          <div className="lg:col-span-3 flex items-center space-x-3.5">
+                            {renderAirlineIcon(flight.airline_code, flight.airline_name, "w-12 h-12")}
+                            <div>
+                              <p className="text-sm font-black text-slate-900 leading-tight">
+                                {flight.airline_name}
+                              </p>
+                              <div className="flex items-center space-x-1.5 mt-1">
+                                <span className="bg-slate-100 text-slate-800 font-mono text-[11px] font-bold px-2 py-0.5 rounded border border-slate-200">
+                                  {flight.flight_number}
+                                </span>
+                                {flight.aircraft && (
+                                  <span className="text-[10px] text-slate-400 font-medium hidden sm:inline-block">
+                                    {flight.aircraft}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Col 2: Departure, Flight Path Bar, Arrival (6 Cols) */}
+                          <div className="lg:col-span-6 grid grid-cols-3 gap-2 items-center text-center">
+                            
+                            {/* Departure */}
+                            <div className="flex flex-col items-center">
+                              <div className="flex items-center space-x-1">
+                                <span className="text-xs font-black text-slate-900 uppercase">{flight.origin}</span>
+                                {flight.origin_terminal && (
+                                  <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold border border-slate-200">
+                                    {flight.origin_terminal}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight my-0.5">
+                                {flight.departure_time}
+                              </span>
+                              <span className="text-xs font-medium text-slate-600">{flight.origin_city}</span>
+                              <span className="text-[10px] text-amber-900 font-bold bg-amber-50 px-1.5 py-0.2 rounded mt-0.5 border border-amber-200/60">
+                                {flight.formatted_date}
+                              </span>
+                            </div>
+
+                            {/* Duration & Non Stop Line */}
+                            <div className="flex flex-col items-center px-1">
+                              <span className="text-xs font-black text-slate-700 tracking-tight">{flight.duration}</span>
+                              <div className="relative w-full flex items-center justify-center my-1.5">
+                                <div className="w-full h-0.5 bg-slate-200"></div>
+                                <div className="absolute w-6 h-6 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center shadow-2xs">
+                                  <Plane className="w-3.5 h-3.5 text-[#0b3b82] transform rotate-45" />
+                                </div>
+                              </div>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                ● {flight.stops}
+                              </span>
+                            </div>
+
+                            {/* Arrival */}
+                            <div className="flex flex-col items-center">
+                              <div className="flex items-center space-x-1">
+                                <span className="text-xs font-black text-slate-900 uppercase">{flight.destination}</span>
+                                {flight.destination_terminal && (
+                                  <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold border border-slate-200">
+                                    {flight.destination_terminal}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight my-0.5">
+                                {flight.arrival_time}
+                              </span>
+                              <span className="text-xs font-medium text-slate-600">{flight.destination_city}</span>
+                              <span className="text-[10px] text-amber-900 font-bold bg-amber-50 px-1.5 py-0.2 rounded mt-0.5 border border-amber-200/60">
+                                {flight.formatted_date}
+                              </span>
+                            </div>
+
+                          </div>
+
+                          {/* Col 3: Price & Book Button (3 Cols) */}
+                          <div className="lg:col-span-3 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
+                            
+                            {/* Price with Radio icon */}
+                            <div className="text-left sm:text-right">
+                              <div className="flex items-center space-x-1.5 justify-start sm:justify-end">
+                                <div className="w-3.5 h-3.5 rounded-full border-2 border-blue-900 flex items-center justify-center shrink-0">
+                                  <div className="w-1.5 h-1.5 bg-blue-900 rounded-full"></div>
+                                </div>
+                                <span className="text-xl sm:text-2xl font-black text-[#0b3b82] tracking-tight">
+                                  ₹{price.toLocaleString('en-IN')}
+                                </span>
+                                <span className="text-[9px] bg-orange-500 text-white font-extrabold px-1.5 py-0.5 rounded uppercase">
+                                  TX
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-semibold text-slate-400">Net per pax • Special Fare</p>
+                            </div>
+
+                            {/* Book Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenBookingModal(flight)}
+                              className="px-6 py-2.5 bg-gradient-to-r from-[#0b3b82] to-blue-900 hover:from-blue-900 hover:to-blue-950 text-white font-black text-xs sm:text-sm rounded-lg shadow-xs hover:shadow-md transition-all flex items-center space-x-1.5 cursor-pointer active:scale-98"
+                            >
+                              <span>Book Seat</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                        </div>
+
+                        {/* Card Bottom Strip (Badges) */}
+                        <div className="bg-slate-50 border-t border-slate-200/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+                          
+                          {/* Badges */}
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                            <span className="w-5 h-5 bg-orange-500 text-white font-black text-[10px] rounded flex items-center justify-center">
+                              E
+                            </span>
+
+                            <span className="text-slate-300">|</span>
+                            <span className="font-bold text-slate-800">TravelX Guaranteed</span>
+
+                            <span className="text-slate-300">|</span>
+                            <span className="text-slate-700 font-semibold">{flight.is_refundable}</span>
+
+                            <span className="text-slate-300">|</span>
+                            <span className="text-slate-700 font-semibold">{flight.meal_type}</span>
+
+                            <span className="text-slate-300">|</span>
+                            <span className="text-slate-700 font-semibold">{formatBaggage(flight.baggage)}</span>
+
+                            <span className="text-slate-300">|</span>
+                            {/* Share Itinerary */}
+                            <label className="flex items-center space-x-1 cursor-pointer text-[11px] font-semibold hover:text-slate-900">
+                              <input
+                                type="checkbox"
+                                onChange={() => handleShareQuote(flight)}
+                                className="rounded text-blue-600 cursor-pointer"
+                              />
+                              <span>Share Itinerary</span>
+                            </label>
+
+                            {/* Seats Left Badge (Orange) */}
+                            <div className="flex items-center space-x-1 text-orange-700 bg-orange-50 px-2.5 py-0.5 rounded-full font-extrabold text-[11px] border border-orange-200">
+                              <Users className="w-3.5 h-3.5" />
+                              <span>{flight.seats_left} Seat(s) Left</span>
+                            </div>
+                          </div>
+
+                          {/* View Flight Details Pill Button */}
+                          <button
+                            type="button"
+                            onClick={() => setDetailFlight(flight)}
+                            className="px-3.5 py-1 rounded-full border border-orange-500 text-orange-600 hover:bg-orange-500 hover:text-white font-bold text-xs transition-colors cursor-pointer"
+                          >
+                            View Flight Details
+                          </button>
+
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+            </section>
+          </div>
+        </main>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 5. VIEW FLIGHT DETAILS MODAL                                   */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {detailFlight && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="bg-[#0b3b82] text-white px-5 py-3.5 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base">Flight Itinerary & Fare Rules</h3>
+                <p className="text-xs text-sky-200">{detailFlight.route_label} • {detailFlight.formatted_date}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailFlight(null)}
+                className="p-1 rounded-full hover:bg-white/20 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 text-xs">
+              
+              {/* Flight Details Block */}
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    {renderAirlineIcon(detailFlight.airline_code, detailFlight.airline_name, "w-12 h-12")}
+                    <div>
+                      <p className="font-extrabold text-sm text-slate-900">{detailFlight.airline_name}</p>
+                      <div className="flex items-center space-x-1.5 mt-0.5">
+                        <span className="font-mono font-bold text-xs text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                          {detailFlight.flight_number}
+                        </span>
+                        {detailFlight.aircraft && (
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            • {detailFlight.aircraft}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] border border-emerald-200">
+                    Non-Stop ({detailFlight.duration})
+                  </span>
+                </div>
+
+                {/* Timings with Terminals */}
+                <div className="grid grid-cols-3 gap-2 text-center pt-3 border-t border-slate-200">
+                  <div>
+                    <div className="flex items-center justify-center space-x-1">
+                      <span className="text-[11px] text-slate-700 font-black">{detailFlight.origin}</span>
+                      {detailFlight.origin_terminal && (
+                        <span className="text-[9px] bg-slate-200 text-slate-700 px-1 rounded font-bold">
+                          {detailFlight.origin_terminal}
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-black text-lg text-slate-950 my-0.5">{detailFlight.departure_time}</p>
+                    <p className="text-slate-600 text-[11px] font-medium">{detailFlight.origin_city}</p>
+                  </div>
+                  <div className="flex flex-col items-center justify-center px-1">
+                    <span className="text-[10px] text-slate-400 font-semibold">Direct Flight</span>
+                    <div className="w-full flex items-center justify-center my-1">
+                      <div className="w-full h-0.5 bg-slate-300"></div>
+                      <Plane className="w-3.5 h-3.5 text-[#0b3b82] mx-1 -rotate-45 shrink-0" />
+                      <div className="w-full h-0.5 bg-slate-300"></div>
+                    </div>
+                    <span className="font-bold text-slate-700 text-xs">{detailFlight.duration}</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-center space-x-1">
+                      <span className="text-[11px] text-slate-700 font-black">{detailFlight.destination}</span>
+                      {detailFlight.destination_terminal && (
+                        <span className="text-[9px] bg-slate-200 text-slate-700 px-1 rounded font-bold">
+                          {detailFlight.destination_terminal}
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-black text-lg text-slate-950 my-0.5">{detailFlight.arrival_time}</p>
+                    <p className="text-slate-600 text-[11px] font-medium">{detailFlight.destination_city}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Baggage & In-flight rules */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                  <div className="flex items-center space-x-1.5 font-bold text-amber-900">
+                    <Briefcase className="w-4 h-4 text-amber-700" />
+                    <span>Baggage Allowance</span>
+                  </div>
+                  <p className="text-slate-700 mt-1">{formatBaggage(detailFlight.baggage)}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Check-in + 7 Kg Cabin Hand Baggage</p>
+                </div>
+
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                  <div className="flex items-center space-x-1.5 font-bold text-emerald-900">
+                    <Coffee className="w-4 h-4 text-emerald-700" />
+                    <span>Meal & Service</span>
+                  </div>
+                  <p className="text-slate-700 mt-1">{detailFlight.meal_type}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Pre-booked or buy on board</p>
+                </div>
+              </div>
+
+              {/* Cancellation Policy */}
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-rose-900 space-y-1">
+                <div className="flex items-center space-x-1.5 font-bold">
+                  <ShieldAlert className="w-4 h-4 text-rose-700" />
+                  <span>Fare Rules & Policy</span>
+                </div>
+                <p className="text-[11px] text-rose-800">
+                  • 100% Non-Refundable & Non-Changeable after ticket confirmation.
+                </p>
+                <p className="text-[11px] text-rose-800">
+                  • Name correction strictly subject to airline group policy.
+                </p>
+              </div>
+
+              {/* Fare Summary */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <div>
+                  <span className="text-slate-500">Quoted Rate:</span>
+                  <span className="text-lg font-black text-[#0b3b82] ml-2">
+                    ₹{getDisplayPrice(detailFlight.final_rate).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const f = detailFlight;
+                    setDetailFlight(null);
+                    handleOpenBookingModal(f);
+                  }}
+                  className="px-5 py-2.5 bg-gradient-to-r from-[#0b3b82] to-blue-900 hover:from-blue-900 hover:to-blue-950 text-white font-black text-xs rounded-lg transition cursor-pointer shadow-md flex items-center space-x-1.5"
+                >
+                  <span>Book Seat Now</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 5B. BOOKING REQUEST MODAL (Direct to Admin Desk)              */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {bookingFlight && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto animate-in zoom-in-95 duration-150">
+            {bookingSuccessResult ? (
+              /* Success Celebration State */
+              <div className="p-6 text-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ring-8 ${
+                  bookingSuccessResult.booking.status === 'AVAILABLE'
+                    ? 'bg-emerald-100 text-emerald-600 ring-emerald-50'
+                    : bookingSuccessResult.booking.status === 'FARE_REVISED'
+                    ? 'bg-indigo-100 text-indigo-600 ring-indigo-50'
+                    : bookingSuccessResult.booking.status === 'SOLD_OUT'
+                    ? 'bg-rose-100 text-rose-600 ring-rose-50'
+                    : 'bg-emerald-100 text-emerald-600 ring-emerald-50'
+                }`}>
+                  {bookingSuccessResult.booking.status === 'SOLD_OUT' ? (
+                    <XCircle className="w-10 h-10 text-rose-600" />
+                  ) : bookingSuccessResult.booking.status === 'FARE_REVISED' ? (
+                    <AlertCircle className="w-10 h-10 text-indigo-600" />
+                  ) : (
+                    <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+                  )}
+                </div>
+
+                <h3 className="text-xl font-black text-slate-900">
+                  {bookingSuccessResult.booking.status === 'AVAILABLE'
+                    ? '🎉 Seat Available, Update Passport for Issue'
+                    : bookingSuccessResult.booking.status === 'FARE_REVISED'
+                    ? 'Airline Fare Update Received'
+                    : bookingSuccessResult.booking.status === 'SOLD_OUT'
+                    ? 'Seats Sold Out for this Flight'
+                    : 'Seat Availability Request Dispatched!'}
+                </h3>
+                <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
+                  {bookingSuccessResult.booking.status === 'AVAILABLE'
+                    ? 'TravelX Operations Desk has confirmed your seats. Please upload passenger passports below to issue tickets immediately.'
+                    : bookingSuccessResult.booking.status === 'FARE_REVISED'
+                    ? 'The airline has revised the fare. Please review and proceed if acceptable.'
+                    : bookingSuccessResult.booking.status === 'SOLD_OUT'
+                    ? 'Unfortunately, seats are full. Please check alternate travel dates.'
+                    : 'Your request was delivered live to the TravelX Operations Desk. An executive is checking seat availability now.'}
+                </p>
+
+                {/* Reference Card */}
+                <div className="bg-blue-50/80 border-2 border-dashed border-blue-300 rounded-xl p-4 my-4">
+                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Your Booking Reference</span>
+                  <div className="flex items-center justify-center space-x-2 mt-1">
+                    <span className="text-2xl font-black text-blue-950 font-mono tracking-normal">
+                      #{bookingSuccessResult.booking.request_ref}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyRef(bookingSuccessResult.booking.request_ref)}
+                      className="p-1.5 hover:bg-blue-100 rounded-lg text-blue-800 transition cursor-pointer"
+                      title="Copy Reference Code"
+                    >
+                      {copiedRef ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {copiedRef && (
+                    <span className="text-[11px] text-emerald-600 font-bold block mt-1">Copied to clipboard!</span>
+                  )}
+                </div>
+
+                {/* Flight & Amount Summary */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-left text-xs space-y-2 mb-5">
+                  <div className="flex justify-between pb-2 border-b border-slate-200">
+                    <span className="text-slate-500">Flight:</span>
+                    <span className="font-bold text-slate-900">
+                      {bookingFlight.airline_name} ({bookingFlight.flight_number})
+                    </span>
+                  </div>
+                  <div className="flex justify-between pb-2 border-b border-slate-200">
+                    <span className="text-slate-500">Sector & Date:</span>
+                    <span className="font-bold text-slate-900">
+                      {bookingFlight.origin} ➔ {bookingFlight.destination} • {bookingFlight.day_label}, {bookingFlight.formatted_date}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pb-2 border-b border-slate-200">
+                    <span className="text-slate-500">Passengers:</span>
+                    <span className="font-bold text-slate-900">
+                      {bookingSuccessResult.booking.pax_count} Pax
+                      {(bookingSuccessResult.booking.pax_adults || bookingSuccessResult.booking.pax_children || bookingSuccessResult.booking.pax_infants) ? (
+                        <span className="text-slate-500 font-normal ml-1">
+                          ({bookingSuccessResult.booking.pax_adults || bookingSuccessResult.booking.pax_count} Adt
+                          {bookingSuccessResult.booking.pax_children ? `, ${bookingSuccessResult.booking.pax_children} Chd` : ''}
+                          {bookingSuccessResult.booking.pax_infants ? `, ${bookingSuccessResult.booking.pax_infants} Inf` : ''})
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm pt-0.5">
+                    <span className="font-extrabold text-slate-700">Total Rate:</span>
+                    <div className="text-right">
+                      <span className="font-black text-[#0b3b82] block leading-tight">
+                        ₹{Number(bookingSuccessResult.booking.total_amount).toLocaleString('en-IN')}
+                      </span>
+                      {bookingSuccessResult.booking.pax_infants > 0 && (
+                        <span className="text-[10px] text-amber-800 font-bold block mt-0.5">
+                          {bookingSuccessResult.booking.infant_fare
+                            ? `(Includes Infant: ₹${Number(bookingSuccessResult.booking.infant_fare * bookingSuccessResult.booking.pax_infants).toLocaleString('en-IN')})`
+                            : `• Infant rate extra, not included in this. For infant rate, please contact TravelX.`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Notice Card */}
+                {bookingSuccessResult.booking.status === 'AVAILABLE' ? (
+                  <div className="p-4 bg-emerald-50 border-2 border-emerald-500 rounded-2xl mb-5 text-emerald-950 text-left space-y-1.5 shadow-sm animate-in zoom-in-95">
+                    <div className="flex items-center space-x-2 text-xs font-black text-emerald-950">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <span>SEAT AVAILABLE — UPDATE PASSPORT FOR ISSUE</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-900 font-semibold leading-relaxed">
+                      Seats are confirmed and held for your agency! Please upload passenger passports below to proceed with ticket issuance.
+                    </p>
+                  </div>
+                ) : bookingSuccessResult.booking.status === 'FARE_REVISED' ? (
+                  <div className="p-4 bg-indigo-50 border-2 border-indigo-400 rounded-2xl mb-5 text-indigo-950 text-left space-y-1.5 shadow-sm animate-in zoom-in-95">
+                    <div className="flex items-center space-x-2 text-xs font-black text-indigo-950">
+                      <AlertCircle className="w-5 h-5 text-indigo-600 shrink-0" />
+                      <span>AIRLINE FARE REVISED: ₹{Number(bookingSuccessResult.booking.revised_fare).toLocaleString('en-IN')}/PAX</span>
+                    </div>
+                    <p className="text-[11px] text-indigo-900 font-medium">
+                      {bookingSuccessResult.booking.admin_notes || 'Airline increased basic fare. If acceptable to your passenger, proceed to upload passports.'}
+                    </p>
+                  </div>
+                ) : bookingSuccessResult.booking.status === 'SOLD_OUT' ? (
+                  <div className="p-4 bg-rose-50 border-2 border-rose-400 rounded-2xl mb-5 text-rose-950 text-left space-y-1.5 shadow-sm animate-in zoom-in-95">
+                    <div className="flex items-center space-x-2 text-xs font-black text-rose-950">
+                      <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                      <span>SEATS SOLD OUT FOR THIS DATE</span>
+                    </div>
+                    <p className="text-[11px] text-rose-900 font-medium">
+                      {bookingSuccessResult.booking.admin_notes || 'Seats are no longer available for this flight. Please search alternate dates.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center space-x-2 text-xs font-bold text-amber-900 bg-amber-50 px-3.5 py-2.5 rounded-xl border border-amber-300 mb-5">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                    <span>Status: PENDING REVIEW at TravelX Operations Desk</span>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping ml-1" title="Live Auto-Checking Active" />
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="space-y-2">
+                  {bookingSuccessResult.booking.status === 'AVAILABLE' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ref = bookingSuccessResult.booking.request_ref;
+                        setBookingFlight(null);
+                        setBookingSuccessResult(null);
+                        handleFetchTracking(ref);
+                      }}
+                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black rounded-xl transition flex items-center justify-center space-x-2 cursor-pointer shadow-md animate-pulse active:scale-98"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>👉 Update Passport for Issue (Upload Passports)</span>
+                    </button>
+                  ) : bookingSuccessResult.booking.status === 'FARE_REVISED' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ref = bookingSuccessResult.booking.request_ref;
+                        setBookingFlight(null);
+                        setBookingSuccessResult(null);
+                        handleFetchTracking(ref);
+                      }}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-black rounded-xl transition flex items-center justify-center space-x-2 cursor-pointer shadow-md"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>Proceed to Upload Passports (₹{Number(bookingSuccessResult.booking.revised_fare).toLocaleString('en-IN')})</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ref = bookingSuccessResult.booking.request_ref;
+                          setBookingFlight(null);
+                          setBookingSuccessResult(null);
+                          handleFetchTracking(ref);
+                        }}
+                        className="flex-1 py-2.5 bg-blue-900 hover:bg-blue-950 text-white text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Search className="w-4 h-4" />
+                        <span>Live Track & Upload Passports</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleWhatsAppBookingConfirm(bookingSuccessResult.booking, bookingFlight)}
+                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-xs"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        <span>Chat on WhatsApp</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookingFlight(null);
+                      setBookingSuccessResult(null);
+                    }}
+                    className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Request Form State */
+              <div>
+                {/* Modal Header */}
+                <div className="bg-gradient-to-r from-[#0b3b82] via-[#0f4c9c] to-blue-900 text-white p-5 relative overflow-hidden">
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-sky-200 shadow-inner">
+                        <Plane className="w-5 h-5 -rotate-45" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[10px] uppercase font-black tracking-widest text-sky-300">
+                            Seat Available??? • Instant Enquiry
+                          </span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-black leading-tight text-white">
+                          {bookingFlight.origin_city} ({bookingFlight.origin}) ➔ {bookingFlight.destination_city} ({bookingFlight.destination})
+                        </h3>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBookingFlight(null)}
+                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                      title="Close modal"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Flight Summary Strip */}
+                <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-3">
+                    {renderAirlineIcon(bookingFlight.airline_code, bookingFlight.airline_name, "w-8 h-8")}
+                    <div>
+                      <div className="font-extrabold text-slate-900">
+                        {bookingFlight.airline_name} <span className="font-mono text-slate-600 font-bold">({bookingFlight.flight_number})</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        {bookingFlight.day_label}, {bookingFlight.formatted_date} • {bookingFlight.departure_time} - {bookingFlight.arrival_time}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-500 block font-medium">Per Pax</span>
+                    <span className="text-sm font-black text-[#0b3b82]">
+                      ₹{getDisplayPrice(bookingFlight.final_rate).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Form Container */}
+                <form onSubmit={handleSubmitBooking} className="p-5 space-y-4">
+                  {/* Passenger Breakdown Card: Adults, Children, Infants */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                      <div className="flex items-center space-x-1.5">
+                        <Users className="w-4 h-4 text-[#0b3b82]" />
+                        <label className="text-xs font-black text-slate-900">
+                          Passengers ({bookingAdults + bookingChildren + bookingInfants} Pax)
+                        </label>
+                      </div>
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                        {bookingFlight.seats_left} seats available
+                      </span>
+                    </div>
+
+                    {/* 1. Adults Counter */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-extrabold text-slate-900">Adults</div>
+                        <div className="text-[11px] text-slate-500 font-medium">12+ years</div>
+                      </div>
+                      <div className="flex items-center space-x-2 bg-white border border-slate-300 rounded-lg p-1 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.max(1, bookingAdults - 1);
+                            setBookingAdults(next);
+                            const nextInfants = Math.min(bookingInfants, next);
+                            if (nextInfants !== bookingInfants) setBookingInfants(nextInfants);
+                            setBookingPax(next + bookingChildren + nextInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-7 text-center font-black text-xs sm:text-sm text-slate-900">
+                          {bookingAdults}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.min(9, bookingAdults + 1);
+                            setBookingAdults(next);
+                            setBookingPax(next + bookingChildren + bookingInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-[#0b3b82] hover:bg-blue-900 text-white font-bold transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 2. Children Counter */}
+                    <div className="flex items-center justify-between border-t border-slate-200/60 pt-2.5">
+                      <div>
+                        <div className="text-xs font-extrabold text-slate-900">Children</div>
+                        <div className="text-[11px] text-slate-500 font-medium">2-11 years</div>
+                      </div>
+                      <div className="flex items-center space-x-2 bg-white border border-slate-300 rounded-lg p-1 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.max(0, bookingChildren - 1);
+                            setBookingChildren(next);
+                            setBookingPax(bookingAdults + next + bookingInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-7 text-center font-black text-xs sm:text-sm text-slate-900">
+                          {bookingChildren}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.min(8, bookingChildren + 1);
+                            setBookingChildren(next);
+                            setBookingPax(bookingAdults + next + bookingInfants);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-[#0b3b82] hover:bg-blue-900 text-white font-bold transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 3. Infants Counter */}
+                    <div className="flex items-center justify-between border-t border-slate-200/60 pt-2.5">
+                      <div>
+                        <div className="text-xs font-extrabold text-slate-900">Infants</div>
+                        <div className="text-[11px] text-slate-500 font-medium">Under 2 years (lap infant)</div>
+                      </div>
+                      <div className="flex items-center space-x-2 bg-white border border-slate-300 rounded-lg p-1 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.max(0, bookingInfants - 1);
+                            setBookingInfants(next);
+                            setBookingPax(bookingAdults + bookingChildren + next);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-7 text-center font-black text-xs sm:text-sm text-slate-900">
+                          {bookingInfants}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.min(bookingAdults, bookingInfants + 1);
+                            setBookingInfants(next);
+                            setBookingPax(bookingAdults + bookingChildren + next);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-[#0b3b82] hover:bg-blue-900 text-white font-bold transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Total Fare Breakdown Highlight */}
+                  <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-slate-600 font-bold block">
+                        Estimated Net Fare:
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        {bookingAdults + bookingChildren} {bookingAdults + bookingChildren === 1 ? 'Seat' : 'Seats'} × ₹{getDisplayPrice(bookingFlight.final_rate).toLocaleString('en-IN')}
+                        {bookingInfants > 0 && ` (+ ${bookingInfants} Infant)`}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-black text-[#0b3b82] block leading-tight">
+                        ₹{((bookingAdults + bookingChildren) * getDisplayPrice(bookingFlight.final_rate)).toLocaleString('en-IN')}
+                      </span>
+                      {bookingInfants > 0 && (
+                        <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5 inline-block border border-amber-300">
+                          Infant rate not included
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Infant Rate Notice Card */}
+                  {bookingInfants > 0 && (
+                    <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border border-amber-300/90 rounded-2xl flex items-start space-x-3 text-xs text-amber-950 animate-in fade-in">
+                      <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                        <AlertCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-black text-amber-950 text-xs leading-tight">
+                          Infant rate extra, not included in this.
+                        </p>
+                        <p className="text-[11px] text-amber-800 font-bold mt-0.5">
+                          For infant rate, please contact TravelX.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Agency Details: Shown only for first-time agents without a saved profile */}
+                  {(!agentProfile || !agentProfile.agencyName) && (
+                    /* First Time Agent: 10-SECOND SETUP */
+                    <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                      <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-800">
+                        <Smartphone className="w-4 h-4 text-[#0b3b82]" />
+                        <span>Agency Details (One-Time Setup)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Enter once — we remember your agency for instant 1-click booking on your next visit!
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                        {/* Mobile */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Mobile Number *
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="tel"
+                              required
+                              maxLength={10}
+                              placeholder="10-digit mobile"
+                              value={bookingForm.mobile}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '');
+                                setBookingForm({ ...bookingForm, mobile: val });
+                                if (val.length === 10) {
+                                  handleMobileLookup(val);
+                                }
+                              }}
+                              className="w-full pl-3 pr-8 py-2 bg-white rounded-lg border border-slate-300 text-xs font-bold text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 font-mono"
+                            />
+                            {lookupLoading && (
+                              <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin absolute right-2.5 top-2.5" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Agency Name */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Agency Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Enter your Agency Name"
+                            value={bookingForm.agencyName}
+                            onChange={(e) => setBookingForm({ ...bookingForm, agencyName: e.target.value })}
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-xs font-bold text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
+                          />
+                        </div>
+
+                        {/* Contact Person */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Contact Person (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Your Name (Optional)"
+                            value={bookingForm.agentName}
+                            onChange={(e) => setBookingForm({ ...bookingForm, agentName: e.target.value })}
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-xs font-medium text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
+                          />
+                        </div>
+
+                        {/* City */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            City (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter City (Optional)"
+                            value={bookingForm.city}
+                            onChange={(e) => setBookingForm({ ...bookingForm, city: e.target.value })}
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-xs font-medium text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
+                          />
+                        </div>
+
+                        {/* Office Address */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Office / Shop Address (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Shop/Office No., Building, Market / Street"
+                            value={bookingForm.address}
+                            onChange={(e) => setBookingForm({ ...bookingForm, address: e.target.value })}
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-xs text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remarks / Passenger Names (Optional) */}
+                  <div className="text-xs">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Remarks / Pax Names (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 2 adults, 1 child, passenger names: Mr Rajesh Kumar, urgent"
+                      value={bookingForm.remarks}
+                      onChange={(e) => setBookingForm({ ...bookingForm, remarks: e.target.value })}
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-xs text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="pt-2 flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setBookingFlight(null)}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmittingBooking}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-[#0b3b82] to-blue-900 hover:from-blue-900 hover:to-blue-950 disabled:opacity-50 text-white text-xs sm:text-sm font-black rounded-xl shadow-md transition cursor-pointer flex items-center justify-center space-x-1.5 active:scale-98"
+                    >
+                      {isSubmittingBooking ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Checking with Desk...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>
+                            ⚡ Seat Available??? • ₹{((bookingAdults + bookingChildren) * getDisplayPrice(bookingFlight.final_rate)).toLocaleString('en-IN')}
+                            {bookingInfants > 0 ? ` (+ ${bookingInfants} Inf)` : ''}
+                          </span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 5C. B2B AGENT PROFILE & ADDRESS MODAL                         */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#0b3b82] to-blue-900 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-sky-200" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base leading-tight">Agency Profile & Address</h3>
+                  <p className="text-[11px] text-sky-200 mt-0.5">Complete business details for 1-click booking</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/20 transition cursor-pointer text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="p-5 space-y-4 text-xs">
+              <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-3 text-[11px] text-blue-900 leading-relaxed">
+                ℹ️ Your agency profile is stored on this browser for automatic 1-click booking without re-entering details.
+              </div>
+
+              {/* Section 1: Agency & Contact */}
+              <div className="space-y-2.5">
+                <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider block">
+                  1. Agency & Contact Info
+                </span>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Agency Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter your Agency Name"
+                    value={bookingForm.agencyName || agentProfile?.agencyName || ''}
+                    onChange={(e) => setBookingForm({ ...bookingForm, agencyName: e.target.value })}
+                    className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 font-bold text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Mobile Number *</label>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="10-digit mobile"
+                        value={bookingForm.mobile || agentProfile?.mobile || ''}
+                        onChange={(e) => {
+                          const clean = e.target.value.replace(/\D/g, '');
+                          setBookingForm({ ...bookingForm, mobile: clean });
+                          if (clean.length === 10) handleMobileLookup(clean);
+                        }}
+                        className="w-full pl-3 pr-8 py-2 bg-white rounded-lg border border-slate-300 font-mono font-bold text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                      />
+                      {lookupLoading && (
+                        <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin absolute right-2.5 top-2.5" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Contact Person (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="Your Name (Optional)"
+                      value={bookingForm.agentName || agentProfile?.agentName || ''}
+                      onChange={(e) => setBookingForm({ ...bookingForm, agentName: e.target.value })}
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 font-medium text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Email ID (Optional)</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. agency@yourcompany.com"
+                    value={bookingForm.email || agentProfile?.email || ''}
+                    onChange={(e) => setBookingForm({ ...bookingForm, email: e.target.value })}
+                    className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 font-medium text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Section 2: Complete Address Details (Proper Address Options) */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-200">
+                <div className="flex items-center space-x-1 text-[11px] font-black text-slate-900 uppercase tracking-wider">
+                  <MapPin className="w-3.5 h-3.5 text-orange-600" />
+                  <span>2. Registered Office Address</span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Office / Shop Address (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Shop/Office No., Floor, Complex/Market, Street"
+                    value={bookingForm.address || agentProfile?.address || ''}
+                    onChange={(e) => setBookingForm({ ...bookingForm, address: e.target.value })}
+                    className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">City (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Amritsar"
+                      value={bookingForm.city || agentProfile?.city || ''}
+                      onChange={(e) => setBookingForm({ ...bookingForm, city: e.target.value })}
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 font-medium text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">State (Optional)</label>
+                    <select
+                      value={bookingForm.state || agentProfile?.state || 'Punjab'}
+                      onChange={(e) => setBookingForm({ ...bookingForm, state: e.target.value })}
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 font-medium text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs cursor-pointer"
+                    >
+                      {INDIAN_STATES.map(st => (
+                        <option key={st} value={st}>{st}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Pincode (Optional)</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="e.g. 143001"
+                      value={bookingForm.pincode || agentProfile?.pincode || ''}
+                      onChange={(e) => setBookingForm({ ...bookingForm, pincode: e.target.value.replace(/\D/g, '') })}
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 font-mono text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 space-y-2 border-t border-slate-100">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-gradient-to-r from-[#0b3b82] to-blue-900 hover:from-blue-900 hover:to-blue-950 text-white font-black text-xs sm:text-sm rounded-xl transition cursor-pointer shadow-md flex items-center justify-center space-x-1.5 active:scale-98"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Agency Profile</span>
+                </button>
+
+                {agentProfile && (
+                  <button
+                    type="button"
+                    onClick={handleClearProfile}
+                    className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition cursor-pointer border border-rose-200"
+                  >
+                    Clear Saved Agency / Switch Account
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 6. ADMIN SECURITY PIN MODAL (Switch back to internal panel)   */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {showAdminPinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center mx-auto shadow-md">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-base text-slate-900">Switch to Admin Desk</h3>
+              <p className="text-xs text-slate-500">
+                Enter your Admin Access PIN to enter the internal rate management panel.
+              </p>
+            </div>
+
+            <form onSubmit={handleVerifyAdminPin} className="mt-4 space-y-3">
+              <div>
+                <input
+                  type="password"
+                  value={adminPinInput}
+                  onChange={(e) => {
+                    setAdminPinInput(e.target.value);
+                    setAdminPinError(false);
+                  }}
+                  placeholder="Enter PIN (Default: 7860)"
+                  className={`w-full px-3 py-2 text-center text-lg font-mono tracking-widest rounded-xl border outline-none focus:ring-2 ${
+                    adminPinError
+                      ? 'border-rose-500 focus:ring-rose-200 bg-rose-50'
+                      : 'border-slate-300 focus:border-slate-900 focus:ring-slate-200'
+                  }`}
+                  autoFocus
+                />
+                {adminPinError && (
+                  <p className="text-xs text-rose-600 font-semibold mt-1 text-center">
+                    Incorrect PIN. Try: 7860
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdminPinModal(false);
+                    setAdminPinInput('');
+                    setAdminPinError(false);
+                  }}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs"
+                >
+                  Enter Admin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 6B. LIVE BOOKING TRACKER & E-TICKET MODAL                      */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {showTrackerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 max-h-[92vh] flex flex-col">
+            {/* Tracker Header */}
+            <div className="bg-[#0b3b82] text-white p-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-white/10 text-white">
+                  <Search className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-bold text-sm sm:text-base leading-tight">
+                      Live Booking Tracker & E-Ticket
+                    </h3>
+                    {trackedBooking && !['CONFIRMED', 'CANCELLED', 'SOLD_OUT'].includes(trackedBooking.status) && (
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Live Sync 5s</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-sky-200">
+                    Track status, upload passenger passports, and download issued tickets
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTrackerModal(false);
+                  setTrackError(null);
+                }}
+                className="text-white/70 hover:text-white p-1.5 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              
+              {/* Reference Search Bar */}
+              <div className="flex items-center space-x-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    value={trackInputRef}
+                    onChange={(e) => setTrackInputRef(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && handleFetchTracking(trackInputRef)}
+                    placeholder="Enter Booking Reference (e.g. TX-NT5Y)"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-slate-900 text-sm outline-none focus:border-blue-900 focus:bg-white"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={trackLoading || !trackInputRef.trim()}
+                  onClick={() => handleFetchTracking(trackInputRef)}
+                  className="px-5 py-2.5 bg-blue-900 hover:bg-blue-950 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center space-x-1.5 shrink-0 shadow-xs"
+                >
+                  {trackLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  <span>Track</span>
+                </button>
+              </div>
+
+              {/* Error State */}
+              {trackError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{trackError}</span>
+                </div>
+              )}
+
+              {/* When Booking Loaded */}
+              {trackedBooking && (
+                <div className="space-y-4">
+                  {/* Top Reference & Status Card */}
+                  <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-sky-200 font-bold block">
+                          Booking Reference
+                        </span>
+                        <div className="flex items-center space-x-2 mt-0.5">
+                          <span className="text-xl sm:text-2xl font-black font-mono tracking-normal text-white">
+                            #{trackedBooking.request_ref}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(trackedBooking.request_ref);
+                              setCopiedRef(true);
+                              setTimeout(() => setCopiedRef(false), 2000);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-sky-200 transition cursor-pointer"
+                            title="Copy Reference"
+                          >
+                            {copiedRef ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div>
+                        {trackedBooking.status === 'PENDING' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-400 text-slate-950 shadow-sm">
+                            <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping mr-0.5" />
+                            <span>PENDING REVIEW</span>
+                          </span>
+                        )}
+                        {trackedBooking.status === 'AVAILABLE' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-400 text-slate-950 shadow-sm">
+                            <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                            <span>SEATS AVAILABLE</span>
+                          </span>
+                        )}
+                        {trackedBooking.status === 'FARE_REVISED' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-purple-300 text-slate-950 shadow-sm">
+                            <AlertCircle className="w-4 h-4 text-slate-950" />
+                            <span>FARE REVISED: ₹{Number(trackedBooking.revised_fare).toLocaleString('en-IN')}</span>
+                          </span>
+                        )}
+                        {trackedBooking.status === 'SOLD_OUT' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-400 text-slate-950 shadow-sm">
+                            <XCircle className="w-4 h-4 text-slate-950" />
+                            <span>SOLD OUT</span>
+                          </span>
+                        )}
+                        {trackedBooking.status === 'DOCS_SUBMITTED' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-teal-300 text-slate-950 shadow-sm">
+                            <FileText className="w-4 h-4 text-slate-950" />
+                            <span>PASSPORTS SUBMITTED</span>
+                          </span>
+                        )}
+                        {trackedBooking.status === 'CONFIRMED' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-300 text-slate-950 shadow-sm">
+                            <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                            <span>TICKET ISSUED</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Sector & Passenger Quick Info */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 text-xs">
+                      <div>
+                        <span className="text-sky-200 text-[10px] block">Sector</span>
+                        <span className="font-black text-white">{trackedBooking.origin} ➔ {trackedBooking.destination}</span>
+                      </div>
+                      <div>
+                        <span className="text-sky-200 text-[10px] block">Travel Date</span>
+                        <span className="font-black text-white">{trackedBooking.travel_date}</span>
+                      </div>
+                      <div>
+                        <span className="text-sky-200 text-[10px] block">Flight</span>
+                        <span className="font-black text-white">{trackedBooking.airline_name || trackedBooking.airline_code} {trackedBooking.flight_number}</span>
+                      </div>
+                      <div>
+                        <span className="text-sky-200 text-[10px] block">Total Amount</span>
+                        <span className="font-black text-white">
+                          ₹{Number(trackedBooking.total_amount || (trackedBooking.quoted_rate * trackedBooking.pax_count)).toLocaleString('en-IN')}
+                        </span>
+                        {trackedBooking.pax_infants > 0 && (
+                          <span className="text-[9px] text-amber-200 block font-semibold">
+                            {trackedBooking.infant_fare
+                              ? `(Includes Inf: ₹${Number(trackedBooking.infant_fare * trackedBooking.pax_infants).toLocaleString('en-IN')})`
+                              : `• Infant rate extra (Contact TravelX)`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Admin Note if any */}
+                  {trackedBooking.admin_notes && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-950">
+                      <span className="font-bold block mb-0.5">TravelX Operations Desk Note:</span>
+                      <p className="italic">{trackedBooking.admin_notes}</p>
+                    </div>
+                  )}
+
+                  {/* 4-Step Interactive Lifecycle Card */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                      Booking Progress Timeline
+                    </h4>
+
+                    {/* Step 1: Inquiry */}
+                    <div className="flex items-start space-x-3">
+                      <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-xs">
+                        <Check className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-slate-900">1. Seat Availability Request Submitted</p>
+                        <p className="text-[11px] text-slate-500">
+                          Received for {trackedBooking.pax_count} Pax ({trackedBooking.pax_adults || trackedBooking.pax_count} Adt{trackedBooking.pax_children ? `, ${trackedBooking.pax_children} Chd` : ''}{trackedBooking.pax_infants ? `, ${trackedBooking.pax_infants} Inf` : ''}) • {trackedBooking.baggage || '30+7 KG'}.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 2: Verification */}
+                    <div className="flex items-start space-x-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold shadow-xs ${
+                        trackedBooking.status === 'PENDING'
+                          ? 'bg-amber-500 text-white animate-pulse'
+                          : trackedBooking.status === 'SOLD_OUT'
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-emerald-600 text-white'
+                      }`}>
+                        {trackedBooking.status === 'PENDING' ? <Clock className="w-4 h-4" /> : trackedBooking.status === 'SOLD_OUT' ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-slate-900">2. Seat Availability & Fare Verification</p>
+                        {trackedBooking.status === 'PENDING' && (
+                          <p className="text-[11px] text-amber-700 font-medium">
+                            Operations desk is checking real-time availability with the airline. Refresh in 1-2 minutes.
+                          </p>
+                        )}
+                        {trackedBooking.status === 'AVAILABLE' && (
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] text-emerald-700 font-bold">
+                              Seats Confirmed Available at ₹{Number(trackedBooking.quoted_rate).toLocaleString('en-IN')}/pax! Upload passenger passports below to issue tickets.
+                            </p>
+                            {trackedBooking.pax_infants > 0 && (
+                              <p className="text-[11px] text-emerald-800 font-semibold">
+                                {trackedBooking.infant_fare
+                                  ? `• Airline Infant Fare: ₹${Number(trackedBooking.infant_fare).toLocaleString('en-IN')} x ${trackedBooking.pax_infants} (Total: ₹${Number(trackedBooking.total_amount).toLocaleString('en-IN')})`
+                                  : `• Infant rate extra, not included in this. For infant rate, please contact TravelX.`}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {trackedBooking.status === 'FARE_REVISED' && (
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] text-indigo-700 font-bold">
+                              Airline Fare Update: Revised rate is ₹{Number(trackedBooking.revised_fare).toLocaleString('en-IN')}/pax (Quoted was ₹{Number(trackedBooking.quoted_rate).toLocaleString('en-IN')}). If acceptable, proceed to upload passports.
+                            </p>
+                            {trackedBooking.pax_infants > 0 && (
+                              <p className="text-[11px] text-indigo-800 font-semibold">
+                                {trackedBooking.infant_fare
+                                  ? `• Airline Infant Fare: ₹${Number(trackedBooking.infant_fare).toLocaleString('en-IN')} x ${trackedBooking.pax_infants} (Total: ₹${Number(trackedBooking.total_amount).toLocaleString('en-IN')})`
+                                  : `• Infant rate extra, not included in this. For infant rate, please contact TravelX.`}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {trackedBooking.status === 'SOLD_OUT' && (
+                          <p className="text-[11px] text-rose-700 font-bold">
+                            Seats are Sold Out for this date. Please check alternate travel dates.
+                          </p>
+                        )}
+                        {!['PENDING', 'AVAILABLE', 'FARE_REVISED', 'SOLD_OUT'].includes(trackedBooking.status) && (
+                          <p className="text-[11px] text-emerald-700">
+                            Seats confirmed and verified.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 3: Passport Upload Section */}
+                    <div className="flex items-start space-x-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold shadow-xs ${
+                        trackedBooking.has_passports || trackedBooking.status === 'DOCS_SUBMITTED' || trackedBooking.status === 'CONFIRMED'
+                          ? 'bg-emerald-600 text-white'
+                          : ['AVAILABLE', 'FARE_REVISED'].includes(trackedBooking.status)
+                          ? 'bg-blue-600 text-white animate-bounce'
+                          : 'bg-slate-300 text-slate-600'
+                      }`}>
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <p className="text-xs font-bold text-slate-900">3. Passenger Passports Submission</p>
+
+                        {/* List previously uploaded passports */}
+                        {trackedBooking.passports && trackedBooking.passports.length > 0 && (
+                          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1 text-xs">
+                            <div className="flex items-center space-x-1.5 text-emerald-900 font-bold">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span>{trackedBooking.passports.length} Passport(s) Received</span>
+                            </div>
+                            <div className="text-[11px] text-emerald-800 space-y-0.5 pl-5">
+                              {trackedBooking.passports.map((p, i) => (
+                                <p key={i} className="truncate">• {p.originalName} ({p.size ? `${(p.size / 1024).toFixed(1)} KB` : ''})</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Upload Dropzone (Enabled when Available or Revised or Docs) */}
+                        {['AVAILABLE', 'FARE_REVISED', 'DOCS_SUBMITTED'].includes(trackedBooking.status) && (
+                          <form onSubmit={handleUploadPassportsSubmit} className="space-y-2 pt-1">
+                            <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-3 bg-white text-center cursor-pointer transition">
+                              <input
+                                type="file"
+                                id="agent-passport-input"
+                                multiple
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={(e) => {
+                                  if (e.target.files) {
+                                    setSelectedPassportFiles(Array.from(e.target.files));
+                                  }
+                                }}
+                              />
+                              <label htmlFor="agent-passport-input" className="cursor-pointer space-y-1 block">
+                                <Upload className="w-6 h-6 text-blue-900 mx-auto" />
+                                <p className="text-xs font-bold text-slate-800">
+                                  {selectedPassportFiles.length > 0
+                                    ? `${selectedPassportFiles.length} file(s) selected (Click to change)`
+                                    : 'Click to select Passenger Passport copies (Images or PDF)'}
+                                </p>
+                                <p className="text-[10px] text-slate-400">
+                                  Select up to 10 passport pages (max 15MB each)
+                                </p>
+                              </label>
+                            </div>
+
+                            {selectedPassportFiles.length > 0 && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-blue-950">
+                                  Ready to upload {selectedPassportFiles.length} document(s)
+                                </span>
+                                <button
+                                  type="submit"
+                                  disabled={passportUploading}
+                                  className="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs rounded-xl transition flex items-center space-x-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                                >
+                                  {passportUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                                  <span>Submit Passports for Issuance</span>
+                                </button>
+                              </div>
+                            )}
+                          </form>
+                        )}
+
+                        {passportUploadSuccess && (
+                          <p className="text-xs font-bold text-emerald-700">
+                            ✅ Passports uploaded successfully! TravelX Operations Desk has been notified to issue your ticket.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 4: E-Ticket Issuance & Download */}
+                    <div className="flex items-start space-x-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold shadow-xs ${
+                        trackedBooking.has_ticket || trackedBooking.status === 'CONFIRMED'
+                          ? 'bg-emerald-600 text-white ring-4 ring-emerald-100'
+                          : 'bg-slate-300 text-slate-600'
+                      }`}>
+                        <Ticket className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <p className="text-xs font-bold text-slate-900">4. Official E-Ticket & Confirmation</p>
+
+                        {trackedBooking.has_ticket || trackedBooking.status === 'CONFIRMED' ? (
+                          <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div>
+                                <p className="text-xs font-black text-emerald-950 flex items-center space-x-1.5">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                                  <span>Ticket Issued & Confirmed!</span>
+                                </p>
+                                {trackedBooking.pnr_code && (
+                                  <p className="text-xs font-mono font-bold text-emerald-900 mt-0.5">
+                                    Airline PNR: <span className="bg-emerald-200/80 px-2 py-0.5 rounded text-emerald-950 font-black">{trackedBooking.pnr_code}</span>
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Download E-Ticket Button */}
+                              {trackedBooking.ticket_download_url && (
+                                <a
+                                  href={trackedBooking.ticket_download_url}
+                                  download
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center space-x-2 shadow-md cursor-pointer active:scale-98"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  <span>Download Official E-Ticket (PDF)</span>
+                                </a>
+                              )}
+                            </div>
+
+                            <p className="text-[11px] text-emerald-800">
+                              The ticket PDF contains official airline barcode and passenger details. You can print or WhatsApp directly to your passenger!
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-500">
+                            Ticket will be uploaded here as soon as passports are verified by the operations desk.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Quick WhatsApp Support for this Booking */}
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <a
+                      href={`https://wa.me/${(agencyConfig.whatsapp || '919888888888').replace(/\D/g, '')}?text=${encodeURIComponent(`Hi TravelX, regarding booking #${trackedBooking.request_ref} (${trackedBooking.origin} to ${trackedBooking.destination} on ${trackedBooking.travel_date}): please assist.`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                    >
+                      <MessageSquare className="w-4 h-4 text-emerald-600" />
+                      <span>Chat with Operations Desk regarding #{trackedBooking.request_ref}</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleFetchTracking(trackedBooking.request_ref)}
+                      className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
+                      title="Refresh Status"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Refresh Status</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 7. FOOTER                                                     */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <footer className="bg-white border-t border-slate-200 text-slate-500 text-xs py-5 mt-auto">
+        <div className="max-w-[1700px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <div>
+            <span className="font-extrabold text-slate-900 font-sans">TravelX</span>
+            <span className="mx-2">•</span>
+            <span>B2B Fixed Departure Special Air Fares Engine</span>
+          </div>
+
+          <div className="flex items-center space-x-4 text-[11px]">
+            <span>Rates verified live</span>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => setShowAdminPinModal(true)}
+              className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
+            >
+              <Lock className="w-3 h-3" />
+              <span>Admin Desk</span>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  );
+}
