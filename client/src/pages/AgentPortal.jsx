@@ -3482,7 +3482,7 @@ Please confirm availability and share status.`;
             <span>•</span>
             <button
               type="button"
-              onClick={() => setShowAdminPinModal(true)}
+              onClick={() => onSwitchToAdmin && onSwitchToAdmin()}
               className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
             >
               <Lock className="w-3 h-3" />

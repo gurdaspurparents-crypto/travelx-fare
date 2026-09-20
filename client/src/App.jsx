@@ -16,22 +16,29 @@ import AgentPortal from './pages/AgentPortal';
 import BookingRequestsDesk from './pages/BookingRequestsDesk';
 import { api } from './utils/api';
 
-function checkAgentRoute() {
+function checkAdminRoute() {
   if (typeof window === 'undefined') return false;
   const path = window.location.pathname.toLowerCase();
   const search = window.location.search.toLowerCase();
   const hash = window.location.hash.toLowerCase();
   return (
-    path.startsWith('/agent') ||
-    path.startsWith('/rates') ||
-    search.includes('view=agent') ||
-    search.includes('portal=agent') ||
-    hash.includes('agent')
+    path.startsWith('/admin') ||
+    path.startsWith('/desk') ||
+    path.startsWith('/manage') ||
+    search.includes('view=admin') ||
+    search.includes('admin=true') ||
+    hash.includes('admin')
   );
 }
 
 export default function App() {
-  const [isAgentMode, setIsAgentMode] = useState(checkAgentRoute);
+  const [isAdminMode, setIsAdminMode] = useState(checkAdminRoute);
+  const [adminUnlocked, setAdminUnlocked] = useState(() => {
+    return localStorage.getItem('travelx_admin_auth') === 'true';
+  });
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [masterData, setMasterData] = useState({
     airlines: [],
@@ -42,7 +49,7 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = () => {
-      setIsAgentMode(checkAgentRoute());
+      setIsAdminMode(checkAdminRoute());
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -50,17 +57,35 @@ export default function App() {
 
   const handleOpenAgentPortal = () => {
     if (window.history.pushState) {
-      window.history.pushState({}, '', '/?view=agent');
+      window.history.pushState({}, '', '/');
     }
-    setIsAgentMode(true);
+    setIsAdminMode(false);
   };
 
   const handleSwitchToAdmin = () => {
     if (window.history.pushState) {
-      window.history.pushState({}, '', '/');
+      window.history.pushState({}, '', '/admin');
     }
-    setIsAgentMode(false);
-    setActiveTab('final-rates');
+    setIsAdminMode(true);
+  };
+
+  const handlePinSubmit = (e) => {
+    e?.preventDefault();
+    // Default PIN: 7788 or 1234
+    if (pinInput.trim() === '7788' || pinInput.trim() === '1234') {
+      localStorage.setItem('travelx_admin_auth', 'true');
+      setAdminUnlocked(true);
+      setPinError(false);
+      setPinInput('');
+    } else {
+      setPinError(true);
+    }
+  };
+
+  const handleAdminLogout = () => {
+    localStorage.removeItem('travelx_admin_auth');
+    setAdminUnlocked(false);
+    handleOpenAgentPortal();
   };
 
   const loadMasters = async () => {
@@ -89,9 +114,66 @@ export default function App() {
     setActiveTab('compare');
   };
 
-  // If in B2B Agent View, render clean customer/agent-facing portal
-  if (isAgentMode) {
+  // If NOT in Admin Mode, ALWAYS render clean public B2B Agent Portal
+  if (!isAdminMode) {
     return <AgentPortal onSwitchToAdmin={handleSwitchToAdmin} />;
+  }
+
+  // If in Admin Mode but not yet authenticated with PIN
+  if (!adminUnlocked) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-blue-600 selection:text-white">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl relative overflow-hidden">
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-400 border border-blue-500/20 mb-3 shadow-inner">
+              <span className="text-2xl">🔒</span>
+            </div>
+            <h1 className="text-xl font-bold text-white tracking-tight">TravelX Operations Desk</h1>
+            <p className="text-xs text-slate-400 mt-1">Authorized Management Access Only</p>
+          </div>
+
+          <form onSubmit={handlePinSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 text-center">
+                Enter Security PIN
+              </label>
+              <input
+                type="password"
+                maxLength={6}
+                autoFocus
+                value={pinInput}
+                onChange={(e) => { setPinInput(e.target.value); setPinError(false); }}
+                placeholder="• • • •"
+                className={`w-full text-center text-2xl tracking-[0.6em] py-3.5 px-4 bg-slate-950 border ${pinError ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'} rounded-2xl text-white font-mono outline-none transition-all placeholder:text-slate-600 placeholder:tracking-normal`}
+              />
+              {pinError && (
+                <p className="text-xs text-rose-400 text-center mt-2 font-medium">
+                  Incorrect Security PIN. Please try again.
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-2xl shadow-lg shadow-blue-500/25 transition-all text-sm flex items-center justify-center space-x-2"
+            >
+              <span>Unlock Admin Desk</span>
+              <span>➔</span>
+            </button>
+          </form>
+
+          <div className="mt-6 pt-5 border-t border-slate-800/80 text-center">
+            <button
+              onClick={handleOpenAgentPortal}
+              className="text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              ← Back to Public B2B Agent Portal
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
