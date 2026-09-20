@@ -18,26 +18,37 @@ const INDIAN_STATES = [
   'Tamil Nadu', 'Kerala', 'Bihar', 'Madhya Pradesh', 'Other'
 ];
 
-const ALLOWED_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH'];
-
-const SECTOR_OPTIONS = [
+const DEFAULT_SECTOR_OPTIONS = [
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'DXB', destCity: 'Dubai', label: '(ATQ) Amritsar ➔ (DXB) Dubai' },
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'SHJ', destCity: 'Sharjah', label: '(ATQ) Amritsar ➔ (SHJ) Sharjah' },
   { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' },
+  { origin: 'DEL', originCity: 'Delhi', dest: 'LHR', destCity: 'London', label: '(DEL) Delhi ➔ (LHR) London' },
+  { origin: 'DEL', originCity: 'Delhi', dest: 'ROM', destCity: 'Rome', label: '(DEL) Delhi ➔ (ROM) Rome' },
+  { origin: 'DEL', originCity: 'Delhi', dest: 'YYZ', destCity: 'Toronto', label: '(DEL) Delhi ➔ (YYZ) Toronto' },
+  { origin: 'ATQ', originCity: 'Amritsar', dest: 'SIN', destCity: 'Singapore', label: '(ATQ) Amritsar ➔ (SIN) Singapore' },
 ];
 
-const ORIGINS = [
+const DEFAULT_ORIGINS = [
   { code: 'ATQ', city: 'Amritsar', label: '(ATQ) Amritsar' },
-  { code: 'IXC', city: 'Chandigarh', label: '(IXC) Chandigarh' }
+  { code: 'IXC', city: 'Chandigarh', label: '(IXC) Chandigarh' },
+  { code: 'DEL', city: 'Delhi', label: '(DEL) Delhi' }
 ];
 
-const DESTINATIONS = {
+const DEFAULT_DESTINATIONS = {
   'ATQ': [
     { code: 'DXB', city: 'Dubai', label: '(DXB) Dubai' },
-    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' }
+    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' },
+    { code: 'SIN', city: 'Singapore', label: '(SIN) Singapore' },
+    { code: 'ROM', city: 'Rome', label: '(ROM) Rome' }
   ],
   'IXC': [
     { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' }
+  ],
+  'DEL': [
+    { code: 'LHR', city: 'London', label: '(LHR) London' },
+    { code: 'ROM', city: 'Rome', label: '(ROM) Rome' },
+    { code: 'YYZ', city: 'Toronto', label: '(YYZ) Toronto' },
+    { code: 'KUL', city: 'Kuala Lumpur', label: '(KUL) Kuala Lumpur' }
   ]
 };
 
@@ -196,7 +207,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   const calendarScrollRef = useRef(null);
 
   // 1. Fetch live data
-  const loadPortalData = async () => {
+  const loadPortalData = async (isRetry = false) => {
     try {
       setLoading(true);
       setError(null);
@@ -214,11 +225,19 @@ export default function AgentPortal({ onSwitchToAdmin }) {
           }));
         }
       } else {
-        setError('Unable to load live flight rates. Please refresh.');
+        if (!isRetry) {
+          setTimeout(() => loadPortalData(true), 2000);
+          return;
+        }
+        setError('Server is warming up or busy. Please click Refresh below.');
       }
     } catch (err) {
       console.error('Error fetching public fares:', err);
-      setError('Connection error. Please check your internet connection.');
+      if (!isRetry) {
+        setTimeout(() => loadPortalData(true), 2000);
+        return;
+      }
+      setError('Connection error. Please verify connection and click Refresh.');
     } finally {
       setLoading(false);
     }
@@ -496,6 +515,67 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     setDestination(oldO);
   };
 
+  // Dynamic sector options combining popular default routes with all active routes in daily flights
+  const availableSectorOptions = useMemo(() => {
+    const map = new Map();
+    DEFAULT_SECTOR_OPTIONS.forEach(s => map.set(`${s.origin}-${s.dest}`, s));
+
+    dailyFlights.forEach(f => {
+      const key = `${f.origin}-${f.destination}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          origin: f.origin,
+          originCity: f.origin_city || f.origin,
+          dest: f.destination,
+          destCity: f.destination_city || f.destination,
+          label: `(${f.origin}) ${f.origin_city || f.origin} ➔ (${f.destination}) ${f.destination_city || f.destination}`
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [dailyFlights]);
+
+  // Derived Origins
+  const derivedOrigins = useMemo(() => {
+    const map = new Map();
+    DEFAULT_ORIGINS.forEach(o => map.set(o.code, o));
+
+    dailyFlights.forEach(f => {
+      if (f.origin && !map.has(f.origin)) {
+        map.set(f.origin, {
+          code: f.origin,
+          city: f.origin_city || f.origin,
+          label: `(${f.origin}) ${f.origin_city || f.origin}`
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [dailyFlights]);
+
+  // Derived Destinations by Origin
+  const derivedDestinations = useMemo(() => {
+    const map = {};
+    dailyFlights.forEach(f => {
+      const o = f.origin;
+      const d = f.destination;
+      if (!map[o]) map[o] = new Map();
+      if (!map[o].has(d)) {
+        map[o].set(d, {
+          code: d,
+          city: f.destination_city || d,
+          label: `(${d}) ${f.destination_city || d}`
+        });
+      }
+    });
+
+    const result = { ...DEFAULT_DESTINATIONS };
+    for (const [o, dMap] of Object.entries(map)) {
+      result[o] = Array.from(dMap.values());
+    }
+    return result;
+  }, [dailyFlights]);
+
   // 2. Derive unique available dates for current sector (ATQ-DXB, etc.)
   const currentSectorKey = `${origin}-${destination}`;
 
@@ -524,20 +604,28 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     return list;
   }, [dailyFlights, currentSectorKey]);
 
-  // Set default onwardDate if current date is not in list
+  // Nearest available date for the sector (used when selected date has no flights)
+  const nearestAvailableDate = useMemo(() => {
+    if (!availableDatesList.length) return null;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const target = onwardDate || todayStr;
+    const exact = availableDatesList.find(d => d.date === target);
+    if (exact) return exact;
+    const next = availableDatesList.find(d => d.date > target);
+    return next || availableDatesList[0];
+  }, [availableDatesList, onwardDate]);
+
+  // Auto-select nearest available date if current date is not in sector dates
   useEffect(() => {
     if (availableDatesList.length > 0) {
       const exists = availableDatesList.some(d => d.date === onwardDate);
-      if (!exists && availableDatesList[0]) {
-        const target25 = availableDatesList.find(d => d.date.includes('-09-25'));
-        if (target25) {
-          setOnwardDate(target25.date);
-        } else {
-          setOnwardDate(availableDatesList[0].date);
-        }
+      if (!exists) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const futureDate = availableDatesList.find(d => d.date >= (onwardDate || todayStr));
+        setOnwardDate(futureDate ? futureDate.date : availableDatesList[0].date);
       }
     }
-  }, [availableDatesList]);
+  }, [availableDatesList, currentSectorKey]);
 
   // 3. Scroll Calendar Strip & Auto-center selected date in the middle
   const scrollCalendar = (direction) => {
@@ -1276,7 +1364,7 @@ Please confirm availability and share status.`;
                         {origin}
                       </span>
                       <span className="text-xs font-bold text-slate-600 truncate">
-                        {origin === 'ATQ' ? 'Amritsar, India' : origin === 'IXC' ? 'Chandigarh, India' : origin}
+                        {derivedOrigins.find(o => o.code === origin)?.city || origin}
                       </span>
                     </div>
                   </div>
@@ -1285,14 +1373,16 @@ Please confirm availability and share status.`;
 
                 {/* Origin Dropdown */}
                 {showOriginDropdown && (
-                  <div className="absolute left-0 top-15 w-full bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-1.5 space-y-1 animate-in zoom-in-95 duration-100">
-                    {ORIGINS.map(o => (
+                  <div className="absolute left-0 top-15 w-full bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-1.5 space-y-1 animate-in zoom-in-95 duration-100 max-h-64 overflow-y-auto">
+                    {derivedOrigins.map(o => (
                       <div
                         key={o.code}
                         onClick={() => {
                           setOrigin(o.code);
-                          if (o.code === 'ATQ') setDestination('DXB');
-                          else if (o.code === 'IXC') setDestination('AUH');
+                          const destList = derivedDestinations[o.code] || [];
+                          if (destList.length > 0 && !destList.some(d => d.code === destination)) {
+                            setDestination(destList[0].code);
+                          }
                           setShowOriginDropdown(false);
                         }}
                         className={`px-3.5 py-2.5 rounded-xl text-xs font-bold hover:bg-blue-50 cursor-pointer flex items-center justify-between transition ${
@@ -1341,7 +1431,7 @@ Please confirm availability and share status.`;
                         {destination}
                       </span>
                       <span className="text-xs font-bold text-slate-600 truncate">
-                        {destination === 'DXB' ? 'Dubai, UAE' : destination === 'SHJ' ? 'Sharjah, UAE' : destination === 'AUH' ? 'Abu Dhabi, UAE' : destination}
+                        {((derivedDestinations[origin] || []).find(d => d.code === destination))?.city || destination}
                       </span>
                     </div>
                   </div>
@@ -1350,8 +1440,8 @@ Please confirm availability and share status.`;
 
                 {/* Destination Dropdown */}
                 {showDestDropdown && (
-                  <div className="absolute left-0 top-15 w-full bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-1.5 space-y-1 animate-in zoom-in-95 duration-100">
-                    {(DESTINATIONS[origin] || DESTINATIONS['ATQ']).map(d => (
+                  <div className="absolute left-0 top-15 w-full bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-1.5 space-y-1 animate-in zoom-in-95 duration-100 max-h-64 overflow-y-auto">
+                    {(derivedDestinations[origin] || DEFAULT_DESTINATIONS['ATQ'] || []).map(d => (
                       <div
                         key={d.code}
                         onClick={() => {
@@ -1598,7 +1688,7 @@ Please confirm availability and share status.`;
             <span className="text-slate-400 font-extrabold text-[11px] shrink-0 uppercase tracking-wider flex items-center space-x-1">
               <span>Popular Sectors:</span>
             </span>
-            {SECTOR_OPTIONS.map(s => {
+            {availableSectorOptions.map(s => {
               const isSelected = origin === s.origin && destination === s.dest;
               return (
                 <button
@@ -1678,6 +1768,29 @@ Please confirm availability and share status.`;
       {hasSearched && (
         <main className="flex-1 max-w-[1700px] w-full mx-auto px-3 sm:px-6 py-3 flex flex-col gap-3">
           
+          {/* Live Rates Error / Server Warmup Alert with Retry */}
+          {error && (
+            <div className="bg-amber-50 border border-amber-300/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-amber-950 shadow-sm animate-in fade-in duration-200">
+              <div className="flex items-center space-x-3 text-center sm:text-left">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <p className="font-extrabold text-xs sm:text-sm text-amber-950 leading-snug">{error}</p>
+                  <p className="text-[11px] text-amber-700 font-medium mt-0.5">Click "Reload Rates" to fetch latest live B2B airline inventory immediately.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => loadPortalData(true)}
+                className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition cursor-pointer shadow-sm active:scale-98 shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reload Rates</span>
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
             
             {/* ───────────────────────────────────────────────────────── */}
@@ -1818,7 +1931,7 @@ Please confirm availability and share status.`;
               <div className="pt-2 border-t border-slate-100">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Switch Sector</label>
                 <div className="mt-1.5 space-y-1">
-                  {SECTOR_OPTIONS.map(s => {
+                  {availableSectorOptions.map(s => {
                     const isCurrent = origin === s.origin && destination === s.dest;
                     return (
                       <button
@@ -2006,14 +2119,38 @@ Please confirm availability and share status.`;
 
               {/* 3. FLIGHT RESULT CARDS LIST (Exact Match: Image 3) */}
               {displayedFlights.length === 0 ? (
-                <div className="bg-white rounded-b-lg border border-slate-200 p-8 text-center space-y-3">
-                  <Plane className="w-10 h-10 text-slate-300 mx-auto" />
-                  <p className="font-bold text-sm text-slate-800">
-                    No fixed departures found on this date.
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Try selecting another date from the calendar strip above or check the next day.
-                  </p>
+                <div className="bg-white rounded-b-lg border border-slate-200 p-8 text-center space-y-4">
+                  <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-2xs">
+                    <Plane className="w-7 h-7 text-amber-600 -rotate-45" />
+                  </div>
+                  <div>
+                    <p className="font-black text-base text-slate-900">
+                      No flights found on {onwardDate || 'this date'}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      Special group fares for {origin} ➔ {destination} are available on alternate dates in the calendar strip above.
+                    </p>
+                  </div>
+
+                  {nearestAvailableDate && (
+                    <div className="inline-flex flex-col sm:flex-row items-center gap-3 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-200/90 p-3.5 rounded-2xl shadow-xs">
+                      <div className="text-left text-xs">
+                        <span className="font-black text-orange-950 uppercase tracking-wider text-[10px] block">Nearest Departure:</span>
+                        <span className="font-black text-orange-600 text-sm">{nearestAvailableDate.label} ({nearestAvailableDate.dayName})</span>
+                        <span className="text-slate-600 text-xs ml-2">Fare from <strong className="text-slate-900 font-black">₹{getDisplayPrice(nearestAvailableDate.minFare).toLocaleString('en-IN')}</strong></span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOnwardDate(nearestAvailableDate.date);
+                          centerSelectedDate(nearestAvailableDate.date);
+                        }}
+                        className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs rounded-xl shadow-md cursor-pointer transition active:scale-98 shrink-0"
+                      >
+                        View {nearestAvailableDate.label} Flights →
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">

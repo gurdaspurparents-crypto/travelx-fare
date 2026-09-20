@@ -129,6 +129,7 @@ const CITY_NAMES = {
   'BOM': 'Mumbai',
   'MXP': 'Milan',
   'FCO': 'Rome',
+  'ROM': 'Rome',
   'LHR': 'London',
   'YYZ': 'Toronto',
   'JED': 'Jeddah',
@@ -139,10 +140,21 @@ const CITY_NAMES = {
   'BAH': 'Bahrain',
   'SIN': 'Singapore',
   'BKK': 'Bangkok',
+  'DMK': 'Bangkok (DMK)',
   'KUL': 'Kuala Lumpur',
   'CAN': 'Guangzhou',
-  'HKG': 'Hong Kong'
+  'HKG': 'Hong Kong',
+  'BHX': 'Birmingham',
+  'MEL': 'Melbourne',
+  'SYD': 'Sydney',
+  'YEG': 'Edmonton',
+  'YTO': 'Toronto',
+  'YVR': 'Vancouver',
+  'YYC': 'Calgary'
 };
+
+// Top priority sectors to pin at the front of UI chips & tabs
+const PRIORITY_PUBLIC_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH', 'DEL-LHR', 'DEL-ROM', 'DEL-YYZ', 'ATQ-SIN'];
 
 /**
  * Controller: Get Sanitized Public Rates for B2B Agents
@@ -176,16 +188,17 @@ exports.getPublicFares = (req, res) => {
 
     const rows = db.prepare(query).all();
 
-    // Active sectors for public agent view (strictly ATQ-DXB, ATQ-SHJ, IXC-AUH as requested)
-    const ACTIVE_PUBLIC_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH'];
-
-    // If 'all' is not explicitly requested, filter strictly to allowed sectors
+    // Include all active upcoming sectors from DB; prioritize top Gulf & international routes
     let targetRows = rows;
-    if (req.query.all !== 'true') {
-      targetRows = rows.filter(f => {
-        const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
-        return ACTIVE_PUBLIC_SECTORS.includes(sKey);
-      });
+    if (origin && destination) {
+      targetRows = rows.filter(f => 
+        (f.origin || '').toUpperCase() === origin.toUpperCase() && 
+        (f.destination || '').toUpperCase() === destination.toUpperCase()
+      );
+    } else if (origin) {
+      targetRows = rows.filter(f => (f.origin || '').toUpperCase() === origin.toUpperCase());
+    } else if (destination) {
+      targetRows = rows.filter(f => (f.destination || '').toUpperCase() === destination.toUpperCase());
     }
 
     // 1. Group by Sector
@@ -198,10 +211,10 @@ exports.getPublicFares = (req, res) => {
 
     const publicList = [];
 
-    // Order sectors strictly: ATQ-DXB, ATQ-SHJ, IXC-AUH
+    // Order sectors by priority first, then alphabetically
     const orderedSectorKeys = Array.from(sectorMap.keys()).sort((a, b) => {
-      const idxA = ACTIVE_PUBLIC_SECTORS.indexOf(a);
-      const idxB = ACTIVE_PUBLIC_SECTORS.indexOf(b);
+      const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a);
+      const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
@@ -319,10 +332,10 @@ exports.getPublicFares = (req, res) => {
       }
     }
 
-    // Sort by sector in requested priority order (ATQ-DXB, ATQ-SHJ, IXC-AUH), then travel_date ASC, then lowest rate ASC
+    // Sort by sector in requested priority order, then travel_date ASC, then lowest rate ASC
     publicList.sort((a, b) => {
-      const idxA = ACTIVE_PUBLIC_SECTORS.indexOf(a.sector_code);
-      const idxB = ACTIVE_PUBLIC_SECTORS.indexOf(b.sector_code);
+      const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a.sector_code);
+      const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b.sector_code);
       if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
@@ -359,8 +372,8 @@ exports.getPublicFares = (req, res) => {
     // Collect available filter lists for client UI in requested order
     const sectors = Array.from(new Set(publicList.map(f => f.sector_code)))
       .sort((a, b) => {
-        const idxA = ACTIVE_PUBLIC_SECTORS.indexOf(a);
-        const idxB = ACTIVE_PUBLIC_SECTORS.indexOf(b);
+        const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a);
+        const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b);
         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
         if (idxA !== -1) return -1;
         if (idxB !== -1) return 1;
