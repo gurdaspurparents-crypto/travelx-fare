@@ -14,8 +14,16 @@ const vendorRuleController = require('./controllers/vendorRuleController');
 const publicAgentController = require('./controllers/publicAgentController');
 const bookingController = require('./controllers/bookingController');
 
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL UNHANDLED REJECTION:', reason);
+});
+
 const app = express();
 const PORT = process.env.PORT || 5001;
+const HOST = '0.0.0.0';
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -129,6 +137,6 @@ app.use((req, res, next) => {
   res.send('Travelx API is running. Frontend dev server is running on port 5173.');
 });
 
-app.listen(PORT, () => {
-  console.log(`✈️ Travelx Special Fare Manager Backend running on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`✈️ Travelx Special Fare Manager Backend running on http://${HOST}:${PORT}`);
 });
