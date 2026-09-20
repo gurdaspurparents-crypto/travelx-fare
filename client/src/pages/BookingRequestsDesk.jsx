@@ -1300,7 +1300,33 @@ Thank you for booking with TravelX!`;
                               <span>CONTACTED</span>
                             </span>
                           )}
-                          {b.status === 'CANCELLED' && (
+                          {(b.status === 'FARE_DECLINED' || (b.status === 'CANCELLED' && b.admin_notes && b.admin_notes.includes('Declined'))) && (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-xs">
+                                <XCircle className="w-3 h-3 text-white" />
+                                <span>FARE DECLINED</span>
+                              </span>
+                              {b.revised_fare && (
+                                <span className="text-[10px] text-rose-700 font-extrabold block">
+                                  Rejected ₹{Number(b.revised_fare).toLocaleString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {(b.status === 'FARE_ACCEPTED' || (b.admin_notes && b.admin_notes.includes('Agent Accepted Revised Fare'))) && (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-xs">
+                                <CheckCircle2 className="w-3 h-3 text-white" />
+                                <span>FARE ACCEPTED</span>
+                              </span>
+                              {b.revised_fare && (
+                                <span className="text-[10px] text-emerald-700 font-extrabold block">
+                                  Agreed ₹{Number(b.revised_fare).toLocaleString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {b.status === 'CANCELLED' && (!b.admin_notes || !b.admin_notes.includes('Declined')) && (
                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-800 border border-slate-300">
                               <span>CANCELLED</span>
                             </span>

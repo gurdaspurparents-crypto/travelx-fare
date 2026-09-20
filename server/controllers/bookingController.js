@@ -116,6 +116,39 @@ ${booking.vendor_name ? `• *Winning Vendor:* ${booking.vendor_name} (Net: ₹$
 }
 
 /**
+ * Dispatch custom alert text to Admin's WhatsApp via CallMeBot webhook
+ */
+function sendWhatsAppCustomAlert(text) {
+  try {
+    const phoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'admin_whatsapp_phone'").get();
+    const apiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'callmebot_api_key'").get();
+    const enabledSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'whatsapp_alerts_enabled'").get();
+
+    if (!enabledSetting || enabledSetting.value !== '1') {
+      return;
+    }
+
+    const phone = phoneSetting?.value ? phoneSetting.value.replace(/\D/g, '') : '';
+    const apiKey = apiKeySetting?.value ? apiKeySetting.value.trim() : '';
+
+    if (!phone || !apiKey) {
+      return;
+    }
+
+    const encodedText = encodeURIComponent(text);
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedText}&apikey=${apiKey}`;
+
+    https.get(url, (res) => {
+      console.log(`WhatsApp Custom Alert sent: HTTP ${res.statusCode}`);
+    }).on('error', (err) => {
+      console.warn('CallMeBot notification warning:', err.message);
+    });
+  } catch (err) {
+    console.warn('WhatsApp custom alert warning:', err.message);
+  }
+}
+
+/**
  * Lookup agent by mobile number
  */
 exports.lookupAgent = (req, res) => {
@@ -472,7 +505,7 @@ exports.updateBookingStatus = (req, res) => {
     const { id } = req.params;
     const { status, remarks, pnr_code, revised_fare, admin_notes } = req.body;
 
-    const validStatuses = ['PENDING', 'AVAILABLE', 'FARE_REVISED', 'SOLD_OUT', 'DOCS_SUBMITTED', 'TICKET_ISSUED', 'CONFIRMED', 'CONTACTED', 'CANCELLED'];
+    const validStatuses = ['PENDING', 'AVAILABLE', 'FARE_REVISED', 'FARE_ACCEPTED', 'FARE_DECLINED', 'SOLD_OUT', 'DOCS_SUBMITTED', 'TICKET_ISSUED', 'CONFIRMED', 'CONTACTED', 'CANCELLED'];
     if (status && !validStatuses.includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid status' });
     }
@@ -679,10 +712,23 @@ exports.respondToRevisedFare = (req, res) => {
       const noteAppend = ` • [Agent Accepted Revised Fare ₹${Number(booking.revised_fare || booking.quoted_rate).toLocaleString('en-IN')}]`;
       db.prepare(`
         UPDATE booking_requests
-        SET admin_notes = COALESCE(admin_notes, '') || ?,
+        SET status = 'FARE_ACCEPTED',
+            admin_notes = COALESCE(admin_notes, '') || ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(noteAppend, booking.id);
+
+      sendWhatsAppCustomAlert(`✅ *TRAVELX: REVISED FARE ACCEPTED!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Reference:* #${booking.request_ref}
+• *Agency:* ${booking.agency_name} (${booking.agent_mobile})
+• *Sector:* ${booking.origin} ➔ ${booking.destination}
+• *Flight:* ${booking.airline_name || booking.airline_code} ${booking.flight_number || ''}
+• *Travel Date:* ${booking.travel_date}
+• *Revised Fare:* ₹${Number(booking.revised_fare).toLocaleString('en-IN')}/pax (ACCEPTED!)
+• *Total Booking:* ₹${Number(booking.total_amount).toLocaleString('en-IN')} (${booking.pax_count} Pax)
+• *Status:* Agent agreed to revised rate! Passports upload pending.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
       const updated = db.prepare('SELECT * FROM booking_requests WHERE id = ?').get(booking.id);
       return res.json({ success: true, message: 'Revised fare accepted by agent', action: 'ACCEPT', booking: updated });
@@ -690,11 +736,23 @@ exports.respondToRevisedFare = (req, res) => {
       const noteAppend = ` • [Agent Declined Revised Fare - Request Cancelled]`;
       db.prepare(`
         UPDATE booking_requests
-        SET status = 'CANCELLED',
+        SET status = 'FARE_DECLINED',
             admin_notes = COALESCE(admin_notes, '') || ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(noteAppend, booking.id);
+
+      sendWhatsAppCustomAlert(`❌ *TRAVELX: REVISED FARE DECLINED!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Reference:* #${booking.request_ref}
+• *Agency:* ${booking.agency_name} (${booking.agent_mobile})
+• *Sector:* ${booking.origin} ➔ ${booking.destination}
+• *Flight:* ${booking.airline_name || booking.airline_code} ${booking.flight_number || ''}
+• *Travel Date:* ${booking.travel_date}
+• *Original Quoted:* ₹${Number(booking.quoted_rate).toLocaleString('en-IN')}/pax
+• *Revised Rate Sent:* ₹${Number(booking.revised_fare).toLocaleString('en-IN')}/pax
+• *Status:* Agent DECLINED the revised rate. Booking marked as FARE_DECLINED.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
       const updated = db.prepare('SELECT * FROM booking_requests WHERE id = ?').get(booking.id);
       return res.json({ success: true, message: 'Booking cancelled upon agent decline', action: 'DECLINE', booking: updated });

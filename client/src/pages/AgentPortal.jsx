@@ -3302,6 +3302,24 @@ Please confirm availability and share status.`;
                             <span>FARE REVISED: ₹{Number(trackedBooking.revised_fare).toLocaleString('en-IN')}</span>
                           </span>
                         )}
+                        {trackedBooking.status === 'FARE_ACCEPTED' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-300 text-slate-950 shadow-sm">
+                            <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                            <span>REVISED FARE ACCEPTED</span>
+                          </span>
+                        )}
+                        {trackedBooking.status === 'FARE_DECLINED' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-400 text-slate-950 shadow-sm">
+                            <XCircle className="w-4 h-4 text-slate-950" />
+                            <span>FARE DECLINED / CANCELLED</span>
+                          </span>
+                        )}
+                        {trackedBooking.status === 'CANCELLED' && (
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-slate-300 text-slate-950 shadow-sm">
+                            <XCircle className="w-4 h-4 text-slate-950" />
+                            <span>CANCELLED</span>
+                          </span>
+                        )}
                         {trackedBooking.status === 'SOLD_OUT' && (
                           <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-400 text-slate-950 shadow-sm">
                             <XCircle className="w-4 h-4 text-slate-950" />
