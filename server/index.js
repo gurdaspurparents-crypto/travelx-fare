@@ -138,6 +138,17 @@ app.use((req, res, next) => {
   res.send('Travelx API is running. Frontend dev server is running on port 5173.');
 });
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`✈️ Travelx Special Fare Manager Backend running on http://${HOST}:${PORT}`);
+});
+
+// Eliminate 502 Bad Gateway race conditions behind Render / Cloudflare proxy load balancers
+server.keepAliveTimeout = 120 * 1000;
+server.headersTimeout = 125 * 1000;
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server gracefully');
+  server.close(() => {
+    console.log('HTTP server closed cleanly');
+  });
 });

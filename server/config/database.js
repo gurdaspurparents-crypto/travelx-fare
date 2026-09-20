@@ -8,10 +8,12 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const dbPath = path.join(dataDir, 'travelx_fares.db');
-const db = new Database(dbPath);
+const db = new Database(dbPath, { timeout: 10000 });
 
-// Enable WAL mode for high performance and concurrency
+// Enable WAL mode & busy timeout for high concurrency and zero locks
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('busy_timeout = 10000');
 db.pragma('foreign_keys = ON');
 
 // Initialize database schema
