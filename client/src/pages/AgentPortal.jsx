@@ -88,6 +88,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   const [showMenuDropdown, setShowMenuDropdown] = useState(false);
   const [showTravellerDropdown, setShowTravellerDropdown] = useState(false);
   const travellerDropdownRef = useRef(null);
+  const dateInputRef = useRef(null);
 
   // Customer Mode (Agent custom profit markup toggle)
   const [customerMode, setCustomerMode] = useState(false);
@@ -1288,19 +1289,36 @@ Please confirm availability and share status.`;
 
               {/* Onward Date (2 Cols) */}
               <div className="md:col-span-2">
-                <div className="bg-slate-50 hover:bg-white rounded-xl h-14 px-3 flex flex-col justify-center border border-slate-200/90 shadow-2xs hover:shadow-sm transition">
+                <div 
+                  onClick={() => {
+                    try {
+                      if (dateInputRef.current && typeof dateInputRef.current.showPicker === 'function') {
+                        dateInputRef.current.showPicker();
+                      } else {
+                        dateInputRef.current?.focus();
+                      }
+                    } catch (_) {
+                      dateInputRef.current?.focus();
+                    }
+                  }}
+                  className="bg-slate-50 hover:bg-white rounded-xl h-14 px-3 flex flex-col justify-center border border-slate-200/90 hover:border-blue-500 shadow-2xs hover:shadow-sm transition cursor-pointer select-none group"
+                  title="Click to open calendar"
+                >
                   <span className="text-[10px] text-slate-400 font-extrabold tracking-wider uppercase leading-none">
                     Departure Date
                   </span>
                   <div className="flex items-center justify-between mt-1">
                     <input
+                      ref={dateInputRef}
                       type="date"
                       value={onwardDate}
                       min={new Date().toISOString().slice(0, 10)}
-                      onChange={(e) => setOnwardDate(e.target.value)}
-                      className="text-xs font-black text-slate-900 bg-transparent outline-none w-full cursor-pointer font-sans"
+                      onChange={(e) => {
+                        setOnwardDate(e.target.value);
+                        setHasSearched(true);
+                      }}
+                      className="text-xs font-black text-slate-900 bg-transparent outline-none w-full cursor-pointer font-sans [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                     />
-                    <Calendar className="w-3.5 h-3.5 text-blue-800 shrink-0 ml-1" />
                   </div>
                 </div>
               </div>
