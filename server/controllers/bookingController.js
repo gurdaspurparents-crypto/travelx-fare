@@ -718,7 +718,7 @@ exports.respondToRevisedFare = (req, res) => {
       return res.status(400).json({ success: false, error: 'Reference ID is required' });
     }
 
-    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, "#", "")) = ?').get(cleanRef);
+    const booking = db.prepare("SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, '#', '')) = ?").get(cleanRef);
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Booking reference not found' });
     }
@@ -791,7 +791,7 @@ exports.uploadPassports = (req, res) => {
       return res.status(400).json({ success: false, error: 'Reference ID is required' });
     }
 
-    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, "#", "")) = ?').get(cleanRef);
+    const booking = db.prepare("SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, '#', '')) = ?").get(cleanRef);
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Booking reference not found' });
     }
@@ -839,7 +839,7 @@ exports.uploadPassports = (req, res) => {
     });
   } catch (err) {
     console.error('Error uploading passports:', err);
-    return res.status(500).json({ success: false, error: 'Failed to upload passports' });
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to upload passports' });
   }
 };
 
@@ -895,7 +895,7 @@ exports.downloadTicket = (req, res) => {
       return res.status(400).send('Reference ID is required.');
     }
 
-    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, "#", "")) = ?').get(cleanRef);
+    const booking = db.prepare("SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, '#', '')) = ?").get(cleanRef);
     if (!booking || !booking.ticket_file_path) {
       return res.status(404).send('E-Ticket not available yet for this booking.');
     }
