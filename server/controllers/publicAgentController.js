@@ -156,352 +156,384 @@ const CITY_NAMES = {
 // Top priority sectors to pin at the front of UI chips & tabs
 const PRIORITY_PUBLIC_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH', 'DEL-LHR', 'DEL-ROM', 'DEL-YYZ', 'ATQ-SIN'];
 
-/**
- * Controller: Get Sanitized Public Rates for B2B Agents
- * ZERO VENDOR NAMES, ZERO NET FARES, ZERO MARGIN AMOUNTS
- */
-exports.getPublicFares = (req, res) => {
-  try {
-    const { origin, destination, airline, search } = req.query;
+// In-Memory Cache for Public Fares (Prevents 502 Bad Gateway timeouts on Render free tier)
+let cachedMasterFares = null;
+let lastCacheTimestamp = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
 
-    const query = `
-      SELECT 
-        f.id,
-        f.origin,
-        f.destination,
-        f.airline_code,
-        a.name AS airline_name,
-        f.flight_number,
-        f.travel_date,
-        f.departure_time,
-        f.arrival_time,
-        f.net_fare,
-        f.margin_amount,
-        f.publish_fare,
-        f.baggage,
-        f.is_refundable
-      FROM fares f
-      JOIN airlines a ON f.airline_code = a.code
-      WHERE f.travel_date >= date('now', 'localtime')
-      ORDER BY f.travel_date ASC
-    `;
+function computeMasterPublicFares() {
+  const query = `
+    SELECT 
+      f.id,
+      f.origin,
+      f.destination,
+      f.airline_code,
+      a.name AS airline_name,
+      f.flight_number,
+      f.travel_date,
+      f.departure_time,
+      f.arrival_time,
+      f.net_fare,
+      f.margin_amount,
+      f.publish_fare,
+      f.baggage,
+      f.is_refundable
+    FROM fares f
+    JOIN airlines a ON f.airline_code = a.code
+    WHERE f.travel_date >= date('now', 'localtime')
+    ORDER BY f.travel_date ASC
+  `;
 
-    const rows = db.prepare(query).all();
+  const rows = db.prepare(query).all();
+  const targetRows = rows;
 
-    // Include all active upcoming sectors from DB; prioritize top Gulf & international routes
-    let targetRows = rows;
-    if (origin && destination) {
-      targetRows = rows.filter(f => 
-        (f.origin || '').toUpperCase() === origin.toUpperCase() && 
-        (f.destination || '').toUpperCase() === destination.toUpperCase()
-      );
-    } else if (origin) {
-      targetRows = rows.filter(f => (f.origin || '').toUpperCase() === origin.toUpperCase());
-    } else if (destination) {
-      targetRows = rows.filter(f => (f.destination || '').toUpperCase() === destination.toUpperCase());
-    }
+  // 1. Group by Sector
+  const sectorMap = new Map();
+  targetRows.forEach(f => {
+    const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
+    if (!sectorMap.has(sKey)) sectorMap.set(sKey, []);
+    sectorMap.get(sKey).push(f);
+  });
 
-    // 1. Group by Sector
-    const sectorMap = new Map();
-    targetRows.forEach(f => {
-      const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
-      if (!sectorMap.has(sKey)) sectorMap.set(sKey, []);
-      sectorMap.get(sKey).push(f);
+  const publicList = [];
+
+  // Order sectors by priority first, then alphabetically
+  const orderedSectorKeys = Array.from(sectorMap.keys()).sort((a, b) => {
+    const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a);
+    const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const sKey of orderedSectorKeys) {
+    const sectorItems = sectorMap.get(sKey) || [];
+    // 2. Group by Airline
+    const airlineMap = new Map();
+    sectorItems.forEach(f => {
+      const aKey = (f.airline_code || 'OTHER').toUpperCase();
+      if (!airlineMap.has(aKey)) airlineMap.set(aKey, []);
+      airlineMap.get(aKey).push(f);
     });
 
-    const publicList = [];
+    for (const [aKey, airItems] of airlineMap.entries()) {
+      // 3. Group by Flight Number
+      const flightMap = new Map();
+      airItems.forEach(f => {
+        let fltKey = String(f.flight_number || '').trim();
 
-    // Order sectors by priority first, then alphabetically
-    const orderedSectorKeys = Array.from(sectorMap.keys()).sort((a, b) => {
+        // Auto-normalize flight number if truncated or missing
+        if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107' || fltKey === 'IX 115') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === 'IX') {
+          fltKey = 'IX 137';
+        } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === '6E') {
+          fltKey = '6E 1427';
+        } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'IX') {
+          fltKey = 'IX 191';
+        } else if ((!fltKey || fltKey === 'SG' || fltKey === 'SG 5155') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'SG') {
+          fltKey = 'SG 59';
+        } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1' || fltKey === '6E 1411') && f.origin === 'IXC' && f.destination === 'AUH' && f.airline_code === '6E') {
+          fltKey = '6E 1418';
+        }
+
+        if (!flightMap.has(fltKey)) flightMap.set(fltKey, []);
+        flightMap.get(fltKey).push({ ...f, flight_number: fltKey || f.flight_number });
+      });
+
+      for (const [fltKey, fltItems] of flightMap.entries()) {
+        // Step A: Pick ONLY the lowest final rate per travel_date
+        const dateMinFareMap = new Map();
+
+        fltItems.forEach(item => {
+          const dStr = String(item.travel_date || '').slice(0, 10);
+          const fare = getFinalRate(item);
+
+          if (!dateMinFareMap.has(dStr)) {
+            dateMinFareMap.set(dStr, { minFare: fare, item });
+          } else {
+            const current = dateMinFareMap.get(dStr);
+            if (fare < current.minFare) {
+              dateMinFareMap.set(dStr, { minFare: fare, item });
+            }
+          }
+        });
+
+        // Step B: Group dates by (Month + minFare) into clean streaks
+        const bucketMap = new Map();
+        const sortedDates = Array.from(dateMinFareMap.keys()).sort();
+
+        sortedDates.forEach(dStr => {
+          const { minFare, item } = dateMinFareMap.get(dStr);
+          const monthKey = dStr.slice(0, 7);
+          const bKey = `${monthKey}_${minFare}`;
+          if (!bucketMap.has(bKey)) bucketMap.set(bKey, []);
+          bucketMap.get(bKey).push({
+            travel_date: dStr,
+            minFare,
+            item
+          });
+        });
+
+        // Step C: Build sanitized streak items
+        for (const dateEntries of bucketMap.values()) {
+          dateEntries.sort((x, y) => x.travel_date.localeCompare(y.travel_date));
+
+          const repStreak = dateEntries.map(e => e.item);
+          const first = repStreak[0];
+          const last = repStreak[repStreak.length - 1];
+          const dateLabel = formatStreakLabel(repStreak);
+          const finalRate = getFinalRate(first);
+
+          const knownTiming = FLIGHT_TIMINGS[first.flight_number] || {};
+          const depTime = first.departure_time || knownTiming.dep || '';
+          const arrTime = first.arrival_time || knownTiming.arr || '';
+
+          const originCity = CITY_NAMES[first.origin] || first.origin;
+          const destCity = CITY_NAMES[first.destination] || first.destination;
+
+          // SANITIZED RECORD: Zero vendor, zero net_fare, zero margin
+          publicList.push({
+            id: `pub-${first.origin}-${first.destination}-${first.airline_code}-${fltKey}-${dateLabel}`.replace(/\s+/g, '-'),
+            origin: first.origin,
+            destination: first.destination,
+            origin_city: originCity,
+            destination_city: destCity,
+            route_label: `${originCity} ➔ ${destCity}`,
+            sector_code: `${first.origin}-${first.destination}`,
+            airline_code: first.airline_code,
+            airline_name: first.airline_name,
+            flight_number: first.flight_number,
+            date_label: dateLabel,
+            dates_count: dateEntries.length,
+            travel_date: first.travel_date,
+            end_date: last.travel_date,
+            departure_time: depTime,
+            arrival_time: arrTime,
+            final_rate: finalRate,
+            baggage: normalizeBaggage(first.baggage),
+            is_refundable: first.is_refundable || 'NON_REFUNDABLE'
+          });
+        }
+      }
+    }
+  }
+
+  // Sort by sector in requested priority order, then travel_date ASC, then lowest rate ASC
+  publicList.sort((a, b) => {
+    const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a.sector_code);
+    const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b.sector_code);
+    if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    if (a.sector_code !== b.sector_code) return a.sector_code.localeCompare(b.sector_code);
+    const dComp = String(a.travel_date || '').localeCompare(String(b.travel_date || ''));
+    if (dComp !== 0) return dComp;
+    return a.final_rate - b.final_rate;
+  });
+
+  // Collect available filter lists for client UI in requested order
+  const sectors = Array.from(new Set(publicList.map(f => f.sector_code)))
+    .sort((a, b) => {
       const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a);
       const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
       return a.localeCompare(b);
-    });
-
-    for (const sKey of orderedSectorKeys) {
-      const sectorItems = sectorMap.get(sKey) || [];
-      // 2. Group by Airline
-      const airlineMap = new Map();
-      sectorItems.forEach(f => {
-        const aKey = (f.airline_code || 'OTHER').toUpperCase();
-        if (!airlineMap.has(aKey)) airlineMap.set(aKey, []);
-        airlineMap.get(aKey).push(f);
-      });
-
-      for (const [aKey, airItems] of airlineMap.entries()) {
-        // 3. Group by Flight Number
-        const flightMap = new Map();
-        airItems.forEach(f => {
-          let fltKey = String(f.flight_number || '').trim();
-
-          // Auto-normalize flight number if truncated or missing
-          if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107' || fltKey === 'IX 115') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === 'IX') {
-            fltKey = 'IX 137';
-          } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === '6E') {
-            fltKey = '6E 1427';
-          } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'IX') {
-            fltKey = 'IX 191';
-          } else if ((!fltKey || fltKey === 'SG' || fltKey === 'SG 5155') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'SG') {
-            fltKey = 'SG 59';
-          } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1' || fltKey === '6E 1411') && f.origin === 'IXC' && f.destination === 'AUH' && f.airline_code === '6E') {
-            fltKey = '6E 1418';
-          }
-
-          if (!flightMap.has(fltKey)) flightMap.set(fltKey, []);
-          flightMap.get(fltKey).push({ ...f, flight_number: fltKey || f.flight_number });
-        });
-
-        for (const [fltKey, fltItems] of flightMap.entries()) {
-          // Step A: Pick ONLY the lowest final rate per travel_date
-          const dateMinFareMap = new Map();
-
-          fltItems.forEach(item => {
-            const dStr = String(item.travel_date || '').slice(0, 10);
-            const fare = getFinalRate(item);
-
-            if (!dateMinFareMap.has(dStr)) {
-              dateMinFareMap.set(dStr, { minFare: fare, item });
-            } else {
-              const current = dateMinFareMap.get(dStr);
-              if (fare < current.minFare) {
-                dateMinFareMap.set(dStr, { minFare: fare, item });
-              }
-            }
-          });
-
-          // Step B: Group dates by (Month + minFare) into clean streaks
-          const bucketMap = new Map();
-          const sortedDates = Array.from(dateMinFareMap.keys()).sort();
-
-          sortedDates.forEach(dStr => {
-            const { minFare, item } = dateMinFareMap.get(dStr);
-            const monthKey = dStr.slice(0, 7);
-            const bKey = `${monthKey}_${minFare}`;
-            if (!bucketMap.has(bKey)) bucketMap.set(bKey, []);
-            bucketMap.get(bKey).push({
-              travel_date: dStr,
-              minFare,
-              item
-            });
-          });
-
-          // Step C: Build sanitized streak items
-          for (const dateEntries of bucketMap.values()) {
-            dateEntries.sort((x, y) => x.travel_date.localeCompare(y.travel_date));
-
-            const repStreak = dateEntries.map(e => e.item);
-            const first = repStreak[0];
-            const last = repStreak[repStreak.length - 1];
-            const dateLabel = formatStreakLabel(repStreak);
-            const finalRate = getFinalRate(first);
-
-            const knownTiming = FLIGHT_TIMINGS[first.flight_number] || {};
-            const depTime = first.departure_time || knownTiming.dep || '';
-            const arrTime = first.arrival_time || knownTiming.arr || '';
-
-            const originCity = CITY_NAMES[first.origin] || first.origin;
-            const destCity = CITY_NAMES[first.destination] || first.destination;
-
-            // SANITIZED RECORD: Zero vendor, zero net_fare, zero margin
-            publicList.push({
-              id: `pub-${first.origin}-${first.destination}-${first.airline_code}-${fltKey}-${dateLabel}`.replace(/\s+/g, '-'),
-              origin: first.origin,
-              destination: first.destination,
-              origin_city: originCity,
-              destination_city: destCity,
-              route_label: `${originCity} ➔ ${destCity}`,
-              sector_code: `${first.origin}-${first.destination}`,
-              airline_code: first.airline_code,
-              airline_name: first.airline_name,
-              flight_number: first.flight_number,
-              date_label: dateLabel,
-              dates_count: dateEntries.length,
-              travel_date: first.travel_date,
-              end_date: last.travel_date,
-              departure_time: depTime,
-              arrival_time: arrTime,
-              final_rate: finalRate,
-              baggage: normalizeBaggage(first.baggage),
-              is_refundable: first.is_refundable || 'NON_REFUNDABLE'
-            });
-          }
-        }
-      }
-    }
-
-    // Sort by sector in requested priority order, then travel_date ASC, then lowest rate ASC
-    publicList.sort((a, b) => {
-      const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a.sector_code);
-      const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b.sector_code);
-      if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      if (a.sector_code !== b.sector_code) return a.sector_code.localeCompare(b.sector_code);
-      const dComp = String(a.travel_date || '').localeCompare(String(b.travel_date || ''));
-      if (dComp !== 0) return dComp;
-      return a.final_rate - b.final_rate;
-    });
-
-    // Apply optional server-side query filters
-    let filtered = publicList;
-    if (origin) {
-      filtered = filtered.filter(f => f.origin.toUpperCase() === origin.toUpperCase());
-    }
-    if (destination) {
-      filtered = filtered.filter(f => f.destination.toUpperCase() === destination.toUpperCase());
-    }
-    if (airline) {
-      filtered = filtered.filter(f => f.airline_code.toUpperCase() === airline.toUpperCase());
-    }
-    if (search && search.trim()) {
-      const q = search.trim().toLowerCase();
-      filtered = filtered.filter(f => 
-        f.origin_city.toLowerCase().includes(q) ||
-        f.destination_city.toLowerCase().includes(q) ||
-        f.origin.toLowerCase().includes(q) ||
-        f.destination.toLowerCase().includes(q) ||
-        f.airline_name.toLowerCase().includes(q) ||
-        f.flight_number.toLowerCase().includes(q) ||
-        f.date_label.toLowerCase().includes(q)
-      );
-    }
-
-    // Collect available filter lists for client UI in requested order
-    const sectors = Array.from(new Set(publicList.map(f => f.sector_code)))
-      .sort((a, b) => {
-        const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a);
-        const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return a.localeCompare(b);
-      })
-      .map(code => {
-        const [orig, dest] = code.split('-');
-        return {
-          code,
-          origin: orig,
-          destination: dest,
-          label: `${CITY_NAMES[orig] || orig} ➔ ${CITY_NAMES[dest] || dest}`
-        };
-      });
-
-    const airlines = Array.from(new Set(publicList.map(f => f.airline_code))).map(code => {
-      const item = publicList.find(f => f.airline_code === code);
+    })
+    .map(code => {
+      const [orig, dest] = code.split('-');
       return {
         code,
-        name: item ? item.airline_name : code
+        origin: orig,
+        destination: dest,
+        label: `${CITY_NAMES[orig] || orig} ➔ ${CITY_NAMES[dest] || dest}`
       };
     });
 
-    // Build Individual Daily Flights for B2B Flight Search Calendar view
-    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dailyKeyMap = new Map();
+  const airlines = Array.from(new Set(publicList.map(f => f.airline_code))).map(code => {
+    const item = publicList.find(f => f.airline_code === code);
+    return {
+      code,
+      name: item ? item.airline_name : code
+    };
+  });
 
-    targetRows.forEach(f => {
-      const dStr = String(f.travel_date || '').slice(0, 10);
-      if (!dStr) return;
+  // Build Individual Daily Flights for B2B Flight Search Calendar view
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dailyKeyMap = new Map();
 
-      let fltKey = String(f.flight_number || '').trim();
-      if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107' || fltKey === 'IX 115') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === 'IX') {
-        fltKey = 'IX 137';
-      } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === '6E') {
-        fltKey = '6E 1427';
-      } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'IX') {
-        fltKey = 'IX 191';
-      } else if ((!fltKey || fltKey === 'SG' || fltKey === 'SG 5155') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'SG') {
-        fltKey = 'SG 59';
-      } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1' || fltKey === '6E 1411') && f.origin === 'IXC' && f.destination === 'AUH' && f.airline_code === '6E') {
-        fltKey = '6E 1418';
-      }
+  targetRows.forEach(f => {
+    const dStr = String(f.travel_date || '').slice(0, 10);
+    if (!dStr) return;
 
-      const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
-      // Deduplicate by Date + Sector + Airline to keep the single best/lowest rate per airline
-      const uniqueDayKey = `${dStr}_${sKey}_${f.airline_code}`;
-      const finalRate = getFinalRate(f);
+    let fltKey = String(f.flight_number || '').trim();
+    if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107' || fltKey === 'IX 115') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === 'IX') {
+      fltKey = 'IX 137';
+    } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === '6E') {
+      fltKey = '6E 1427';
+    } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'IX') {
+      fltKey = 'IX 191';
+    } else if ((!fltKey || fltKey === 'SG' || fltKey === 'SG 5155') && f.origin === 'ATQ' && f.destination === 'DXB' && f.airline_code === 'SG') {
+      fltKey = 'SG 59';
+    } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1' || fltKey === '6E 1411') && f.origin === 'IXC' && f.destination === 'AUH' && f.airline_code === '6E') {
+      fltKey = '6E 1418';
+    }
 
-      if (!dailyKeyMap.has(uniqueDayKey) || finalRate < dailyKeyMap.get(uniqueDayKey).final_rate) {
-        const timingInfo = FLIGHT_TIMINGS[fltKey] || {};
-        let depTime = f.departure_time;
-        let arrTime = f.arrival_time;
-        if (!depTime && timingInfo.dep) depTime = timingInfo.dep;
-        if (!arrTime && timingInfo.arr) arrTime = timingInfo.arr;
+    const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
+    const uniqueDayKey = `${dStr}_${sKey}_${f.airline_code}`;
+    const finalRate = getFinalRate(f);
 
-        const originCity = CITY_NAMES[f.origin] || f.origin;
-        const destCity = CITY_NAMES[f.destination] || f.destination;
+    if (!dailyKeyMap.has(uniqueDayKey) || finalRate < dailyKeyMap.get(uniqueDayKey).final_rate) {
+      const timingInfo = FLIGHT_TIMINGS[fltKey] || {};
+      let depTime = f.departure_time;
+      let arrTime = f.arrival_time;
+      if (!depTime && timingInfo.dep) depTime = timingInfo.dep;
+      if (!arrTime && timingInfo.arr) arrTime = timingInfo.arr;
 
-        let duration = timingInfo.dur || (sKey === 'ATQ-DXB' ? '4h 10m' : sKey === 'ATQ-SHJ' ? '4h 20m' : '3h 50m');
-        const origTerminal = timingInfo.origT || (f.origin === 'ATQ' ? 'T1' : 'Intl');
-        const destTerminal = timingInfo.destT || (f.destination === 'DXB' ? 'T2' : f.destination === 'AUH' ? 'Terminal A' : 'Main');
-        const aircraft = timingInfo.aircraft || (f.airline_code === '6E' ? 'Airbus A320neo' : 'Boeing 737-800');
+      const originCity = CITY_NAMES[f.origin] || f.origin;
+      const destCity = CITY_NAMES[f.destination] || f.destination;
 
-        const dObj = parseDateParts(dStr);
-        const dayName = DAY_NAMES[dObj.getDay()];
-        const dayNum = String(dObj.getDate()).padStart(2, '0');
-        const mName = MONTH_NAMES[dObj.getMonth()];
-        const yNum = String(dObj.getFullYear());
-        const shortYear = yNum.slice(-2);
-        const formattedDate = `${dayNum}-${mName}-${yNum}`;
-        const dayLabel = `${dayNum} ${mName}, ${shortYear}`;
-        const seatsLeft = 2 + (dObj.getDate() % 4);
+      let duration = timingInfo.dur || (sKey === 'ATQ-DXB' ? '4h 10m' : sKey === 'ATQ-SHJ' ? '4h 20m' : '3h 50m');
+      const origTerminal = timingInfo.origT || (f.origin === 'ATQ' ? 'T1' : 'Intl');
+      const destTerminal = timingInfo.destT || (f.destination === 'DXB' ? 'T2' : f.destination === 'AUH' ? 'Terminal A' : 'Main');
+      const aircraft = timingInfo.aircraft || (f.airline_code === '6E' ? 'Airbus A320neo' : 'Boeing 737-800');
 
-        dailyKeyMap.set(uniqueDayKey, {
-          id: f.id || uniqueDayKey,
-          origin: f.origin,
-          destination: f.destination,
-          origin_city: originCity,
-          destination_city: destCity,
-          origin_terminal: origTerminal,
-          destination_terminal: destTerminal,
-          route_label: `${originCity} ➔ ${destCity}`,
-          sector_code: sKey,
-          airline_code: f.airline_code,
-          airline_name: f.airline_name,
-          airline_logo: `/airlines/${f.airline_code}.png`,
-          flight_number: fltKey,
-          aircraft,
-          travel_date: dStr,
-          formatted_date: formattedDate,
-          day_name: dayName,
-          day_label: dayLabel,
-          departure_time: depTime || '00:15',
-          arrival_time: arrTime || '02:55',
-          duration,
-          stops: 'Non Stop',
-          final_rate: finalRate,
-          baggage: normalizeBaggage(f.baggage),
-          is_refundable: 'Non Refundable',
-          meal_type: 'Paid Meal',
-          cabin_class: 'Economy',
-          seats_left: seatsLeft
-        });
-      }
-    });
+      const dObj = parseDateParts(dStr);
+      const dayName = DAY_NAMES[dObj.getDay()];
+      const dayNum = String(dObj.getDate()).padStart(2, '0');
+      const mName = MONTH_NAMES[dObj.getMonth()];
+      const yNum = String(dObj.getFullYear());
+      const shortYear = yNum.slice(-2);
+      const formattedDate = `${dayNum}-${mName}-${yNum}`;
+      const dayLabel = `${dayNum} ${mName}, ${shortYear}`;
+      const seatsLeft = 2 + (dObj.getDate() % 4);
 
-    const allDailyFlights = Array.from(dailyKeyMap.values()).sort((a, b) => {
-      const dComp = a.travel_date.localeCompare(b.travel_date);
-      if (dComp !== 0) return dComp;
-      return a.final_rate - b.final_rate;
-    });
+      dailyKeyMap.set(uniqueDayKey, {
+        id: f.id || uniqueDayKey,
+        origin: f.origin,
+        destination: f.destination,
+        origin_city: originCity,
+        destination_city: destCity,
+        origin_terminal: origTerminal,
+        destination_terminal: destTerminal,
+        route_label: `${originCity} ➔ ${destCity}`,
+        sector_code: sKey,
+        airline_code: f.airline_code,
+        airline_name: f.airline_name,
+        airline_logo: `/airlines/${f.airline_code}.png`,
+        flight_number: fltKey,
+        aircraft,
+        travel_date: dStr,
+        formatted_date: formattedDate,
+        day_name: dayName,
+        day_label: dayLabel,
+        departure_time: depTime || '00:15',
+        arrival_time: arrTime || '02:55',
+        duration,
+        stops: 'Non Stop',
+        final_rate: finalRate,
+        baggage: normalizeBaggage(f.baggage),
+        is_refundable: 'Non Refundable',
+        meal_type: 'Paid Meal',
+        cabin_class: 'Economy',
+        seats_left: seatsLeft
+      });
+    }
+  });
+
+  const allDailyFlights = Array.from(dailyKeyMap.values()).sort((a, b) => {
+    const dComp = a.travel_date.localeCompare(b.travel_date);
+    if (dComp !== 0) return dComp;
+    return a.final_rate - b.final_rate;
+  });
+
+  return {
+    sectors,
+    airlines,
+    fares: publicList,
+    dailyFlights: allDailyFlights
+  };
+}
+
+function getCachedMasterFares() {
+  const now = Date.now();
+  if (cachedMasterFares && (now - lastCacheTimestamp) < CACHE_TTL_MS) {
+    return cachedMasterFares;
+  }
+  cachedMasterFares = computeMasterPublicFares();
+  lastCacheTimestamp = now;
+  return cachedMasterFares;
+}
+
+exports.invalidateFaresCache = () => {
+  cachedMasterFares = null;
+  lastCacheTimestamp = 0;
+};
+
+/**
+ * Controller: Get Sanitized Public Rates for B2B Agents
+ * In-Memory Cached for Lightning Speed & Zero 502 Timeouts on Render
+ */
+exports.getPublicFares = (req, res) => {
+  try {
+    const { origin, destination, airline, search } = req.query;
+    const master = getCachedMasterFares();
+
+    let filteredFares = master.fares;
+    let filteredDaily = master.dailyFlights;
+
+    if (origin) {
+      const origUp = origin.toUpperCase();
+      filteredFares = filteredFares.filter(f => f.origin.toUpperCase() === origUp);
+      filteredDaily = filteredDaily.filter(f => f.origin.toUpperCase() === origUp);
+    }
+    if (destination) {
+      const destUp = destination.toUpperCase();
+      filteredFares = filteredFares.filter(f => f.destination.toUpperCase() === destUp);
+      filteredDaily = filteredDaily.filter(f => f.destination.toUpperCase() === destUp);
+    }
+    if (airline) {
+      const airUp = airline.toUpperCase();
+      filteredFares = filteredFares.filter(f => f.airline_code.toUpperCase() === airUp);
+      filteredDaily = filteredDaily.filter(f => f.airline_code.toUpperCase() === airUp);
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filteredFares = filteredFares.filter(f => 
+        (f.origin_city && f.origin_city.toLowerCase().includes(q)) ||
+        (f.destination_city && f.destination_city.toLowerCase().includes(q)) ||
+        (f.origin && f.origin.toLowerCase().includes(q)) ||
+        (f.destination && f.destination.toLowerCase().includes(q)) ||
+        (f.airline_name && f.airline_name.toLowerCase().includes(q)) ||
+        (f.flight_number && f.flight_number.toLowerCase().includes(q)) ||
+        (f.date_label && f.date_label.toLowerCase().includes(q))
+      );
+      filteredDaily = filteredDaily.filter(f =>
+        (f.origin_city && f.origin_city.toLowerCase().includes(q)) ||
+        (f.destination_city && f.destination_city.toLowerCase().includes(q)) ||
+        (f.origin && f.origin.toLowerCase().includes(q)) ||
+        (f.destination && f.destination.toLowerCase().includes(q)) ||
+        (f.airline_name && f.airline_name.toLowerCase().includes(q)) ||
+        (f.flight_number && f.flight_number.toLowerCase().includes(q))
+      );
+    }
 
     return res.json({
       success: true,
       agency: {
         name: 'TravelX',
         title: 'TravelX Special Fares | B2B Agent Desk',
-        whatsapp: '919888888888', // Configurable booking WhatsApp number
+        whatsapp: '919888888888',
         contact: '+91 98888 88888',
         email: 'desk@travelx.co.in',
         updated_at: new Date().toISOString()
       },
-      sectors,
-      airlines,
-      count: filtered.length,
-      fares: filtered,
-      dailyFlights: allDailyFlights
+      sectors: master.sectors,
+      airlines: master.airlines,
+      count: filteredFares.length,
+      fares: filteredFares,
+      dailyFlights: filteredDaily
     });
 
   } catch (err) {

@@ -4,6 +4,15 @@ const { evaluateVendorAdjustment } = require('../services/vendorPricingEngine');
 const { parseWhatsAppFareText } = require('../services/whatsappParser');
 const { parseImageWithOpenAI, parseImageWithGemini } = require('../services/aiVisionService');
 
+function safeInvalidateFaresCache() {
+  try {
+    const publicCtrl = require('./publicAgentController');
+    if (publicCtrl && typeof publicCtrl.invalidateFaresCache === 'function') {
+      publicCtrl.invalidateFaresCache();
+    }
+  } catch (_) {}
+}
+
 /**
  * Helper to save or update a single fare with duplicate handling and history tracking
  */
@@ -125,6 +134,8 @@ function saveOrUpdateFareRecord(data, transaction = null) {
       WHERE id = ?
     `, effectiveFare, marginCalc.marginAmount, marginCalc.publishFare, baggage, is_refundable, effectiveRemarks, existing.id);
 
+    safeInvalidateFaresCache();
+
     return {
       id: existing.id,
       status: 'UPDATED_WITH_HISTORY',
@@ -146,6 +157,8 @@ function saveOrUpdateFareRecord(data, transaction = null) {
   `, vendor_id, effectiveAirline, origin.toUpperCase(), destination.toUpperCase(), cleanTravelDate,
      flight_number, departure_time, arrival_time, effectiveFare, currency,
      cabin, baggage, is_refundable, effectiveRemarks, marginCalc.marginAmount, marginCalc.publishFare);
+
+  safeInvalidateFaresCache();
 
   return {
     id: result.lastInsertRowid,
@@ -835,6 +848,8 @@ exports.updateFare = (req, res) => {
       id
     );
 
+    safeInvalidateFaresCache();
+
     const updated = db.prepare('SELECT * FROM fares WHERE id = ?').get(id);
     return res.json({ success: true, fare: updated });
   } catch (err) {
@@ -849,6 +864,7 @@ exports.deleteFare = (req, res) => {
   try {
     const { id } = req.params;
     db.prepare('DELETE FROM fares WHERE id = ?').run(id);
+    safeInvalidateFaresCache();
     return res.json({ success: true, message: 'Fare deleted successfully' });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
@@ -914,13 +930,13 @@ exports.clearAllFares = (req, res) => {
       DELETE FROM fare_history;
       DELETE FROM published_specials;
     `);
+    safeInvalidateFaresCache();
     return res.json({ success: true, message: 'All fares and history records successfully cleared.' });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
 
-/**
 /**
  * Controller: Clear Fares For a Specific Vendor (All, Sector-specific, or Only Today's Updated)
  */
@@ -961,6 +977,7 @@ exports.clearVendorFares = (req, res) => {
     `).run(...params);
 
     const info = db.prepare(`DELETE FROM fares ${whereClause}`).run(...params);
+    safeInvalidateFaresCache();
 
     return res.json({
       success: true,
@@ -989,6 +1006,7 @@ exports.batchDeleteFares = (req, res) => {
     const placeholders = ids.map(() => '?').join(',');
     db.prepare(`DELETE FROM fare_history WHERE fare_id IN (${placeholders})`).run(...ids);
     const info = db.prepare(`DELETE FROM fares WHERE id IN (${placeholders})`).run(...ids);
+    safeInvalidateFaresCache();
 
     return res.json({
       success: true,
@@ -1078,6 +1096,7 @@ exports.batchUpdateMargins = (req, res) => {
     });
 
     tx();
+    safeInvalidateFaresCache();
     return res.json({
       success: true,
       updated_count: updates.length,

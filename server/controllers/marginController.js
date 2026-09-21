@@ -1,6 +1,15 @@
 const db = require('../config/database');
 const { calculateMargin } = require('../services/marginCalculator');
 
+function safeInvalidateFaresCache() {
+  try {
+    const publicCtrl = require('./publicAgentController');
+    if (publicCtrl && typeof publicCtrl.invalidateFaresCache === 'function') {
+      publicCtrl.invalidateFaresCache();
+    }
+  } catch (_) {}
+}
+
 /**
  * Get all margin rules
  */
@@ -56,6 +65,7 @@ exports.createRule = (req, res) => {
     );
 
     const newRule = db.prepare('SELECT * FROM margin_rules WHERE id = ?').get(result.lastInsertRowid);
+    safeInvalidateFaresCache();
     return res.status(201).json({ success: true, rule: newRule });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
@@ -116,6 +126,7 @@ exports.updateRule = (req, res) => {
       id
     );
 
+    safeInvalidateFaresCache();
     const updated = db.prepare('SELECT * FROM margin_rules WHERE id = ?').get(id);
     return res.json({ success: true, rule: updated });
   } catch (err) {
@@ -130,6 +141,7 @@ exports.deleteRule = (req, res) => {
   try {
     const { id } = req.params;
     db.prepare('DELETE FROM margin_rules WHERE id = ?').run(id);
+    safeInvalidateFaresCache();
     return res.json({ success: true, message: 'Rule deleted successfully' });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });

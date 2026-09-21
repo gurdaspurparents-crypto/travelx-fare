@@ -63,9 +63,23 @@ const formatBaggage = (bag) => {
 };
 
 export default function AgentPortal({ onSwitchToAdmin }) {
-  // Master API Data
-  const [fares, setFares] = useState([]);
-  const [dailyFlights, setDailyFlights] = useState([]);
+  // Master API Data - Cached with localStorage for instant 0ms startup and zero rate disconnects
+  const [fares, setFares] = useState(() => {
+    try {
+      const cached = localStorage.getItem('travelx_cached_fares');
+      return cached ? JSON.parse(cached) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [dailyFlights, setDailyFlights] = useState(() => {
+    try {
+      const cached = localStorage.getItem('travelx_cached_daily');
+      return cached ? JSON.parse(cached) : [];
+    } catch (_) {
+      return [];
+    }
+  });
   const [agencyConfig, setAgencyConfig] = useState({
     name: 'TravelX',
     subName: 'B2B Special Fares',
@@ -77,7 +91,14 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     phone: '+91 98888 88888',
     email: 'desk@travelx.co.in'
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('travelx_cached_daily');
+      return !cached || JSON.parse(cached).length === 0;
+    } catch (_) {
+      return true;
+    }
+  });
   const [error, setError] = useState(null);
 
   // Search Bar State (Image 1 & 2)
@@ -207,15 +228,32 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   // Calendar Carousel Scroll Ref
   const calendarScrollRef = useRef(null);
 
-  // 1. Fetch live data
+  // 1. Fetch live data with resilient fallback and persistent caching
   const loadPortalData = async (isRetry = false, retryAttempt = 0) => {
     try {
-      setLoading(true);
-      setError(null);
+      // Only set loading true if we don't already have flight data displayed
+      setDailyFlights(current => {
+        if (!current || current.length === 0) {
+          setLoading(true);
+        }
+        return current;
+      });
+
       const res = await api.getPublicFares();
       if (res && res.success) {
-        setFares(res.fares || []);
-        setDailyFlights(res.dailyFlights || []);
+        setError(null);
+        if (Array.isArray(res.fares) && res.fares.length > 0) {
+          setFares(res.fares);
+          try {
+            localStorage.setItem('travelx_cached_fares', JSON.stringify(res.fares));
+          } catch (_) {}
+        }
+        if (Array.isArray(res.dailyFlights) && res.dailyFlights.length > 0) {
+          setDailyFlights(res.dailyFlights);
+          try {
+            localStorage.setItem('travelx_cached_daily', JSON.stringify(res.dailyFlights));
+          } catch (_) {}
+        }
         if (res.agency) {
           setAgencyConfig(prev => ({ 
             ...prev, 
@@ -226,19 +264,42 @@ export default function AgentPortal({ onSwitchToAdmin }) {
           }));
         }
       } else {
+        // If rates are already loaded on the screen, preserve them! Never show disconnect.
+        const hasExisting = (dailyFlights && dailyFlights.length > 0) || (() => {
+          try {
+            const c = localStorage.getItem('travelx_cached_daily');
+            return c && JSON.parse(c).length > 0;
+          } catch (_) { return false; }
+        })();
+
+        if (!hasExisting) {
+          if (retryAttempt < 3) {
+            setTimeout(() => loadPortalData(true, retryAttempt + 1), 2000);
+            return;
+          }
+          setError('Server is warming up or busy. Please click "Reload Rates" below.');
+        } else {
+          console.warn('Transient server response; keeping existing live rates.');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching public fares:', err);
+      const hasExisting = (dailyFlights && dailyFlights.length > 0) || (() => {
+        try {
+          const c = localStorage.getItem('travelx_cached_daily');
+          return c && JSON.parse(c).length > 0;
+        } catch (_) { return false; }
+      })();
+
+      if (!hasExisting) {
         if (retryAttempt < 3) {
           setTimeout(() => loadPortalData(true, retryAttempt + 1), 2000);
           return;
         }
-        setError('Server is warming up or busy. Please click "Reload Rates" below.');
+        setError('Connection error. Please verify connection and click "Reload Rates" below.');
+      } else {
+        console.warn('Network issue; keeping existing live rates active.');
       }
-    } catch (err) {
-      console.error('Error fetching public fares:', err);
-      if (retryAttempt < 3) {
-        setTimeout(() => loadPortalData(true, retryAttempt + 1), 2000);
-        return;
-      }
-      setError('Connection error. Please verify connection and click "Reload Rates" below.');
     } finally {
       setLoading(false);
     }
@@ -523,6 +584,13 @@ export default function AgentPortal({ onSwitchToAdmin }) {
         handleFetchTracking(t.trim().toUpperCase());
       }
     }
+
+    // Background silent refresh for live rates every 2.5 minutes so rates stay freshly synced
+    const rateInterval = setInterval(() => {
+      loadPortalData(false, 0);
+    }, 150000);
+
+    return () => clearInterval(rateInterval);
   }, []);
 
   // Close traveller dropdown on outside click
