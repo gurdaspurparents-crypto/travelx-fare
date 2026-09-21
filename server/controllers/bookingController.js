@@ -623,8 +623,9 @@ exports.reviewBookingRequest = (req, res) => {
  */
 exports.trackBooking = (req, res) => {
   try {
-    const { ref } = req.params;
-    if (!ref || !ref.trim()) {
+    const rawRef = req.params.ref || '';
+    const cleanRef = rawRef.replace(/^[#\s]+|[#\s]+$/g, '').trim().toUpperCase();
+    if (!cleanRef) {
       return res.status(400).json({ success: false, error: 'Reference ID is required' });
     }
 
@@ -638,8 +639,8 @@ exports.trackBooking = (req, res) => {
         revised_fare, admin_notes, pnr_code, ticket_file_path, passport_files,
         created_at, updated_at
       FROM booking_requests 
-      WHERE UPPER(request_ref) = UPPER(?)
-    `).get(ref.trim());
+      WHERE UPPER(REPLACE(request_ref, '#', '')) = ?
+    `).get(cleanRef);
 
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Booking reference not found' });
@@ -711,14 +712,13 @@ exports.trackBooking = (req, res) => {
  */
 exports.respondToRevisedFare = (req, res) => {
   try {
-    const { ref } = req.params;
-    const { action } = req.body; // 'ACCEPT' | 'DECLINE'
-
-    if (!ref || !ref.trim()) {
+    const rawRef = req.params.ref || '';
+    const cleanRef = rawRef.replace(/^[#\s]+|[#\s]+$/g, '').trim().toUpperCase();
+    if (!cleanRef) {
       return res.status(400).json({ success: false, error: 'Reference ID is required' });
     }
 
-    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(request_ref) = UPPER(?)').get(ref.trim());
+    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, "#", "")) = ?').get(cleanRef);
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Booking reference not found' });
     }
@@ -785,8 +785,13 @@ exports.respondToRevisedFare = (req, res) => {
  */
 exports.uploadPassports = (req, res) => {
   try {
-    const { ref } = req.params;
-    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(request_ref) = UPPER(?)').get(ref.trim());
+    const rawRef = req.params.ref || '';
+    const cleanRef = rawRef.replace(/^[#\s]+|[#\s]+$/g, '').trim().toUpperCase();
+    if (!cleanRef) {
+      return res.status(400).json({ success: false, error: 'Reference ID is required' });
+    }
+
+    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, "#", "")) = ?').get(cleanRef);
     if (!booking) {
       return res.status(404).json({ success: false, error: 'Booking reference not found' });
     }
@@ -884,8 +889,13 @@ exports.uploadTicket = (req, res) => {
  */
 exports.downloadTicket = (req, res) => {
   try {
-    const { ref } = req.params;
-    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(request_ref) = UPPER(?)').get(ref.trim());
+    const rawRef = req.params.ref || '';
+    const cleanRef = rawRef.replace(/^[#\s]+|[#\s]+$/g, '').trim().toUpperCase();
+    if (!cleanRef) {
+      return res.status(400).send('Reference ID is required.');
+    }
+
+    const booking = db.prepare('SELECT * FROM booking_requests WHERE UPPER(REPLACE(request_ref, "#", "")) = ?').get(cleanRef);
     if (!booking || !booking.ticket_file_path) {
       return res.status(404).send('E-Ticket not available yet for this booking.');
     }

@@ -360,24 +360,23 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     }
   };
 
-  const handleUploadPassportsSubmit = async (e) => {
-    if (e) e.preventDefault();
-    if (!trackedBooking || selectedPassportFiles.length === 0) {
-      alert('Please select passenger passport images or PDF files first.');
-      return;
-    }
+  const handleAutoUploadPassports = async (files) => {
+    if (!trackedBooking) return;
+    const fileList = Array.from(files || []);
+    if (fileList.length === 0) return;
+
     try {
       setPassportUploading(true);
       const formData = new FormData();
-      for (let i = 0; i < selectedPassportFiles.length; i++) {
-        formData.append('passports', selectedPassportFiles[i]);
+      for (let i = 0; i < fileList.length; i++) {
+        formData.append('passports', fileList[i]);
       }
       const res = await api.uploadPassports(trackedBooking.request_ref, formData);
       if (res && res.success) {
         setPassportUploadSuccess(true);
         setSelectedPassportFiles([]);
         await handleFetchTracking(trackedBooking.request_ref);
-        setTimeout(() => setPassportUploadSuccess(false), 5000);
+        setTimeout(() => setPassportUploadSuccess(false), 6000);
       } else {
         alert(res?.error || 'Failed to upload passports');
       }
@@ -386,6 +385,8 @@ export default function AgentPortal({ onSwitchToAdmin }) {
       alert('Connection error uploading passports');
     } finally {
       setPassportUploading(false);
+      const fileInput = document.getElementById('agent-passport-input');
+      if (fileInput) fileInput.value = '';
     }
   };
 
@@ -3823,51 +3824,59 @@ Please confirm availability and share status.`;
                           </div>
                         )}
 
-                        {/* Upload Dropzone (Enabled when Available, or Revised & Accepted, or Docs Submitted) */}
-                        {((trackedBooking.status === 'AVAILABLE') || (trackedBooking.status === 'FARE_REVISED' && isFareAccepted) || (trackedBooking.status === 'DOCS_SUBMITTED')) && (
-                          <form onSubmit={handleUploadPassportsSubmit} className="space-y-2 pt-1">
-                            <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-3 bg-white text-center cursor-pointer transition">
+                        {/* Upload Dropzone (Auto-uploads immediately upon selection, No submit button needed) */}
+                        {((trackedBooking.status === 'AVAILABLE') || (trackedBooking.status === 'FARE_REVISED' && isFareAccepted) || (trackedBooking.status === 'DOCS_SUBMITTED') || (trackedBooking.status === 'TICKET_PROCESSING')) && (
+                          <div className="space-y-2 pt-1">
+                            <div className={`border-2 border-dashed rounded-xl p-4 bg-white text-center transition ${
+                              passportUploading 
+                                ? 'border-blue-400 bg-blue-50/50 cursor-wait' 
+                                : 'border-slate-300 hover:border-blue-500 cursor-pointer'
+                            }`}>
                               <input
                                 type="file"
                                 id="agent-passport-input"
                                 multiple
+                                disabled={passportUploading}
                                 accept=".pdf,.jpg,.jpeg,.png"
                                 className="hidden"
                                 onChange={(e) => {
-                                  if (e.target.files) {
-                                    setSelectedPassportFiles(Array.from(e.target.files));
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    handleAutoUploadPassports(e.target.files);
                                   }
                                 }}
                               />
-                              <label htmlFor="agent-passport-input" className="cursor-pointer space-y-1 block">
-                                <Upload className="w-6 h-6 text-blue-900 mx-auto" />
-                                <p className="text-xs font-bold text-slate-800">
-                                  {selectedPassportFiles.length > 0
-                                    ? `${selectedPassportFiles.length} file(s) selected (Click to change)`
-                                    : 'Click to select Passenger Passport copies (Images or PDF)'}
-                                </p>
-                                <p className="text-[10px] text-slate-400">
-                                  Select up to 10 passport pages (max 15MB each)
-                                </p>
+                              <label 
+                                htmlFor="agent-passport-input" 
+                                className={`block space-y-1.5 ${passportUploading ? 'cursor-wait pointer-events-none' : 'cursor-pointer'}`}
+                              >
+                                {passportUploading ? (
+                                  <div className="py-2 space-y-2">
+                                    <Loader2 className="w-7 h-7 text-blue-900 animate-spin mx-auto" />
+                                    <p className="text-xs font-black text-blue-950">
+                                      Uploading passport(s) & updating booking...
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 font-medium">
+                                      Please wait while files are being securely submitted to operations
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center mx-auto">
+                                      <Upload className="w-5 h-5" />
+                                    </div>
+                                    <p className="text-xs font-black text-slate-800">
+                                      {trackedBooking.passports && trackedBooking.passports.length > 0
+                                        ? 'Click to add more Passenger Passport copies (Images or PDF)'
+                                        : 'Click to select Passenger Passport copies (Images or PDF)'}
+                                    </p>
+                                    <p className="text-[10px] text-blue-700 font-bold">
+                                      ⚡ Auto-uploads instantly upon selection • Select up to 10 pages (max 15MB each)
+                                    </p>
+                                  </>
+                                )}
                               </label>
                             </div>
-
-                            {selectedPassportFiles.length > 0 && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold text-blue-950">
-                                  Ready to upload {selectedPassportFiles.length} document(s)
-                                </span>
-                                <button
-                                  type="submit"
-                                  disabled={passportUploading}
-                                  className="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs rounded-xl transition flex items-center space-x-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
-                                >
-                                  {passportUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                                  <span>Submit Passports for Issuance</span>
-                                </button>
-                              </div>
-                            )}
-                          </form>
+                          </div>
                         )}
 
                         {passportUploadSuccess && (
