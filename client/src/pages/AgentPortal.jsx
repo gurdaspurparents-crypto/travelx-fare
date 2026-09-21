@@ -3558,16 +3558,10 @@ Please confirm availability and share status.`;
                             <span>SOLD OUT</span>
                           </span>
                         )}
-                        {trackedBooking.status === 'DOCS_SUBMITTED' && (
-                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-teal-300 text-slate-950 shadow-sm">
-                            <FileText className="w-4 h-4 text-slate-950" />
-                            <span>PASSPORTS SUBMITTED</span>
-                          </span>
-                        )}
-                        {trackedBooking.status === 'TICKET_PROCESSING' && (
+                        {['DOCS_SUBMITTED', 'TICKET_PROCESSING'].includes(trackedBooking.status) && (
                           <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black bg-sky-300 text-slate-950 shadow-sm animate-pulse">
                             <Loader2 className="w-4 h-4 text-slate-950 animate-spin" />
-                            <span>TICKET UNDER ISSUANCE</span>
+                            <span>TICKET UNDER ISSUANCE / IN PROCESS</span>
                           </span>
                         )}
                         {trackedBooking.status === 'CONFIRMED' && (
@@ -3889,13 +3883,11 @@ Please confirm availability and share status.`;
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold shadow-xs ${
                         trackedBooking.has_ticket || trackedBooking.status === 'CONFIRMED'
                           ? 'bg-emerald-600 text-white ring-4 ring-emerald-100'
-                          : trackedBooking.status === 'TICKET_PROCESSING'
+                          : ['DOCS_SUBMITTED', 'TICKET_PROCESSING'].includes(trackedBooking.status)
                           ? 'bg-sky-500 text-white ring-4 ring-sky-100 animate-pulse'
-                          : trackedBooking.status === 'DOCS_SUBMITTED'
-                          ? 'bg-amber-500 text-white ring-4 ring-amber-100'
                           : 'bg-slate-300 text-slate-600'
                       }`}>
-                        {trackedBooking.status === 'TICKET_PROCESSING' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ticket className="w-4 h-4" />}
+                        {['DOCS_SUBMITTED', 'TICKET_PROCESSING'].includes(trackedBooking.status) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ticket className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 space-y-2">
                         <p className="text-xs font-bold text-slate-900">4. Official E-Ticket & Confirmation</p>
@@ -3934,57 +3926,45 @@ Please confirm availability and share status.`;
                               The ticket PDF contains official airline barcode and passenger details. You can print or WhatsApp directly to your passenger!
                             </p>
                           </div>
-                        ) : trackedBooking.status === 'TICKET_PROCESSING' ? (
+                        ) : ['DOCS_SUBMITTED', 'TICKET_PROCESSING'].includes(trackedBooking.status) ? (
                           <div className="p-4 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50 border-2 border-sky-200 rounded-2xl space-y-3">
                             <div className="flex items-center space-x-2">
                               <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center">
                                 <Loader2 className="w-5 h-5 text-sky-600 animate-spin" />
                               </div>
                               <div>
-                                <p className="text-xs font-black text-sky-950">Ticket Under Issuance</p>
-                                <p className="text-[10px] text-sky-700 font-semibold">Your booking is being processed</p>
+                                <p className="text-xs font-black text-sky-950">Ticket Under Process & Issuance</p>
+                                <p className="text-[10px] text-sky-700 font-semibold">
+                                  {trackedBooking.status === 'TICKET_PROCESSING'
+                                    ? 'Operations desk is actively preparing your official airline e-ticket'
+                                    : 'Passports received • Operations desk is processing your booking with the airline'}
+                                </p>
                               </div>
                             </div>
                             <div className="space-y-2 pl-2">
                               <div className="flex items-center space-x-2">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                <span className="text-[11px] text-slate-700">Passports verified by operations desk</span>
+                                <span className="text-[11px] text-slate-700 font-medium">Passenger passports received & verified</span>
                               </div>
                               <div className="flex items-center space-x-2">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                <span className="text-[11px] text-slate-700">Fare confirmed & payment processed</span>
+                                <span className="text-[11px] text-slate-700 font-medium">Seat availability confirmed & special fare locked</span>
                               </div>
                               <div className="flex items-center space-x-2">
                                 <div className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
-                                <span className="text-[11px] text-sky-900 font-bold">Issuing airline ticket & generating PNR...</span>
+                                <span className="text-[11px] text-sky-900 font-bold">Airline PNR issuance & ticket dispatch in progress...</span>
                               </div>
                               <div className="flex items-center space-x-2 opacity-40">
                                 <div className="w-2 h-2 rounded-full bg-slate-300" />
-                                <span className="text-[11px] text-slate-500">E-Ticket PDF ready for download</span>
+                                <span className="text-[11px] text-slate-500">Official E-Ticket PDF ready for download</span>
                               </div>
                             </div>
-                            <div className="h-1.5 bg-sky-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-gradient-to-r from-sky-400 to-blue-500 rounded-full animate-pulse" style={{ width: '70%' }} />
+                            <div className="h-2 bg-sky-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500 rounded-full animate-pulse" style={{ width: '75%' }} />
                             </div>
-                            <p className="text-[10px] text-sky-600 font-medium text-center">⏳ Estimated time: 5-15 minutes • Auto-refreshing every 5 seconds</p>
-                          </div>
-                        ) : trackedBooking.status === 'DOCS_SUBMITTED' ? (
-                          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
-                            <div className="flex items-center space-x-2">
-                              <Clock className="w-4 h-4 text-amber-600" />
-                              <p className="text-xs font-bold text-amber-900">Passports Under Verification</p>
-                            </div>
-                            <div className="space-y-1.5 pl-6">
-                              <div className="flex items-center space-x-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                <span className="text-[11px] text-amber-800">Operations desk is verifying your passport documents</span>
-                              </div>
-                              <div className="flex items-center space-x-2 opacity-40">
-                                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                                <span className="text-[11px] text-slate-500">Ticket issuance will begin after verification</span>
-                              </div>
-                            </div>
-                            <p className="text-[10px] text-amber-600 font-medium">📋 Your passports are being reviewed. Ticket will be issued shortly.</p>
+                            <p className="text-[10px] text-sky-700 font-bold text-center">
+                              ⏳ Status: Under Issuance • Expected time: 5-15 mins • Live auto-sync active
+                            </p>
                           </div>
                         ) : (
                           <p className="text-[11px] text-slate-500">

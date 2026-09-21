@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Inbox, Phone, MessageSquare, CheckCircle2, Clock, 
   XCircle, Search, RefreshCw, Filter, Users, Calendar, 
@@ -86,6 +86,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   const previousBookingsStatusMapRef = useRef({});
   const previousPendingCountRef = useRef(0);
   const autoOpenedPendingIdsRef = useRef(new Set());
+  const hasInitializedRef = useRef(false);
   const titleFlashIntervalRef = useRef(null);
 
   // Desktop Push Notifications state
@@ -97,15 +98,23 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   useEffect(() => {
     const unlockAudio = () => {
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        if (ctx.state === 'suspended') {
-          ctx.resume();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          if (ctx.state === 'suspended') {
+            ctx.resume();
+          }
         }
       } catch (e) {}
-      window.removeEventListener('click', unlockAudio);
     };
-    window.addEventListener('click', unlockAudio);
-    return () => window.removeEventListener('click', unlockAudio);
+    ['click', 'keydown', 'pointerdown', 'touchstart'].forEach(evt => {
+      window.addEventListener(evt, unlockAudio, { once: true });
+    });
+    return () => {
+      ['click', 'keydown', 'pointerdown', 'touchstart'].forEach(evt => {
+        window.removeEventListener(evt, unlockAudio);
+      });
+    };
   }, []);
 
   // Request browser desktop notification permission
@@ -262,13 +271,25 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   const loadBookings = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
+      // Fetch all bookings so desk can monitor new leads and real-time events across ALL statuses
       const res = await api.getBookingRequests({
-        status: statusFilter === 'ALL' ? '' : statusFilter,
         search: searchQuery
       });
       if (res && res.success) {
         const fetchedBookings = res.bookings || [];
         setBookings(fetchedBookings);
+
+        // On first load, record existing IDs so previous leads don't trigger modal popups on refresh
+        if (!hasInitializedRef.current) {
+          hasInitializedRef.current = true;
+          fetchedBookings.forEach(b => {
+            autoOpenedPendingIdsRef.current.add(b.id);
+            previousBookingsStatusMapRef.current[b.id] = b.status;
+          });
+          previousPendingCountRef.current = res.stats?.pending || 0;
+          if (res.stats) setStats(res.stats);
+          return;
+        }
 
         // 1. Check for brand-new incoming PENDING inquiries -> AUTO-OPEN ON SCREEN!
         for (const b of fetchedBookings) {
@@ -341,7 +362,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
               if (Notification.permission === 'granted') {
                 const notif = new Notification(`🚨 Passports Received! #${b.request_ref}`, {
                   body: `${b.agency_name} submitted passenger passports for ${b.origin} ➔ ${b.destination}. Click to view & issue ticket!`,
-                  icon: '/favicon.ico',
+                  icon: '/favicon.svg',
                   tag: `passports-${b.id}`,
                   requireInteraction: true
                 });
@@ -395,6 +416,26 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
     }
   };
 
+  // Filter bookings for display in table based on selected status tab
+  const displayBookings = useMemo(() => {
+    let list = bookings;
+    if (statusFilter !== 'ALL') {
+      const sf = statusFilter.toUpperCase();
+      if (sf === 'CANCELLED') {
+        list = list.filter(b => ['CANCELLED', 'SOLD_OUT', 'FARE_DECLINED'].includes(b.status));
+      } else if (sf === 'AVAILABLE') {
+        list = list.filter(b => ['AVAILABLE', 'FARE_REVISED'].includes(b.status));
+      } else if (sf === 'DOCS_SUBMITTED') {
+        list = list.filter(b => ['DOCS_SUBMITTED', 'TICKET_PROCESSING'].includes(b.status));
+      } else if (sf === 'FARE_DECLINED') {
+        list = list.filter(b => b.status === 'FARE_DECLINED' || (b.status === 'CANCELLED' && b.admin_notes && b.admin_notes.includes('Declined')));
+      } else {
+        list = list.filter(b => b.status === sf);
+      }
+    }
+    return list;
+  }, [bookings, statusFilter]);
+
   const loadAgents = async () => {
     try {
       const res = await api.getAgentsDirectory({ search: searchQuery });
@@ -412,7 +453,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
     } else {
       loadAgents();
     }
-  }, [activeSubTab, statusFilter, searchQuery]);
+  }, [activeSubTab, searchQuery]);
 
   // Auto-polling every 3 seconds for instant desk notifications across all tabs
   useEffect(() => {
@@ -421,7 +462,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
       loadBookings(true);
     }, 3000);
     return () => clearInterval(interval);
-  }, [autoRefresh, statusFilter, searchQuery]);
+  }, [autoRefresh, searchQuery]);
 
   const handleUpdateStatus = async (id, newStatus, customRemark = '') => {
     try {
@@ -1179,10 +1220,10 @@ Thank you for booking with TravelX!`;
       {/* ───────────────────────────────────────────────────────────── */}
       {activeSubTab === 'requests' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-          {bookings.length === 0 ? (
+          {displayBookings.length === 0 ? (
             <div className="p-12 text-center space-y-3">
               <Inbox className="w-12 h-12 text-slate-300 mx-auto" />
-              <p className="text-sm font-bold text-slate-700">No booking requests found.</p>
+              <p className="text-sm font-bold text-slate-700">No booking requests found in this view.</p>
               <p className="text-xs text-slate-400">
                 When agents click "Book Seat" on the B2B portal, inquiries will instantly appear here with an audio alert.
               </p>
@@ -1202,7 +1243,7 @@ Thank you for booking with TravelX!`;
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {bookings.map(b => {
+                  {displayBookings.map(b => {
                     const isActioning = actionLoadingId === b.id;
                     const isPending = b.status === 'PENDING';
                     const isConfirmed = b.status === 'CONFIRMED';
@@ -1897,12 +1938,11 @@ Thank you for booking with TravelX!`;
               {/* PNR Code Input */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Airline PNR Number / Booking Code <span className="text-rose-500">*</span>
+                  Airline PNR Number / Booking Code <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. K9X2LP or ABC123"
+                  placeholder="Optional — e.g. K9X2LP or ABC123"
                   value={pnrCodeInput}
                   onChange={(e) => setPnrCodeInput(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2.5 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 uppercase"
@@ -2758,13 +2798,12 @@ Thank you for booking with TravelX!`;
               {/* PNR Code Input */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-black text-slate-900">
-                  Airline PNR / Ticket Number:
+                  Airline PNR / Ticket Number <span className="text-slate-400 font-normal">(Optional)</span>:
                 </label>
                 <div className="relative">
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. IX-98124 or 6E-KL9X2"
+                    placeholder="Optional — e.g. IX-98124 or 6E-KL9X2"
                     value={ticketPnrInput}
                     onChange={(e) => setTicketPnrInput(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-50 uppercase rounded-xl border border-slate-300 font-mono font-black text-slate-900 text-sm outline-none focus:border-blue-900 focus:bg-white shadow-2xs tracking-wider"
