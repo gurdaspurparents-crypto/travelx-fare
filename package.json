@@ -5,7 +5,8 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "build": "cd client && npm install && npm run build",
+    "build": "node -e \"console.log('Using pre-built client dist')\"",
+    "build:local": "cd client && npm install && npm run build",
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build",
     "test": "node tests/backend.test.js"
