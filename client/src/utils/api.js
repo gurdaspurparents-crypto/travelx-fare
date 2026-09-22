@@ -1,12 +1,29 @@
-/**
- * API client for Travelx Special Fare Manager
- */
+async function safeFetch(url, options = {}) {
+  try {
+    const res = await fetch(url, options);
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return {
+        success: false,
+        error: res.status >= 500
+          ? `Server updating (${res.status}). Kripya 5 second baad dobara try karein.`
+          : `Unexpected response (${res.status})`
+      };
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: 'Network connection failed. Kripya page refresh karein (Ctrl + F5).'
+    };
+  }
+}
 
 export const api = {
   // Health
   getHealth: async () => {
-    const res = await fetch('/api/health');
-    return res.json();
+    return safeFetch('/api/health');
   },
 
   // Dashboard
@@ -54,21 +71,19 @@ export const api = {
   },
 
   saveQuickGrid: async (data) => {
-    const res = await fetch('/api/fares/quick-grid', {
+    return safeFetch('/api/fares/quick-grid', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   saveDateRange: async (data) => {
-    const res = await fetch('/api/fares/date-range', {
+    return safeFetch('/api/fares/date-range', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   parseWhatsApp: async (text, defaults = {}) => {
@@ -90,12 +105,11 @@ export const api = {
   },
 
   saveBulkFares: async (vendor_id, fares, replace_missing_dates = true, replace_mode = 'sector') => {
-    const res = await fetch('/api/fares/bulk-save', {
+    return safeFetch('/api/fares/bulk-save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendor_id, fares, replace_missing_dates, replace_mode })
     });
-    return res.json();
   },
 
   batchUpdateMargins: async (updates, mark_published = 1, batch_title = 'Special Fare Release') => {
