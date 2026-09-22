@@ -161,6 +161,12 @@ let cachedMasterFares = null;
 let lastCacheTimestamp = 0;
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
 
+function invalidateFaresCache() {
+  cachedMasterFares = null;
+  lastCacheTimestamp = 0;
+}
+exports.invalidateFaresCache = invalidateFaresCache;
+
 function computeMasterPublicFares() {
   const query = `
     SELECT 

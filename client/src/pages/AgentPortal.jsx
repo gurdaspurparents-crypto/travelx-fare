@@ -242,16 +242,25 @@ export default function AgentPortal({ onSwitchToAdmin }) {
       const res = await api.getPublicFares();
       if (res && res.success) {
         setError(null);
-        if (Array.isArray(res.fares) && res.fares.length > 0) {
+        setLoading(false);
+        if (Array.isArray(res.fares)) {
           setFares(res.fares);
           try {
-            localStorage.setItem('travelx_cached_fares', JSON.stringify(res.fares));
+            if (res.fares.length > 0) {
+              localStorage.setItem('travelx_cached_fares', JSON.stringify(res.fares));
+            } else {
+              localStorage.removeItem('travelx_cached_fares');
+            }
           } catch (_) {}
         }
-        if (Array.isArray(res.dailyFlights) && res.dailyFlights.length > 0) {
+        if (Array.isArray(res.dailyFlights)) {
           setDailyFlights(res.dailyFlights);
           try {
-            localStorage.setItem('travelx_cached_daily', JSON.stringify(res.dailyFlights));
+            if (res.dailyFlights.length > 0) {
+              localStorage.setItem('travelx_cached_daily', JSON.stringify(res.dailyFlights));
+            } else {
+              localStorage.removeItem('travelx_cached_daily');
+            }
           } catch (_) {}
         }
         if (res.agency) {

@@ -16,8 +16,9 @@ export default function ClearRatesModal({
   const [mode, setMode] = useState('vendor'); // 'vendor' | 'all'
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [selectedSector, setSelectedSector] = useState(''); // "" for all, or "ORIGIN-DESTINATION"
-  const [vendorScope, setVendorScope] = useState('today'); // 'today' | 'all'
+  const [vendorScope, setVendorScope] = useState('all'); // Default to 'all' for reliable deletion
   const [vendorStats, setVendorStats] = useState({ total: 0, updated_today: 0, sectors: [], loading: false });
+  const [systemTotalFares, setSystemTotalFares] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
 
@@ -33,8 +34,17 @@ export default function ClearRatesModal({
       } else {
         setSelectedSector('');
       }
-      setVendorScope(initialScope);
+      setVendorScope(initialScope || 'all');
       setMode('vendor'); // Default to vendor mode for safety
+
+      // Fetch overall system fares count for Full System Reset tab
+      api.getDashboardStats()
+        .then(res => {
+          if (res.success && res.stats) {
+            setSystemTotalFares(res.stats.total_fares || 0);
+          }
+        })
+        .catch(() => {});
     }
   }, [isOpen, defaultVendorId, defaultOrigin, defaultDestination, initialScope, vendors]);
 
@@ -53,10 +63,8 @@ export default function ClearRatesModal({
                 sectors: res.sectors || [],
                 loading: false 
               });
-              // If vendor has today's updates, default to 'today', else 'all'
-              if (res.updated_today > 0) {
-                setVendorScope('today');
-              } else {
+              // Auto-select 'all' if no updates today
+              if (res.updated_today === 0) {
                 setVendorScope('all');
               }
             } else {
@@ -82,7 +90,8 @@ export default function ClearRatesModal({
 
   const totalInScope = activeSector ? activeSector.total : vendorStats.total;
   const todayInScope = activeSector ? activeSector.updated_today : vendorStats.updated_today;
-  const deleteCount = vendorScope === 'today' ? todayInScope : totalInScope;
+  const effectiveScope = (vendorScope === 'today' && todayInScope === 0) ? 'all' : vendorScope;
+  const deleteCount = effectiveScope === 'today' ? todayInScope : totalInScope;
 
   const handleClear = async () => {
     try {
@@ -93,8 +102,9 @@ export default function ClearRatesModal({
         const res = await api.clearAllFares();
         if (res.success) {
           setStatus({ type: 'success', text: '✅ All fares and price history have been cleared successfully.' });
+          setSystemTotalFares(0);
+          if (onRatesCleared) onRatesCleared();
           setTimeout(() => {
-            if (onRatesCleared) onRatesCleared();
             onClose();
           }, 800);
         } else {
@@ -107,7 +117,7 @@ export default function ClearRatesModal({
           return;
         }
 
-        const isOnlyToday = vendorScope === 'today';
+        const isOnlyToday = effectiveScope === 'today';
         const [selOrigin, selDest] = selectedSector ? selectedSector.split('-') : ['', ''];
 
         const res = await api.clearVendorFares(selectedVendorId, {
@@ -124,8 +134,8 @@ export default function ClearRatesModal({
             type: 'success', 
             text: `✅ ${res.deleted_count || 0} ${scopeLabel} for ${vName}${sectorLabel} deleted successfully.` 
           });
+          if (onRatesCleared) onRatesCleared(selectedVendorId, isOnlyToday, selectedSector);
           setTimeout(() => {
-            if (onRatesCleared) onRatesCleared(selectedVendorId, isOnlyToday, selectedSector);
             onClose();
           }, 800);
         } else {
@@ -294,19 +304,26 @@ export default function ClearRatesModal({
                 
                 {/* Option A: Today's Updated Rates */}
                 <div 
-                  onClick={() => setVendorScope('today')}
-                  className={`p-3 rounded-xl border-2 transition cursor-pointer flex items-start space-x-3 ${
-                    vendorScope === 'today'
-                      ? 'bg-amber-50/60 border-amber-500 shadow-xs'
-                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  onClick={() => {
+                    if (todayInScope > 0) setVendorScope('today');
+                  }}
+                  className={`p-3 rounded-xl border-2 transition flex items-start space-x-3 ${
+                    todayInScope === 0
+                      ? 'opacity-50 bg-slate-50/70 border-slate-200 cursor-not-allowed'
+                      : effectiveScope === 'today'
+                      ? 'bg-amber-50/60 border-amber-500 shadow-xs cursor-pointer'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300 cursor-pointer'
                   }`}
                 >
                   <input
                     type="radio"
                     name="vendorScope"
-                    checked={vendorScope === 'today'}
-                    onChange={() => setVendorScope('today')}
-                    className="mt-0.5 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    disabled={todayInScope === 0}
+                    checked={effectiveScope === 'today'}
+                    onChange={() => {
+                      if (todayInScope > 0) setVendorScope('today');
+                    }}
+                    className="mt-0.5 text-amber-600 focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed"
                   />
                   <div className="flex-1 text-xs">
                     <div className="flex items-center justify-between">
@@ -314,12 +331,16 @@ export default function ClearRatesModal({
                         <Zap className="w-3.5 h-3.5 text-amber-500" />
                         <span>Delete Today's Updated Rates Only</span>
                       </strong>
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-200 text-amber-900 font-mono">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-black font-mono ${
+                        todayInScope > 0 ? 'bg-amber-200 text-amber-900' : 'bg-slate-200 text-slate-600'
+                      }`}>
                         {todayInScope} rates
                       </span>
                     </div>
                     <p className="text-slate-500 text-[11px] mt-0.5 leading-relaxed">
-                      Removes rates uploaded or updated today for <strong>{selectedVendor?.name}</strong> {selectedSector ? `on ${selectedSector}` : ''}. Older previous rates safe rahenge.
+                      {todayInScope > 0
+                        ? `Removes only rates uploaded or updated today for ${selectedVendor?.name || 'this vendor'}. Older previous rates safe rahenge.`
+                        : `No rates were updated today. To clear inventory, select "Delete ALL Rates" below.`}
                     </p>
                   </div>
                 </div>
@@ -328,7 +349,7 @@ export default function ClearRatesModal({
                 <div 
                   onClick={() => setVendorScope('all')}
                   className={`p-3 rounded-xl border-2 transition cursor-pointer flex items-start space-x-3 ${
-                    vendorScope === 'all'
+                    effectiveScope === 'all'
                       ? 'bg-rose-50/60 border-rose-500 shadow-xs'
                       : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                   }`}
@@ -336,7 +357,7 @@ export default function ClearRatesModal({
                   <input
                     type="radio"
                     name="vendorScope"
-                    checked={vendorScope === 'all'}
+                    checked={effectiveScope === 'all'}
                     onChange={() => setVendorScope('all')}
                     className="mt-0.5 text-rose-600 focus:ring-rose-500 cursor-pointer"
                   />
@@ -364,7 +385,7 @@ export default function ClearRatesModal({
           {/* MODE 2: FULL SYSTEM RESET */}
           {mode === 'all' && (
             <div className="space-y-3">
-              <div className="p-4 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 space-y-2">
+              <div className="p-4 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 space-y-2.5">
                 <div className="flex items-center space-x-2 font-black text-rose-800 text-sm">
                   <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
                   <span>Full Database Fares Reset</span>
@@ -372,8 +393,16 @@ export default function ClearRatesModal({
                 <p className="text-[11px] leading-relaxed text-rose-700">
                   This will wipe out <strong>ALL active fare records and price history across EVERY vendor</strong>.
                 </p>
-                <div className="bg-white/80 p-2.5 rounded-lg border border-rose-100 text-[11px] text-slate-700">
-                  ✅ Your Airlines list, Vendors list, and Routes master data will remain <strong>100% safe</strong>.
+                {systemTotalFares !== null && (
+                  <div className="p-2.5 bg-rose-100/80 rounded-lg border border-rose-200 font-mono font-black text-rose-950 text-xs flex items-center justify-between">
+                    <span>Total Active System Fares:</span>
+                    <span className="text-xs bg-rose-600 text-white px-2.5 py-0.5 rounded-full font-bold">
+                      {systemTotalFares} fares
+                    </span>
+                  </div>
+                )}
+                <div className="bg-white/90 p-2.5 rounded-lg border border-rose-100 text-[11px] text-slate-700">
+                  ✅ Your Airlines list, Vendors list, Routes, and Bookings master data will remain <strong>100% safe</strong>.
                 </div>
               </div>
             </div>
@@ -402,6 +431,11 @@ export default function ClearRatesModal({
                 <span className="text-rose-600 ml-1">({deleteCount} rates)</span>
               </span>
             )}
+            {mode === 'all' && systemTotalFares !== null && (
+              <span>
+                Target: <strong className="text-rose-700">All Vendors</strong> ({systemTotalFares} total rates)
+              </span>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">
@@ -424,8 +458,8 @@ export default function ClearRatesModal({
                 {loading 
                   ? 'Deleting...' 
                   : (mode === 'all' 
-                      ? 'Confirm Full System Reset' 
-                      : `Delete ${deleteCount} ${vendorScope === 'today' ? "Today's" : "All"} Rates`
+                      ? (systemTotalFares !== null ? `Confirm Full Reset (${systemTotalFares} Fares)` : 'Confirm Full System Reset')
+                      : `Delete ${deleteCount} ${effectiveScope === 'today' ? "Today's" : "All"} Rates`
                     )
                 }
               </span>

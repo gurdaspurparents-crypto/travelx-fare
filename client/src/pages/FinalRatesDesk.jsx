@@ -12,7 +12,7 @@ import { getAirlineName, getFlightTiming } from '../utils/airlineHelper';
 import { formatRouteName, getCityName } from '../utils/airportHelper';
 import { formatStreakLabel, formatDayMonth } from '../utils/dateGroupingHelper';
 
-export default function FinalRatesDesk({ masterData = {}, setActiveTab }) {
+export default function FinalRatesDesk({ masterData = {}, setActiveTab, faresRefreshKey }) {
   const { vendors = [], airlines = [], routes = [] } = masterData;
 
   const [fares, setFares] = useState([]);
@@ -118,7 +118,7 @@ export default function FinalRatesDesk({ masterData = {}, setActiveTab }) {
 
   useEffect(() => {
     loadFares();
-  }, []);
+  }, [faresRefreshKey]);
 
   // Helper: Calculate Final Selling Rate
   const getFinalRate = (f) => {

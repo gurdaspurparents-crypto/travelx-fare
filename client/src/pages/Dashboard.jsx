@@ -8,7 +8,7 @@ import {
 import { api } from '../utils/api';
 import ClearRatesModal from '../components/ClearRatesModal';
 
-export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}, onRatesCleared }) {
+export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}, onRatesCleared, faresRefreshKey }) {
   const { vendors = [] } = masterData;
   const [showClearModal, setShowClearModal] = useState(false);
   const [data, setData] = useState({
@@ -43,7 +43,7 @@ export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [faresRefreshKey]);
 
   const stats = data.stats || {};
 

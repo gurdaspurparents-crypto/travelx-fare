@@ -929,7 +929,11 @@ exports.clearAllFares = (req, res) => {
       DELETE FROM fares;
       DELETE FROM fare_history;
       DELETE FROM published_specials;
+      VACUUM;
     `);
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
     safeInvalidateFaresCache();
     return res.json({ success: true, message: 'All fares and history records successfully cleared.' });
   } catch (err) {
@@ -977,6 +981,9 @@ exports.clearVendorFares = (req, res) => {
     `).run(...params);
 
     const info = db.prepare(`DELETE FROM fares ${whereClause}`).run(...params);
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
     safeInvalidateFaresCache();
 
     return res.json({

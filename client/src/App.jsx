@@ -88,6 +88,13 @@ export default function App() {
     handleOpenAgentPortal();
   };
 
+  const [faresRefreshKey, setFaresRefreshKey] = useState(0);
+
+  const handleRatesChanged = () => {
+    setFaresRefreshKey(k => k + 1);
+    loadMasters();
+  };
+
   const loadMasters = async () => {
     try {
       const [resA, resV, resR] = await Promise.all([
@@ -183,7 +190,7 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         vendors={masterData.vendors}
-        onRatesCleared={loadMasters}
+        onRatesCleared={handleRatesChanged}
         onOpenAgentPortal={handleOpenAgentPortal}
       />
 
@@ -194,7 +201,8 @@ export default function App() {
             masterData={masterData}
             setActiveTab={setActiveTab}
             onSelectRoute={handleSelectRouteFromDashboard}
-            onRatesCleared={loadMasters}
+            onRatesCleared={handleRatesChanged}
+            faresRefreshKey={faresRefreshKey}
           />
         )}
 
@@ -208,6 +216,7 @@ export default function App() {
           <FinalRatesDesk
             masterData={masterData}
             setActiveTab={setActiveTab}
+            faresRefreshKey={faresRefreshKey}
           />
         )}
 
@@ -215,14 +224,16 @@ export default function App() {
           <AllRatesDesk
             masterData={masterData}
             setActiveTab={setActiveTab}
+            faresRefreshKey={faresRefreshKey}
           />
         )}
 
         {activeTab === 'vendor-heads' && (
           <VendorFaresDesk
             masterData={masterData}
-            onFaresSaved={() => loadMasters()}
+            onFaresSaved={handleRatesChanged}
             setActiveTab={setActiveTab}
+            faresRefreshKey={faresRefreshKey}
           />
         )}
 

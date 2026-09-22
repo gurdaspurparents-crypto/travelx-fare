@@ -11,7 +11,7 @@ import { getAirlineName } from '../utils/airlineHelper';
 import { formatRouteName, getCityName } from '../utils/airportHelper';
 import ClearRatesModal from '../components/ClearRatesModal';
 
-export default function AllRatesDesk({ masterData = {}, setActiveTab }) {
+export default function AllRatesDesk({ masterData = {}, setActiveTab, faresRefreshKey }) {
   const { vendors = [], airlines = [], routes = [] } = masterData;
 
   const [fares, setFares] = useState([]);
@@ -114,7 +114,7 @@ export default function AllRatesDesk({ masterData = {}, setActiveTab }) {
 
   useEffect(() => {
     loadFares();
-  }, [filters, sortBy]);
+  }, [filters, sortBy, faresRefreshKey]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
