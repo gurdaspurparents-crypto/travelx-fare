@@ -1,6 +1,13 @@
-async function safeFetch(url, options = {}) {
+async function safeFetch(url, options = {}, retries = 2) {
   try {
     const res = await fetch(url, options);
+    // If Render is waking up from cold sleep (502 / 503 / 504), automatically retry after 2.5s
+    if ((res.status === 502 || res.status === 503 || res.status === 504) && retries > 0) {
+      console.warn(`Server waking up (${res.status}). Retrying in 2.5s... (${retries} attempts left)`);
+      await new Promise(r => setTimeout(r, 2500));
+      return safeFetch(url, options, retries - 1);
+    }
+
     const text = await res.text();
     try {
       return JSON.parse(text);
@@ -13,6 +20,11 @@ async function safeFetch(url, options = {}) {
       };
     }
   } catch (err) {
+    if (retries > 0) {
+      console.warn('Network connection interrupted, retrying in 2.5s...', err.message);
+      await new Promise(r => setTimeout(r, 2500));
+      return safeFetch(url, options, retries - 1);
+    }
     return {
       success: false,
       error: 'Network connection failed. Kripya page refresh karein (Ctrl + F5).'

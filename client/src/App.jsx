@@ -114,6 +114,13 @@ export default function App() {
 
   useEffect(() => {
     loadMasters();
+
+    // Heartbeat ping every 8 minutes to keep backend warm while user has tab open
+    const interval = setInterval(() => {
+      api.getHealth().catch(() => {});
+    }, 8 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleSelectRouteFromDashboard = (origin, destination) => {
