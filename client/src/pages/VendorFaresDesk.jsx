@@ -333,25 +333,28 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
     try {
       setLoading(true);
       const res = await api.saveBulkFares(Number(selectedVendorId), formattedFares, autoDeleteMissing, 'sector');
-      if (res.success) {
+      if (res.success && res.saved_count > 0) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} missing/sold-out dates removed)` : '';
+        const successMsg = `🎉 Successfully saved ${res.saved_count} fares in ${selectedVendor?.name}'s account!${delMsg}`;
         setStatus({
           type: 'success',
-          text: `🎉 Successfully saved ${res.saved_count} fares in ${selectedVendor?.name}'s account!${delMsg}`
+          text: successMsg
         });
         loadActiveVendorFares(selectedVendorId);
         if (onFaresSaved) onFaresSaved();
         if (andSort && setActiveTab) {
           setTimeout(() => setActiveTab('compare'), 500);
         }
-        return true;
+        return { success: true, saved_count: res.saved_count, message: successMsg };
       } else {
-        setStatus({ type: 'error', text: res.error || 'Failed to save fares.' });
-        return false;
+        const errorMsg = res.error || (res.errors && res.errors[0]?.error) || 'Failed to save fares: 0 records saved.';
+        setStatus({ type: 'error', text: errorMsg });
+        return { success: false, error: errorMsg };
       }
     } catch (err) {
-      setStatus({ type: 'error', text: 'Error saving image fares to database.' });
-      return false;
+      const errorMsg = err.message || 'Error saving image fares to database.';
+      setStatus({ type: 'error', text: errorMsg });
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }

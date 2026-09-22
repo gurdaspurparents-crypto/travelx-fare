@@ -566,7 +566,77 @@ function parseWhatsAppFareText(text, defaults = {}) {
   };
 }
 
+/**
+ * Normalizes any airline input (code, name, flyer text, flight number) into canonical 2-letter IATA code
+ */
+function normalizeAirlineCode(rawAirline, flightNumber = '', defaultAirline = 'AI') {
+  const fltStr = String(flightNumber || '').trim();
+  const fltNumOnly = fltStr.replace(/[^0-9]/g, '');
+
+  // Air India Express routes / flight numbers
+  if (['191', '192', '137', '138'].includes(fltNumOnly) || /^(IX|AIX)[\s\-_]?(191|192|137|138)$/i.test(fltStr)) {
+    return 'IX';
+  }
+
+  const raw = String(rawAirline || '').trim();
+  if (!raw && !fltStr) return defaultAirline || 'AI';
+
+  // 1. Direct 2-letter code check
+  const upperRaw = raw.toUpperCase();
+  if (KNOWN_AIRLINES.includes(upperRaw)) {
+    return upperRaw;
+  }
+
+  // 2. Look for known 2-letter IATA code enclosed in brackets or word boundary e.g. "IndiGo (6E)", "(6E)", "6E", "SG"
+  const iataMatch = raw.match(/\b(6E|IX|AI|SG|QP|UK|G9|FZ|EK|EY|QR|WY|OV|SV|XY|F3|KU|J9|GF|S5|IC|9I|MS|W5|UL|BG|BS|RA|H9|KB|RQ|SQ|MH|OD|AK|TG|SL|VJ|VN|CX|GA|NH|JL|KE|KC|HY|BA|VS|LH|AF|KL|LX|TK|AZ|LO|AY|OS|SK|AC|UA|AA|DL|QF|ET|KQ)\b/i);
+  if (iataMatch) {
+    return iataMatch[1].toUpperCase();
+  }
+
+  // 3. Name to code map match
+  const lower = raw.toLowerCase();
+  for (const item of AIRLINE_NAME_MAP) {
+    if (lower === item.name.toLowerCase() || lower.includes(item.name.toLowerCase())) {
+      return item.code;
+    }
+  }
+
+  // 4. Check specific common abbreviations / mistakes
+  if (lower.includes('indigo') || lower.includes('6e') || lower === 'in') return '6E';
+  if (lower.includes('spice') || lower.includes('sg') || lower === 'sp') return 'SG';
+  if (lower.includes('air india express') || lower.includes('express') || lower.includes('ix')) return 'IX';
+  if (lower.includes('air india') || lower.includes('airindia') || lower === 'ai') return 'AI';
+  if (lower.includes('star air') || lower.includes('starair') || lower.includes('s5')) return 'S5';
+  if (lower.includes('akasa') || lower.includes('qp')) return 'QP';
+  if (lower.includes('vistara') || lower.includes('uk')) return 'UK';
+  if (lower.includes('arabia') || lower.includes('g9')) return 'G9';
+  if (lower.includes('flydubai') || lower.includes('fly dubai') || lower.includes('fz')) return 'FZ';
+  if (lower.includes('emirates') || lower.includes('ek')) return 'EK';
+  if (lower.includes('etihad') || lower.includes('ey')) return 'EY';
+  if (lower.includes('qatar') || lower.includes('qr')) return 'QR';
+  if (lower.includes('oman') || lower.includes('wy')) return 'WY';
+  if (lower.includes('salam') || lower.includes('ov')) return 'OV';
+  if (lower.includes('saudia') || lower.includes('saudi') || lower.includes('sv')) return 'SV';
+  if (lower.includes('flynas') || lower.includes('nas') || lower.includes('xy')) return 'XY';
+  if (lower.includes('flyadeal') || lower.includes('adeal') || lower.includes('f3')) return 'F3';
+  if (lower.includes('kuwait') || lower.includes('ku')) return 'KU';
+  if (lower.includes('jazeera') || lower.includes('j9')) return 'J9';
+  if (lower.includes('gulf') || lower.includes('gf')) return 'GF';
+
+  // 5. Check if flight number starts with a known airline code (e.g. "6E 1401" or "SG-23")
+  if (fltStr) {
+    const fltCodeMatch = fltStr.match(/^([A-Z0-9]{2})/i);
+    if (fltCodeMatch && KNOWN_AIRLINES.includes(fltCodeMatch[1].toUpperCase())) {
+      return fltCodeMatch[1].toUpperCase();
+    }
+  }
+
+  return defaultAirline || 'AI';
+}
+
 module.exports = {
   parseWhatsAppFareText,
-  parseDateString
+  parseDateString,
+  normalizeAirlineCode,
+  KNOWN_AIRLINES
 };

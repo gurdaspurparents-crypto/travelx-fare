@@ -1,7 +1,7 @@
 const db = require('../config/database');
 const { calculateMargin } = require('../services/marginCalculator');
 const { evaluateVendorAdjustment } = require('../services/vendorPricingEngine');
-const { parseWhatsAppFareText } = require('../services/whatsappParser');
+const { parseWhatsAppFareText, parseDateString, normalizeAirlineCode } = require('../services/whatsappParser');
 const { parseImageWithOpenAI, parseImageWithGemini } = require('../services/aiVisionService');
 
 function safeInvalidateFaresCache() {
@@ -43,25 +43,17 @@ function saveOrUpdateFareRecord(data, transaction = null) {
     custom_margin = null
   } = data;
 
-  // Normalize airline: If flight number is 191, 192, 137, 138 -> Air India Express (IX)
-  let effectiveAirline = airline_code ? String(airline_code).trim().toUpperCase() : '';
-  const fltNumOnly = String(flight_number || '').trim().replace(/[^0-9]/g, '');
-  if (['191', '192', '137', '138'].includes(fltNumOnly) || /^(IX|AIX)[\s\-_]?(191|192|137|138)$/i.test(String(flight_number || '').trim())) {
-    effectiveAirline = 'IX';
-  }
+  // Normalize airline to canonical 2-letter IATA code
+  const effectiveAirline = normalizeAirlineCode(airline_code, flight_number, 'AI');
 
   const numFare = Number(net_fare);
   if (!vendor_id || !effectiveAirline || !origin || !destination || !travel_date || !numFare || numFare <= 0) {
     throw new Error('Mandatory fields missing: Vendor, Airline, Origin, Destination, Travel Date, Net Fare are required.');
   }
 
-  // Normalize travel_date year so historical years (< 2026) are never saved
-  let cleanTravelDate = String(travel_date).trim();
+  // Normalize travel_date to ISO YYYY-MM-DD format (enforcing defaultYear >= 2026)
   const currentYear = new Date().getFullYear();
-  const yrMatch = cleanTravelDate.match(/^(\d{4})/);
-  if (yrMatch && Number(yrMatch[1]) < currentYear) {
-    cleanTravelDate = `${currentYear}${cleanTravelDate.slice(4)}`;
-  }
+  const cleanTravelDate = parseDateString(travel_date, currentYear) || String(travel_date).trim();
 
   // Auto-apply vendor pricing rules (e.g. Bipasha discount or Gulf sector slab markup)
   const vendorAdj = evaluateVendorAdjustment({
@@ -202,7 +194,9 @@ exports.saveQuickGridFares = (req, res) => {
     replace_missing_dates = false
   } = req.body;
 
-  if (!vendor_id || !airline_code || !origin || !destination) {
+  const effectiveAirline = normalizeAirlineCode(airline_code, flight_number, 'AI');
+
+  if (!vendor_id || !effectiveAirline || !origin || !destination) {
     return res.status(400).json({
       success: false,
       error: 'Vendor, Airline, Origin, and Destination are required for Quick Grid'
@@ -213,6 +207,7 @@ exports.saveQuickGridFares = (req, res) => {
     return res.status(400).json({ success: false, error: 'No date/fare entries provided' });
   }
 
+  const currentYear = new Date().getFullYear();
   const results = [];
   const errors = [];
   const deletedDates = [];
@@ -220,7 +215,10 @@ exports.saveQuickGridFares = (req, res) => {
   const saveTx = db.transaction(() => {
     // If replace_missing_dates is requested, prune any existing dates for this sector not present in new entries
     if (replace_missing_dates) {
-      const validDates = entries.filter(e => e.travel_date && Number(e.net_fare) > 0).map(e => e.travel_date);
+      const validDates = entries
+        .filter(e => e.travel_date && Number(e.net_fare) > 0)
+        .map(e => parseDateString(e.travel_date, currentYear) || String(e.travel_date).trim());
+
       if (validDates.length > 0) {
         const incomingDateSet = new Set(validDates);
 
@@ -233,7 +231,7 @@ exports.saveQuickGridFares = (req, res) => {
             AND UPPER(origin) = UPPER(?)
             AND UPPER(destination) = UPPER(?)
             AND UPPER(COALESCE(cabin, 'ECONOMY')) = UPPER(?)
-        `).all(vendor_id, airline_code, origin, destination, cabin || 'ECONOMY');
+        `).all(vendor_id, effectiveAirline, origin, destination, cabin || 'ECONOMY');
 
         const deleteStmt = db.prepare('DELETE FROM fares WHERE id = ?');
         const historyStmt = db.prepare(`
@@ -455,11 +453,13 @@ exports.saveBulkParsedFares = (req, res) => {
     return res.status(400).json({ success: false, error: 'No fare records to save' });
   }
 
-  // Pre-process fares: ensure flight numbers 191, 192, 137, 138 are mapped to 'IX' (Air India Express)
+  // Pre-process fares: normalize airline codes and parse dates to ISO YYYY-MM-DD
+  const currentYear = new Date().getFullYear();
   for (const f of fares) {
-    const fltNumOnly = String(f.flight_number || '').trim().replace(/[^0-9]/g, '');
-    if (['191', '192', '137', '138'].includes(fltNumOnly) || /^(IX|AIX)[\s\-_]?(191|192|137|138)$/i.test(String(f.flight_number || '').trim())) {
-      f.airline_code = 'IX';
+    f.airline_code = normalizeAirlineCode(f.airline_code, f.flight_number, 'AI');
+    const parsedD = parseDateString(f.travel_date, currentYear);
+    if (parsedD) {
+      f.travel_date = parsedD;
     }
   }
 
@@ -602,8 +602,9 @@ exports.saveBulkParsedFares = (req, res) => {
     const droppedCount = results.filter(r => r.fare_diff && r.fare_diff < 0).length;
     const hikedCount = results.filter(r => r.fare_diff && r.fare_diff > 0).length;
 
+    const isSuccess = results.length > 0;
     return res.json({
-      success: true,
+      success: isSuccess,
       saved_count: results.length,
       created_count: createdCount,
       updated_count: updatedCount,
@@ -612,7 +613,8 @@ exports.saveBulkParsedFares = (req, res) => {
       deleted_count: deletedRecords.length,
       deleted_dates: deletedRecords.map(d => `${d.origin}-${d.destination} (${d.airline_code}): ${d.travel_date}`),
       results,
-      errors
+      errors: errors.length > 0 ? errors : undefined,
+      error: !isSuccess && errors.length > 0 ? `Failed to save: ${errors[0].error || 'Validation error'}` : undefined
     });
   } catch (err) {
     console.error('Bulk save transaction failed:', err);

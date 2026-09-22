@@ -237,6 +237,29 @@ function initSchema() {
   ensureColumn('booking_requests', 'pax_infants', 'INTEGER DEFAULT 0');
   ensureColumn('booking_requests', 'infant_fare', 'REAL');
 
+  // Safe migration: sanitize any legacy DD-MM-YYYY dates in fares to ISO YYYY-MM-DD
+  try {
+    const badFares = db.prepare("SELECT id, travel_date FROM fares WHERE travel_date NOT LIKE '____-__-__'").all();
+    if (badFares && badFares.length > 0) {
+      const updateStmt = db.prepare("UPDATE fares SET travel_date = ? WHERE id = ?");
+      for (const bf of badFares) {
+        const m = String(bf.travel_date || '').trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+        if (m) {
+          const day = m[1].padStart(2, '0');
+          const month = m[2].padStart(2, '0');
+          let year = m[3];
+          if (year.length === 2) year = `20${year}`;
+          const currentYear = new Date().getFullYear();
+          if (Number(year) < currentYear) year = String(currentYear);
+          const iso = `${year}-${month}-${day}`;
+          updateStmt.run(iso, bf.id);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Date sanitization migration note:', e.message);
+  }
+
   // Default app settings
   try {
     const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');

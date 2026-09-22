@@ -2,7 +2,7 @@
  * AI Vision Extraction Service using OpenAI ChatGPT (GPT-4o-mini Vision) & Google Gemini Vision
  */
 
-const { parseDateString } = require('./whatsappParser');
+const { parseDateString, normalizeAirlineCode } = require('./whatsappParser');
 
 const AIRLINE_CODE_MAP = {
   'air india express': 'IX',
@@ -156,12 +156,14 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
   for (const item of rawRecords) {
     let origin = (item.origin || defaults.origin || defaults.defaultOrigin || 'ATQ').toUpperCase().trim();
     let destination = (item.destination || defaults.destination || defaults.defaultDestination || 'DXB').toUpperCase().trim();
-    let airline = (item.airline_code || defaults.airline || defaults.defaultAirline || 'AI').toUpperCase().trim();
+    
+    // Clean airline code using normalizeAirlineCode (never slices raw string into invalid code like "IN")
+    const rawAirline = item.airline_code || item.airline || defaults.airline || defaults.defaultAirline || 'AI';
+    const cleanAirline = normalizeAirlineCode(rawAirline, item.flight_number, defaults.airline || defaults.defaultAirline || 'AI');
 
     // Map full names if returned
     if (CITY_IATA_MAP[origin.toLowerCase()]) origin = CITY_IATA_MAP[origin.toLowerCase()];
     if (CITY_IATA_MAP[destination.toLowerCase()]) destination = CITY_IATA_MAP[destination.toLowerCase()];
-    if (AIRLINE_CODE_MAP[airline.toLowerCase()]) airline = AIRLINE_CODE_MAP[airline.toLowerCase()];
 
     // Unify airport aliases to canonical codes
     if (origin === 'MIL') origin = 'MXP';
@@ -169,7 +171,7 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
     if (origin === 'FCO') origin = 'ROM';
     if (destination === 'FCO') destination = 'ROM';
 
-    // Clean travel date
+    // Clean travel date into YYYY-MM-DD
     const dateStr = parseDateString(item.travel_date, currentYear);
     const fare = parseFloat(String(item.net_fare).replace(/[^0-9.]/g, ''));
 
@@ -177,7 +179,7 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
       cleaned.push({
         origin: origin.slice(0, 3),
         destination: destination.slice(0, 3),
-        airline_code: airline.slice(0, 2),
+        airline_code: cleanAirline,
         flight_number: item.flight_number || '',
         travel_date: dateStr,
         net_fare: fare,
@@ -231,7 +233,8 @@ CRITICAL INSTRUCTIONS:
      * "IC" -> Fly91 (IC).
      * "G9" -> Air Arabia (G9).
      * "FZ" -> Flydubai (FZ).
-   - CRITICAL: NEVER overwrite or default S5, SG, IX, 6E to AI.
+   - CRITICAL: ALWAYS return ONLY the 2-letter uppercase IATA code for airline_code (e.g. "6E", "IX", "SG", "AI", "UK", "QP", "G9", "FZ", "S5", "IC", "EK", "EY", "QR", "WY"). NEVER output full airline names like "IndiGo", "SpiceJet", or "IndiGo (6E)" in the airline_code field!
+   - NEVER overwrite or default S5, SG, IX, 6E to AI.
 
 3. CALENDAR VIEW / MONTHLY GRID FLYERS:
    - If the flyer is structured as a monthly calendar (e.g. header says "Sep 2026", "October 2026", etc.):

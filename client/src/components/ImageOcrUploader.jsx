@@ -116,6 +116,7 @@ export default function ImageOcrUploader({
   const [rawTextEdit, setRawTextEdit] = useState('');
   const [saving, setSaving] = useState(false);
   const [autoDeleteMissing, setAutoDeleteMissing] = useState(true);
+  const [saveFeedback, setSaveFeedback] = useState(null);
 
   // AI Vision Engine & Key States
   const [selectedEngine, setSelectedEngine] = useState('gemini'); // Default to gemini (100% free)
@@ -642,40 +643,63 @@ Instructions:
 
   const handleSaveToVendor = async (andSort = false) => {
     if (!scanResult || !scanResult.records || scanResult.records.length === 0) {
+      setSaveFeedback({ type: 'error', text: 'No fares to save. Please scan an image first.' });
       setStatus({ type: 'error', text: 'No fares to save. Please scan an image first.' });
       return;
     }
 
     const validRows = scanResult.records.filter(r => r.travel_date && Number(r.net_fare) > 0);
     if (validRows.length === 0) {
+      setSaveFeedback({ type: 'error', text: 'Please ensure dates and fares are valid.' });
       setStatus({ type: 'error', text: 'Please ensure dates and fares are valid.' });
       return;
     }
 
     try {
       setSaving(true);
+      setSaveFeedback({ type: 'info', text: `Saving ${validRows.length} fares to ${vendorName}...` });
       setStatus(null);
 
-      const formattedFares = validRows.map(r => ({
-        airline_code: (r.airline_code || defaultAirline).toUpperCase(),
-        origin: (r.origin || defaultOrigin).toUpperCase(),
-        destination: (r.destination || defaultDestination).toUpperCase(),
-        flight_number: r.flight_number || '',
-        travel_date: r.travel_date,
-        net_fare: Number(r.net_fare),
-        cabin: r.cabin || 'ECONOMY',
-        baggage: r.baggage || defaultBaggage,
-        is_refundable: r.is_refundable || defaultRefundable,
-        remarks: `Image OCR: ${uploadedFiles.length > 1 ? `${uploadedFiles.length} Flyers` : (imageFile?.name || 'Screenshot')}`
-      }));
+      const formattedFares = validRows.map(r => {
+        let air = (r.airline_code || defaultAirline).toUpperCase().trim();
+        // Client-side guard for airline code
+        if (air === 'IN' || air.includes('INDIGO')) air = '6E';
+        if (air === 'SP' || air.includes('SPICE')) air = 'SG';
+        if (air.includes('EXPRESS')) air = 'IX';
+
+        return {
+          airline_code: air,
+          origin: (r.origin || defaultOrigin).toUpperCase(),
+          destination: (r.destination || defaultDestination).toUpperCase(),
+          flight_number: r.flight_number || '',
+          travel_date: r.travel_date,
+          net_fare: Number(r.net_fare),
+          cabin: r.cabin || 'ECONOMY',
+          baggage: r.baggage || defaultBaggage,
+          is_refundable: r.is_refundable || defaultRefundable,
+          remarks: `Image OCR: ${uploadedFiles.length > 1 ? `${uploadedFiles.length} Flyers` : (imageFile?.name || 'Screenshot')}`
+        };
+      });
 
       const res = await onFaresSaved(formattedFares, andSort, autoDeleteMissing);
-      if (res !== false) {
-        handleReset();
+      if (res && res.success !== false) {
+        setSaveFeedback({ 
+          type: 'success', 
+          text: res.message || `🎉 Successfully saved ${validRows.length} fares to ${vendorName}!` 
+        });
+        setTimeout(() => {
+          handleReset();
+        }, 1200);
+      } else {
+        const errorMsg = (res && res.error) || 'Failed to save scanned fares.';
+        setSaveFeedback({ type: 'error', text: errorMsg });
+        setStatus({ type: 'error', text: errorMsg });
       }
     } catch (err) {
       console.error(err);
-      setStatus({ type: 'error', text: 'Failed to save scanned fares.' });
+      const errorMsg = err.message || 'Failed to save scanned fares.';
+      setSaveFeedback({ type: 'error', text: errorMsg });
+      setStatus({ type: 'error', text: errorMsg });
     } finally {
       setSaving(false);
     }
@@ -692,6 +716,7 @@ Instructions:
     setImagePreview(null);
     setScanResult(null);
     setStatus(null);
+    setSaveFeedback(null);
     setScanProgress(0);
     setBatchStatus(null);
   };
@@ -1645,26 +1670,51 @@ Instructions:
                     </label>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSaveToVendor(false)}
-                      disabled={saving || scanResult.records.length === 0}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{saving ? 'Saving...' : `Save to ${vendorName}`}</span>
-                    </button>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    {saveFeedback && (
+                      <div className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 animate-fade-in ${
+                        saveFeedback.type === 'success' 
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
+                          : saveFeedback.type === 'error'
+                          ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                          : 'bg-blue-100 text-blue-900 border border-blue-300'
+                      }`}>
+                        {saveFeedback.type === 'success' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : saveFeedback.type === 'error' ? (
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        ) : (
+                          <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                        )}
+                        <span className="truncate max-w-xs sm:max-w-md">{saveFeedback.text}</span>
+                      </div>
+                    )}
 
-                    <button
-                      type="button"
-                      onClick={() => handleSaveToVendor(true)}
-                      disabled={saving || scanResult.records.length === 0}
-                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <span>Save & Compare</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSaveToVendor(false)}
+                        disabled={saving || scanResult.records.length === 0}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {saving ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4" />
+                        )}
+                        <span>{saving ? 'Saving...' : `Save to ${vendorName}`}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSaveToVendor(true)}
+                        disabled={saving || scanResult.records.length === 0}
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <span>Save & Compare</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
