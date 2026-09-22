@@ -520,12 +520,12 @@ export default function ExcelImportModal({
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {displayedRows.map((r, i) => (
-                    <tr key={r.id || i} className="hover:bg-slate-50 transition">
+                    <tr key={r.id || `excel_row_${i}_${r.travel_date || ''}_${r.origin || ''}`} className="hover:bg-slate-50 transition">
                       <td className="px-3 py-1.5 text-slate-400 font-mono">{i + 1}</td>
                       <td className="px-3 py-1.5">
                         <input
                           type="date"
-                          value={r.travel_date}
+                          value={r.travel_date || ''}
                           onChange={(e) => handleUpdateRow(r.id, 'travel_date', e.target.value)}
                           className="bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1.5 py-0.5 font-medium text-slate-900"
                         />
@@ -533,7 +533,7 @@ export default function ExcelImportModal({
                       <td className="px-3 py-1.5">
                         <input
                           type="text"
-                          value={r.origin}
+                          value={r.origin || ''}
                           onChange={(e) => handleUpdateRow(r.id, 'origin', e.target.value.toUpperCase())}
                           className="w-14 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1.5 py-0.5 font-bold uppercase text-slate-900"
                           maxLength={3}
@@ -542,7 +542,7 @@ export default function ExcelImportModal({
                       <td className="px-3 py-1.5">
                         <input
                           type="text"
-                          value={r.destination}
+                          value={r.destination || ''}
                           onChange={(e) => handleUpdateRow(r.id, 'destination', e.target.value.toUpperCase())}
                           className="w-14 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1.5 py-0.5 font-bold uppercase text-slate-900"
                           maxLength={3}
@@ -550,7 +550,7 @@ export default function ExcelImportModal({
                       </td>
                       <td className="px-3 py-1.5">
                         <select
-                          value={r.airline_code}
+                          value={r.airline_code || ''}
                           onChange={(e) => handleUpdateRow(r.id, 'airline_code', e.target.value.toUpperCase())}
                           className="bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1.5 py-0.5 font-bold text-slate-900"
                         >
@@ -564,7 +564,7 @@ export default function ExcelImportModal({
                           <span className="text-slate-400 font-bold mr-1">₹</span>
                           <input
                             type="number"
-                            value={r.net_fare}
+                            value={r.net_fare !== undefined && r.net_fare !== null ? r.net_fare : ''}
                             onChange={(e) => handleUpdateRow(r.id, 'net_fare', e.target.value)}
                             className="w-24 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1.5 py-0.5 font-black text-slate-900"
                           />

@@ -30,6 +30,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
   const loadPublishedFares = async () => {
     try {
       setLoading(true);
+      setStatus(null);
       const res = await api.getAllFares({ is_published: 1 });
       if (res.success && res.fares && res.fares.length > 0) {
         const loaded = res.fares.map(f => {
@@ -58,6 +59,9 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
           });
           setFares(loaded);
           generateBroadcast(loaded);
+        } else {
+          setFares([]);
+          setWhatsappText('');
         }
       }
     } catch (err) {
@@ -444,19 +448,30 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
       </div>
 
       {status && (
-        <div className={`p-4 rounded-xl flex items-center space-x-3 text-sm font-medium ${
+        <div className={`p-4 rounded-xl flex items-center justify-between text-sm font-medium ${
           status.type === 'success' 
             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
             : status.type === 'error'
             ? 'bg-rose-50 text-rose-800 border border-rose-200'
             : 'bg-blue-50 text-blue-800 border border-blue-200'
         }`}>
-          {status.type === 'success' ? (
-            <Check className="w-5 h-5 text-emerald-600 shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-          )}
-          <span>{status.text}</span>
+          <div className="flex items-center space-x-3">
+            {status.type === 'success' ? (
+              <Check className="w-5 h-5 text-emerald-600 shrink-0" />
+            ) : status.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            ) : (
+              <Sparkles className="w-5 h-5 text-blue-600 shrink-0" />
+            )}
+            <span>{status.text}</span>
+          </div>
+          <button 
+            onClick={() => setStatus(null)}
+            className="text-slate-400 hover:text-slate-600 font-bold px-2 py-1 rounded transition text-lg leading-none"
+            title="Dismiss"
+          >
+            ×
+          </button>
         </div>
       )}
 

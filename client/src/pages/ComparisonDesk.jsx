@@ -87,7 +87,10 @@ export default function ComparisonDesk({ masterData, initialRoute, setActiveTab 
   };
 
   useEffect(() => {
-    loadComparisons();
+    const timer = setTimeout(() => {
+      loadComparisons();
+    }, 350);
+    return () => clearTimeout(timer);
   }, [filters]);
 
   const handleFilterChange = (e) => {

@@ -250,6 +250,14 @@ export default function ImageOcrUploader({
     const validFiles = rawFilesList.filter(f => f && (f.type?.startsWith('image/') || f instanceof Blob));
     if (validFiles.length === 0) return;
 
+    if (scanning) {
+      setStatus({
+        type: 'info',
+        text: 'Flyer scanning is already in progress. Please wait a moment.'
+      });
+      return;
+    }
+
     const engineToUse = forcedEngine || selectedEngine;
 
     // Check API Keys before starting batch

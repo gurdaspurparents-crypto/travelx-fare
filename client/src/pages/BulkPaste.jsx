@@ -380,11 +380,11 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {parsedData.records.map((rec, index) => (
-                  <tr key={index} className="hover:bg-slate-50/80">
+                  <tr key={rec.id || `rec_${index}_${rec.travel_date || ''}_${rec.origin || ''}`} className="hover:bg-slate-50/80">
                     <td className="px-4 py-2 text-center text-slate-400 font-mono">{index + 1}</td>
                     <td className="px-4 py-2">
                       <select
-                        value={rec.airline_code}
+                        value={rec.airline_code || ''}
                         onChange={(e) => handleRecordChange(index, 'airline_code', e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-bold text-slate-900"
                       >
@@ -396,7 +396,7 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
                     <td className="px-4 py-2">
                       <input
                         type="text"
-                        value={rec.origin}
+                        value={rec.origin || ''}
                         onChange={(e) => handleRecordChange(index, 'origin', e.target.value.toUpperCase())}
                         maxLength={3}
                         className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-bold uppercase text-slate-900 text-center"
@@ -405,7 +405,7 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
                     <td className="px-4 py-2">
                       <input
                         type="text"
-                        value={rec.destination}
+                        value={rec.destination || ''}
                         onChange={(e) => handleRecordChange(index, 'destination', e.target.value.toUpperCase())}
                         maxLength={3}
                         className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-bold uppercase text-slate-900 text-center"
@@ -414,7 +414,7 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
                     <td className="px-4 py-2">
                       <input
                         type="date"
-                        value={rec.travel_date}
+                        value={rec.travel_date || ''}
                         onChange={(e) => handleRecordChange(index, 'travel_date', e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-semibold text-slate-900"
                       />
@@ -422,7 +422,7 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
                     <td className="px-4 py-2">
                       <input
                         type="number"
-                        value={rec.net_fare}
+                        value={rec.net_fare !== undefined && rec.net_fare !== null ? rec.net_fare : ''}
                         onChange={(e) => handleRecordChange(index, 'net_fare', e.target.value)}
                         className="w-full bg-amber-50 border border-amber-300 rounded px-2 py-1 font-extrabold text-slate-900"
                       />
@@ -430,14 +430,14 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
                     <td className="px-4 py-2">
                       <input
                         type="text"
-                        value={rec.baggage}
+                        value={rec.baggage || '30kg'}
                         onChange={(e) => handleRecordChange(index, 'baggage', e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-700"
                       />
                     </td>
                     <td className="px-4 py-2">
                       <select
-                        value={rec.is_refundable}
+                        value={rec.is_refundable || 'NON_REFUNDABLE'}
                         onChange={(e) => handleRecordChange(index, 'is_refundable', e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-700"
                       >

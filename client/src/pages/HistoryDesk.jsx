@@ -31,7 +31,10 @@ export default function HistoryDesk({ masterData }) {
   };
 
   useEffect(() => {
-    loadHistory();
+    const timer = setTimeout(() => {
+      loadHistory();
+    }, 350);
+    return () => clearTimeout(timer);
   }, [filters]);
 
   const handleFilterChange = (e) => {

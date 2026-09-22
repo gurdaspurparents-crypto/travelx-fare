@@ -927,13 +927,13 @@ exports.getFareHistory = (req, res) => {
  */
 exports.clearAllFares = (req, res) => {
   try {
-    db.exec(`
-      DELETE FROM fares;
-      DELETE FROM fare_history;
-      DELETE FROM published_specials;
-      VACUUM;
-    `);
+    db.prepare('DELETE FROM fares').run();
+    db.prepare('DELETE FROM fare_history').run();
     try {
+      db.prepare('DELETE FROM published_specials').run();
+    } catch (_) {}
+    try {
+      db.exec('VACUUM');
       db.pragma('wal_checkpoint(TRUNCATE)');
     } catch (_) {}
     safeInvalidateFaresCache();
