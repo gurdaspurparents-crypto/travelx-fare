@@ -213,7 +213,21 @@ const VISION_SYSTEM_PROMPT = `You are an expert AI flight data extractor for tra
 Extract ALL flight fares from this airline rate card flyer image into clean, structured JSON.
 
 CRITICAL INSTRUCTIONS:
-1. SECTOR & ROUTE EXTRACTION:
+1. MULTI-SECTOR & MULTI-AIRLINE DETECTION (DO NOT STOP AFTER ONE SECTOR):
+   - A single flyer often contains MULTIPLE SECTORS (e.g. BOTH "ATQ - DXB" AND "ATQ - SHJ", "IXC - DXB", etc.) or MULTIPLE AIRLINES (e.g. BOTH "Air India Express (IX)" AND "IndiGo (6E)", "SpiceJet (SG)").
+   - You MUST extract flight records for ALL sectors and ALL airlines found on the image! Do NOT restrict yourself to only one sector or one airline.
+   - Scan every single row, column, table, and flight card from left-to-right and top-to-bottom.
+
+2. GRID OF FLIGHT RATE CARDS / BOXES (30 to 100+ CARDS):
+   - If the flyer consists of a grid of rectangular cards/boxes (e.g. multiple rows and columns of cards):
+     * Read the Route on each card (e.g. some cards are "ATQ - SHJ", while other cards are "ATQ - DXB").
+     * Read the Travel Date (e.g. "08/10/2026", "15 OCT", "22-10-2026").
+     * Read the Net Fare (e.g. "16200", "Fare: 17500/-").
+     * Read the Airline (e.g. "Air India Express" -> "IX", "IndiGo" -> "6E", "SpiceJet" -> "SG").
+   - You MUST scan EVERY card row-by-row and column-by-column.
+   - Do NOT stop after 30 cards or after one sector! Extract ALL cards (even if there are 60, 70, or 80+ cards on the sheet). Every card with a date and fare MUST be included in the "records" array.
+
+3. SECTOR & ROUTE EXTRACTION:
    - The flyer may contain ANY SECTOR (domestic or international).
    - Look for route indicators such as "AIP - NDC", "ATQ → DXB", "ATQ - SHJ", "IXC -> DXB", "DEL - BOM", etc.
    - For "AIP - NDC", Origin is "AIP" (Adampur) and Destination is "NDC" (Nanded).
@@ -221,7 +235,7 @@ CRITICAL INSTRUCTIONS:
    - For "SG ATQ → DXB", Airline is "SG" (SpiceJet), Origin is "ATQ", Destination is "DXB".
    - CRITICAL: NEVER force, assume, or default the route to "ATQ - DXB" if the flyer shows a different route (such as AIP - NDC, IXC - DXB, etc.). ALWAYS extract the EXACT 3-letter origin and destination airport codes written on the flyer or calendar cell!
 
-2. AIRLINE & FLIGHT NUMBER EXTRACTION:
+4. AIRLINE & FLIGHT NUMBER EXTRACTION:
    - Look for airline indicators such as:
      * "S5" or "S5235/186" -> Airline is "S5" (Star Air), flight_number is "S5 235/186".
      * "IX" or "IX 191" -> Airline is "IX" (Air India Express).
@@ -338,7 +352,7 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
         }
       ],
       response_format: { type: 'json_object' },
-      max_tokens: 4000,
+      max_tokens: 8192,
       temperature: 0.1
     })
   });
@@ -450,7 +464,8 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
           ],
           generationConfig: {
             response_mime_type: 'application/json',
-            temperature: 0.1
+            temperature: 0.1,
+            maxOutputTokens: 8192
           }
         })
       });

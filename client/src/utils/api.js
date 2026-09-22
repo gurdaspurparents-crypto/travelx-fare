@@ -191,8 +191,7 @@ export const api = {
         params.append(k, v);
       }
     });
-    const res = await fetch(`/api/compare?${params.toString()}`);
-    return res.json();
+    return safeFetch(`/api/compare?${params.toString()}`);
   },
 
   getBestFares: async (filters = {}) => {
@@ -202,8 +201,7 @@ export const api = {
         params.append(k, v);
       }
     });
-    const res = await fetch(`/api/compare/best-fares?${params.toString()}`);
-    return res.json();
+    return safeFetch(`/api/compare/best-fares?${params.toString()}`);
   },
 
   // Margins

@@ -74,8 +74,8 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
       setStatus(null);
       const res = await api.getBestFares();
       if (res.success) {
-        if (res.bestFares.length === 0) {
-          setStatus({ type: 'info', text: 'No active fares found in comparison engine. Enter fares in Fast Entry or Quick Grid first.' });
+        if (!res.bestFares || res.bestFares.length === 0) {
+          setStatus({ type: 'info', text: 'Comparison desk me abhi koi active rates nahi hain. Pehle Vendor Rates Desk me flyer upload/save karein.' });
         } else {
           const loaded = res.bestFares.map(f => {
             const net = Number(f.net_fare) || 0;
@@ -93,9 +93,11 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
             text: `⚡ Successfully loaded ${loaded.length} best/lowest net quotes from Comparison Desk!` 
           });
         }
+      } else {
+        setStatus({ type: 'error', text: res.error || 'Failed to load best fares from comparison desk.' });
       }
     } catch (err) {
-      setStatus({ type: 'error', text: 'Failed to load best fares from comparison desk.' });
+      setStatus({ type: 'error', text: err.message || 'Failed to load best fares from comparison desk.' });
     } finally {
       setLoading(false);
     }

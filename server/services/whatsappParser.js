@@ -140,19 +140,23 @@ const AIRLINE_NAME_MAP = [
  */
 function parseDateString(rawDate, defaultYear = new Date().getFullYear()) {
   if (!rawDate) return null;
-  const clean = rawDate.trim().replace(/\s+/g, ' ');
+  let clean = String(rawDate).trim().replace(/\s+/g, ' ');
 
-  // Format: YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-    const yr = Number(clean.slice(0, 4));
-    if (yr < defaultYear) {
-      return `${defaultYear}${clean.slice(4)}`;
-    }
-    return clean;
+  // Remove ordinal suffixes like 1st, 2nd, 3rd, 8th, 15th
+  clean = clean.replace(/(\d{1,2})(st|nd|rd|th)/gi, '$1');
+
+  // Format 1: YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD (1 or 2 digit month/day)
+  let match = clean.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+  if (match) {
+    let year = match[1];
+    if (Number(year) < defaultYear) year = String(defaultYear);
+    const month = match[2].padStart(2, '0');
+    const day = match[3].padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
-  // Format: 15-09-2026 or 15/09/26 or 15-09-26
-  let match = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  // Format 2: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (or with 2-digit year)
+  match = clean.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (match) {
     const day = match[1].padStart(2, '0');
     const month = match[2].padStart(2, '0');
@@ -162,20 +166,38 @@ function parseDateString(rawDate, defaultYear = new Date().getFullYear()) {
     return `${year}-${month}-${day}`;
   }
 
-  // Format: 15/09 or 15-09 (without year)
-  match = clean.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  // Format 3: DD/MM or DD-MM or DD.MM (without year)
+  match = clean.match(/^(\d{1,2})[\/\-\.](\d{1,2})$/);
   if (match) {
     const day = match[1].padStart(2, '0');
     const month = match[2].padStart(2, '0');
     return `${defaultYear}-${month}-${day}`;
   }
 
-  // Format: 15 Sep 2026, 15-Sep-2026, 15SEP26, 15 SEP 26
-  match = clean.match(/^(\d{1,2})[\s\-]?([a-zA-Z]{3,9})[\s\-]?(\d{2,4})?$/);
+  // Format 4: 15 Sep 2026, 15-Sep-2026, 15SEP26, 15 SEP, 8 Oct
+  match = clean.match(/^(\d{1,2})[\s\-\.]?([a-zA-Z]{3,9})[\s\-\.]?(\d{2,4})?$/);
   if (match) {
     const day = match[1].padStart(2, '0');
     const monStr = match[2].toLowerCase().substring(0, 3);
     const month = MONTH_MAP[monStr];
+    let year = match[3];
+    if (year && year.length === 2) {
+      year = `20${year}`;
+    } else if (!year) {
+      year = defaultYear;
+    }
+    if (Number(year) < defaultYear) year = String(defaultYear);
+    if (month) {
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  // Format 5: Sep 15 2026, October 15, Oct 8
+  match = clean.match(/^([a-zA-Z]{3,9})[\s\-\.]+(\d{1,2})(?:[\s\-\,]+(\d{2,4}))?$/);
+  if (match) {
+    const monStr = match[1].toLowerCase().substring(0, 3);
+    const month = MONTH_MAP[monStr];
+    const day = match[2].padStart(2, '0');
     let year = match[3];
     if (year && year.length === 2) {
       year = `20${year}`;
