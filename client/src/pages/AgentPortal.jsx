@@ -18,37 +18,26 @@ const INDIAN_STATES = [
   'Tamil Nadu', 'Kerala', 'Bihar', 'Madhya Pradesh', 'Other'
 ];
 
+const ALLOWED_B2B_SECTOR_KEYS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH'];
+
 const DEFAULT_SECTOR_OPTIONS = [
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'DXB', destCity: 'Dubai', label: '(ATQ) Amritsar ➔ (DXB) Dubai' },
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'SHJ', destCity: 'Sharjah', label: '(ATQ) Amritsar ➔ (SHJ) Sharjah' },
-  { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' },
-  { origin: 'DEL', originCity: 'Delhi', dest: 'LHR', destCity: 'London', label: '(DEL) Delhi ➔ (LHR) London' },
-  { origin: 'DEL', originCity: 'Delhi', dest: 'ROM', destCity: 'Rome', label: '(DEL) Delhi ➔ (ROM) Rome' },
-  { origin: 'DEL', originCity: 'Delhi', dest: 'YYZ', destCity: 'Toronto', label: '(DEL) Delhi ➔ (YYZ) Toronto' },
-  { origin: 'ATQ', originCity: 'Amritsar', dest: 'SIN', destCity: 'Singapore', label: '(ATQ) Amritsar ➔ (SIN) Singapore' },
+  { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' }
 ];
 
 const DEFAULT_ORIGINS = [
   { code: 'ATQ', city: 'Amritsar', label: '(ATQ) Amritsar' },
-  { code: 'IXC', city: 'Chandigarh', label: '(IXC) Chandigarh' },
-  { code: 'DEL', city: 'Delhi', label: '(DEL) Delhi' }
+  { code: 'IXC', city: 'Chandigarh', label: '(IXC) Chandigarh' }
 ];
 
 const DEFAULT_DESTINATIONS = {
   'ATQ': [
     { code: 'DXB', city: 'Dubai', label: '(DXB) Dubai' },
-    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' },
-    { code: 'SIN', city: 'Singapore', label: '(SIN) Singapore' },
-    { code: 'ROM', city: 'Rome', label: '(ROM) Rome' }
+    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' }
   ],
   'IXC': [
     { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' }
-  ],
-  'DEL': [
-    { code: 'LHR', city: 'London', label: '(LHR) London' },
-    { code: 'ROM', city: 'Rome', label: '(ROM) Rome' },
-    { code: 'YYZ', city: 'Toronto', label: '(YYZ) Toronto' },
-    { code: 'KUL', city: 'Kuala Lumpur', label: '(KUL) Kuala Lumpur' }
   ]
 };
 
@@ -63,11 +52,18 @@ const formatBaggage = (bag) => {
 };
 
 export default function AgentPortal({ onSwitchToAdmin }) {
-  // Master API Data - Cached with localStorage for instant 0ms startup and zero rate disconnects
+  const isAllowedB2BSector = (f) => {
+    if (!f) return false;
+    const s = f.sector_code || `${f.origin}-${f.destination}`;
+    return ALLOWED_B2B_SECTOR_KEYS.includes(s);
+  };
+
+  // Master API Data - strictly filtered to the 3 allowed B2B sectors (ATQ-DXB, ATQ-SHJ, IXC-AUH)
   const [fares, setFares] = useState(() => {
     try {
       const cached = localStorage.getItem('travelx_cached_fares');
-      return cached ? JSON.parse(cached) : [];
+      const list = cached ? JSON.parse(cached) : [];
+      return Array.isArray(list) ? list.filter(isAllowedB2BSector) : [];
     } catch (_) {
       return [];
     }
@@ -75,7 +71,8 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   const [dailyFlights, setDailyFlights] = useState(() => {
     try {
       const cached = localStorage.getItem('travelx_cached_daily');
-      return cached ? JSON.parse(cached) : [];
+      const list = cached ? JSON.parse(cached) : [];
+      return Array.isArray(list) ? list.filter(isAllowedB2BSector) : [];
     } catch (_) {
       return [];
     }
@@ -258,20 +255,22 @@ export default function AgentPortal({ onSwitchToAdmin }) {
         setError(null);
         setLoading(false);
         if (Array.isArray(res.fares)) {
-          setFares(res.fares);
+          const cleanFares = res.fares.filter(isAllowedB2BSector);
+          setFares(cleanFares);
           try {
-            if (res.fares.length > 0) {
-              localStorage.setItem('travelx_cached_fares', JSON.stringify(res.fares));
+            if (cleanFares.length > 0) {
+              localStorage.setItem('travelx_cached_fares', JSON.stringify(cleanFares));
             } else {
               localStorage.removeItem('travelx_cached_fares');
             }
           } catch (_) {}
         }
         if (Array.isArray(res.dailyFlights)) {
-          setDailyFlights(res.dailyFlights);
+          const cleanDaily = res.dailyFlights.filter(isAllowedB2BSector);
+          setDailyFlights(cleanDaily);
           try {
-            if (res.dailyFlights.length > 0) {
-              localStorage.setItem('travelx_cached_daily', JSON.stringify(res.dailyFlights));
+            if (cleanDaily.length > 0) {
+              localStorage.setItem('travelx_cached_daily', JSON.stringify(cleanDaily));
             } else {
               localStorage.removeItem('travelx_cached_daily');
             }
@@ -636,74 +635,44 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     return customerMode ? p + Number(customMarkup || 0) : p;
   };
 
-  // Helper: Swap Origin and Destination
+  // Helper: Cycle through allowed B2B sectors (ATQ-DXB -> ATQ-SHJ -> IXC-AUH)
   const handleSwapAirports = () => {
-    const oldO = origin;
-    const oldD = destination;
-    setOrigin(oldD);
-    setDestination(oldO);
+    const key = `${origin}-${destination}`;
+    if (key === 'ATQ-DXB') {
+      setOrigin('ATQ');
+      setDestination('SHJ');
+    } else if (key === 'ATQ-SHJ') {
+      setOrigin('IXC');
+      setDestination('AUH');
+    } else {
+      setOrigin('ATQ');
+      setDestination('DXB');
+    }
   };
 
-  // Dynamic sector options combining popular default routes with all active routes in daily flights
+  // Strictly allowed sector options: ATQ-DXB, ATQ-SHJ, IXC-AUH
   const availableSectorOptions = useMemo(() => {
-    const map = new Map();
-    DEFAULT_SECTOR_OPTIONS.forEach(s => map.set(`${s.origin}-${s.dest}`, s));
+    return DEFAULT_SECTOR_OPTIONS;
+  }, []);
 
-    dailyFlights.forEach(f => {
-      const key = `${f.origin}-${f.destination}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          origin: f.origin,
-          originCity: f.origin_city || f.origin,
-          dest: f.destination,
-          destCity: f.destination_city || f.destination,
-          label: `(${f.origin}) ${f.origin_city || f.origin} ➔ (${f.destination}) ${f.destination_city || f.destination}`
-        });
-      }
-    });
-
-    return Array.from(map.values());
-  }, [dailyFlights]);
-
-  // Derived Origins
+  // Derived Origins: strictly ATQ and IXC
   const derivedOrigins = useMemo(() => {
-    const map = new Map();
-    DEFAULT_ORIGINS.forEach(o => map.set(o.code, o));
+    return DEFAULT_ORIGINS;
+  }, []);
 
-    dailyFlights.forEach(f => {
-      if (f.origin && !map.has(f.origin)) {
-        map.set(f.origin, {
-          code: f.origin,
-          city: f.origin_city || f.origin,
-          label: `(${f.origin}) ${f.origin_city || f.origin}`
-        });
-      }
-    });
-    return Array.from(map.values());
-  }, [dailyFlights]);
-
-  // Derived Destinations by Origin
+  // Derived Destinations by Origin: strictly DXB/SHJ for ATQ, and AUH for IXC
   const derivedDestinations = useMemo(() => {
-    const map = {};
-    dailyFlights.forEach(f => {
-      const o = f.origin;
-      const d = f.destination;
-      if (!map[o]) map[o] = new Map();
-      if (!map[o].has(d)) {
-        map[o].set(d, {
-          code: d,
-          city: f.destination_city || d,
-          label: `(${d}) ${f.destination_city || d}`
-        });
-      }
-    });
+    return DEFAULT_DESTINATIONS;
+  }, []);
 
-    const result = { ...DEFAULT_DESTINATIONS };
-    for (const [o, dMap] of Object.entries(map)) {
-      result[o] = Array.from(dMap.values());
+  // Guarantee selected origin & destination are always one of the 3 allowed B2B sectors
+  useEffect(() => {
+    const key = `${origin}-${destination}`;
+    if (!ALLOWED_B2B_SECTOR_KEYS.includes(key)) {
+      setOrigin('ATQ');
+      setDestination('DXB');
     }
-    return result;
-  }, [dailyFlights]);
+  }, [origin, destination]);
 
   // 2. Derive unique available dates for current sector (ATQ-DXB, etc.)
   const currentSectorKey = `${origin}-${destination}`;

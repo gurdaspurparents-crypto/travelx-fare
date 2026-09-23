@@ -175,8 +175,9 @@ const CITY_NAMES = {
   'YYC': 'Calgary'
 };
 
-// Top priority sectors to pin at the front of UI chips & tabs
-const PRIORITY_PUBLIC_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH', 'DEL-LHR', 'DEL-ROM', 'DEL-YYZ', 'ATQ-SIN'];
+// Exclusively allowed sectors for B2B Agent portal (Strictly ATQ-DXB, ATQ-SHJ, IXC-AUH)
+const B2B_EXCLUSIVE_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH'];
+const PRIORITY_PUBLIC_SECTORS = B2B_EXCLUSIVE_SECTORS;
 
 // In-Memory Cache for Public Fares (Prevents 502 Bad Gateway timeouts on Render free tier)
 let cachedMasterFares = null;
@@ -210,6 +211,11 @@ function computeMasterPublicFares() {
     LEFT JOIN airlines a ON f.airline_code = a.code
     WHERE f.travel_date >= date('now', 'localtime')
       AND (
+        (f.origin = 'ATQ' AND f.destination = 'DXB') OR
+        (f.origin = 'ATQ' AND f.destination = 'SHJ') OR
+        (f.origin = 'IXC' AND f.destination = 'AUH')
+      )
+      AND (
         f.is_published = 1 
         OR NOT EXISTS (
           SELECT 1 FROM fares f2 
@@ -223,27 +229,24 @@ function computeMasterPublicFares() {
   `;
 
   const rows = db.prepare(query).all();
-  const targetRows = rows;
+  const targetRows = rows.filter(f => {
+    const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
+    return B2B_EXCLUSIVE_SECTORS.includes(sKey);
+  });
 
   // 1. Group by Sector
   const sectorMap = new Map();
   targetRows.forEach(f => {
     const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
+    if (!B2B_EXCLUSIVE_SECTORS.includes(sKey)) return;
     if (!sectorMap.has(sKey)) sectorMap.set(sKey, []);
     sectorMap.get(sKey).push(f);
   });
 
   const publicList = [];
 
-  // Order sectors by priority first, then alphabetically
-  const orderedSectorKeys = Array.from(sectorMap.keys()).sort((a, b) => {
-    const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a);
-    const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b);
-    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-    if (idxA !== -1) return -1;
-    if (idxB !== -1) return 1;
-    return a.localeCompare(b);
-  });
+  // Order sectors strictly by allowed sectors
+  const orderedSectorKeys = B2B_EXCLUSIVE_SECTORS.filter(s => sectorMap.has(s));
 
   for (const sKey of orderedSectorKeys) {
     const sectorItems = sectorMap.get(sKey) || [];
@@ -369,16 +372,8 @@ function computeMasterPublicFares() {
     return a.final_rate - b.final_rate;
   });
 
-  // Collect available filter lists for client UI in requested order
-  const sectors = Array.from(new Set(publicList.map(f => f.sector_code)))
-    .sort((a, b) => {
-      const idxA = PRIORITY_PUBLIC_SECTORS.indexOf(a);
-      const idxB = PRIORITY_PUBLIC_SECTORS.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b);
-    })
+  // Collect available filter lists for client UI - strictly the 3 allowed B2B sectors
+  const sectors = B2B_EXCLUSIVE_SECTORS
     .map(code => {
       const [orig, dest] = code.split('-');
       return {
