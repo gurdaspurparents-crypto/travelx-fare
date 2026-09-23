@@ -159,7 +159,7 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageBase64, provider, apiKey, defaults })
-    }, 1, 70000, false);
+    }, 1, 90000, false);
   },
 
   syncVendorInventory: async (vendor_id, fares, replace_mode = 'sector') => {

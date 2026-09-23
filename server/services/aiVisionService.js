@@ -532,8 +532,12 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
  * Dynamically find the best active Gemini model for the user's API Key
  */
 function getGeminiCandidateModels() {
-  // 2.0 and 2.5 flash are closed for new keys and were overwriting a real 3.6 result.
-  return ['gemini-3.6-flash'];
+  // 2.0 and 2.5 flash are closed for new keys. 3.5 models are the backup when 3.6 is busy.
+  return ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+}
+
+function isGeminiCapacityError(status, message) {
+  return status === 429 || status === 503 || /high demand|try again later|unavailable|overloaded|resource exhausted|currently experiencing/i.test(String(message || ''));
 }
 
 function extractCandidateText(data) {
@@ -571,11 +575,11 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
   const startedAt = Date.now();
 
   for (const model of models) {
-    if (Date.now() - startedAt > 50000) break;
+    if (Date.now() - startedAt > 62000) break;
     const plain = String(model).endsWith('#plain');
     const modelId = plain ? String(model).slice(0, -6) : model;
     const abort = new AbortController();
-    const abortTimer = setTimeout(() => abort.abort(), 45000);
+    const abortTimer = setTimeout(() => abort.abort(), 22000);
     try {
       console.log(`🚀 Scanning flyer with Gemini model: ${modelId}...`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
@@ -618,12 +622,13 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         const msg = errJson?.error?.message || `Gemini API Error (${response.status}): ${errText}`;
         lastError = new Error(msg);
         queueSuggestedModel(models, model, msg);
-        if (/thinking/i.test(msg) && !plain && !models.includes(`${modelId}#plain`)) {
+        const queuePlain = /thinking/i.test(msg) && !plain && !models.includes(`${modelId}#plain`);
+        if (queuePlain) {
           models.splice(models.indexOf(model) + 1, 0, `${modelId}#plain`);
         }
         console.warn(`❌ Model ${modelId} failed (${response.status}): ${msg}`);
         const retired = response.status === 404 || /no longer available|not found|is not supported/i.test(msg);
-        if (retired) continue;
+        if (queuePlain || retired || isGeminiCapacityError(response.status, msg)) continue;
         break;
       }
 
