@@ -29,7 +29,8 @@ const STMT_AFFIRM_DUPLICATE = db.prepare(`
   SET updated_at = datetime('now', 'localtime'),
       baggage = COALESCE(?, baggage),
       is_refundable = COALESCE(?, is_refundable),
-      remarks = COALESCE(?, remarks)
+      remarks = COALESCE(?, remarks),
+      is_published = 1
   WHERE id = ?
 `);
 
@@ -46,6 +47,7 @@ const STMT_UPDATE_FARE_PRICE = db.prepare(`
       baggage = ?,
       is_refundable = ?,
       remarks = ?,
+      is_published = 1,
       updated_at = datetime('now', 'localtime')
   WHERE id = ?
 `);
@@ -55,7 +57,7 @@ const STMT_INSERT_FARE = db.prepare(`
     vendor_id, airline_code, origin, destination, travel_date, 
     flight_number, departure_time, arrival_time, net_fare, currency, 
     cabin, baggage, is_refundable, remarks, margin_amount, publish_fare, is_published, created_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now', 'localtime'), datetime('now', 'localtime'))
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'), datetime('now', 'localtime'))
 `);
 
 /**

@@ -196,7 +196,7 @@ function computeMasterPublicFares() {
       f.origin,
       f.destination,
       f.airline_code,
-      a.name AS airline_name,
+      COALESCE(a.name, f.airline_code) AS airline_name,
       f.flight_number,
       f.travel_date,
       f.departure_time,
@@ -207,9 +207,18 @@ function computeMasterPublicFares() {
       f.baggage,
       f.is_refundable
     FROM fares f
-    JOIN airlines a ON f.airline_code = a.code
+    LEFT JOIN airlines a ON f.airline_code = a.code
     WHERE f.travel_date >= date('now', 'localtime')
-      AND f.is_published = 1
+      AND (
+        f.is_published = 1 
+        OR NOT EXISTS (
+          SELECT 1 FROM fares f2 
+          WHERE f2.travel_date >= date('now', 'localtime') 
+            AND f2.is_published = 1 
+            AND f2.origin = f.origin 
+            AND f2.destination = f.destination
+        )
+      )
     ORDER BY f.travel_date ASC
   `;
 

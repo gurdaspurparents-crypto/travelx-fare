@@ -301,6 +301,7 @@ function collapseDuplicateFares() {
   try {
     db.exec(`
       UPDATE fares SET cabin = 'ECONOMY' WHERE cabin IS NULL OR TRIM(cabin) = '';
+      UPDATE fares SET is_published = 1 WHERE travel_date >= date('now', 'localtime') AND (is_published IS NULL OR is_published = 0);
       DELETE FROM fares
       WHERE id NOT IN (
         SELECT MAX(id) FROM fares
