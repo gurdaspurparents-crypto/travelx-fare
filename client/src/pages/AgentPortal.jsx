@@ -129,14 +129,9 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
   // Dropdown open states
   const [showOriginDropdown, setShowOriginDropdown] = useState(false);
   const [showDestDropdown, setShowDestDropdown] = useState(false);
-  const [showMenuDropdown, setShowMenuDropdown] = useState(false);
   const [showTravellerDropdown, setShowTravellerDropdown] = useState(false);
   const travellerDropdownRef = useRef(null);
   const dateInputRef = useRef(null);
-
-  // Customer Mode (Agent custom profit markup toggle)
-  const [customerMode, setCustomerMode] = useState(false);
-  const [customMarkup, setCustomMarkup] = useState(1000);
 
   // Filters State (Image 3 Left Sidebar)
   const [filterRefundable, setFilterRefundable] = useState('ALL'); // 'ALL' | 'REFUNDABLE' | 'NON_REFUNDABLE'
@@ -634,10 +629,9 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Helper: Display price with Customer Markup if active
+  // Helper: Display price
   const getDisplayPrice = (basePrice) => {
-    const p = Number(basePrice) || 0;
-    return customerMode ? p + Number(customMarkup || 0) : p;
+    return Number(basePrice) || 0;
   };
 
   // Helper: Cycle through allowed B2B sectors (ATQ-DXB -> ATQ-SHJ -> IXC-AUH)
@@ -1320,100 +1314,9 @@ Please confirm availability and share status.`;
               <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
               <span className="hidden sm:inline">Booking Desk</span>
             </button>
-
-            {/* Menu Dropdown Toggle */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowMenuDropdown(!showMenuDropdown)}
-                className="p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
-                title="Menu"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-
-              {/* Dropdown Menu */}
-              {showMenuDropdown && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-3 py-2 border-b border-slate-100">
-                    <p className="text-xs font-bold text-slate-900">TravelX B2B Portal</p>
-                    <p className="text-[10px] text-slate-500">Live Fixed Departure Engine</p>
-                  </div>
-
-                  {/* Customer Markup Mode Toggle */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomerMode(!customerMode);
-                      setShowMenuDropdown(false);
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between hover:bg-slate-50 text-slate-700"
-                  >
-                    <span className="flex items-center space-x-2">
-                      <Eye className="w-4 h-4 text-purple-600" />
-                      <span>Customer Mode (+Markup)</span>
-                    </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${customerMode ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                      {customerMode ? 'ON' : 'OFF'}
-                    </span>
-                  </button>
-
-                  {/* Refresh Data */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loadPortalData();
-                      setShowMenuDropdown(false);
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center space-x-2 hover:bg-slate-50 text-slate-700"
-                  >
-                    <RefreshCw className="w-4 h-4 text-emerald-600" />
-                    <span>Refresh Live Rates</span>
-                  </button>
-
-                  {!isStaffEmbedded && (
-                    <>
-                      <div className="my-1 border-t border-slate-100"></div>
-
-                      {/* Admin Switch */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowMenuDropdown(false);
-                          setShowAdminPinModal(true);
-                        }}
-                        className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center space-x-2 hover:bg-rose-50 text-slate-700 hover:text-rose-700"
-                      >
-                        <Lock className="w-4 h-4 text-rose-600" />
-                        <span>Admin Desk Access</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </header>
-
-      {/* Customer Mode Alert Strip */}
-      {customerMode && (
-        <div className="bg-purple-900 text-white py-1.5 px-4 text-xs flex items-center justify-between shadow-xs">
-          <div className="flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-            <span className="font-semibold">
-              Customer Mode Active: Showing walk-in passenger prices with +₹{customMarkup} margin included.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setCustomerMode(false)}
-            className="text-[11px] underline text-purple-200 hover:text-white"
-          >
-            Turn Off
-          </button>
-        </div>
-      )}
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 2. EXECUTIVE AVIATION SEARCH ENGINE                          */}
@@ -1454,10 +1357,6 @@ Please confirm availability and share status.`;
               <span className="flex items-center space-x-1.5 bg-blue-500/10 text-blue-300 px-3 py-1 rounded-full border border-blue-500/20">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span>Guaranteed Group PNR Inventory</span>
-              </span>
-              <span className="flex items-center space-x-1.5 bg-emerald-500/10 text-emerald-300 px-3 py-1 rounded-full border border-emerald-500/20">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>30+7 KG Standard Baggage Included</span>
               </span>
             </div>
           </div>
