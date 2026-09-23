@@ -1254,6 +1254,8 @@ Please confirm availability and share status.`;
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md animate-pulse ring-2 ring-emerald-300'
                   : activeBookingData?.status === 'FARE_REVISED'
                   ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md ring-2 ring-indigo-300'
+                  : activeBookingData?.status === 'TICKET_PROCESSING'
+                  ? 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-700 hover:to-blue-800 text-white shadow-md animate-pulse ring-2 ring-sky-300'
                   : activeBookingData?.status === 'CONFIRMED'
                   ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-md'
                   : activeBookingData?.status === 'PENDING'
@@ -1266,7 +1268,7 @@ Please confirm availability and share status.`;
                 <Bell className="w-3.5 h-3.5" />
                 {activeBookingData && activeBookingData.status !== 'CONFIRMED' && (
                   <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
-                    activeBookingData.status === 'AVAILABLE'
+                    activeBookingData.status === 'AVAILABLE' || activeBookingData.status === 'TICKET_PROCESSING'
                       ? 'bg-white animate-ping'
                       : 'bg-amber-500'
                   }`} />
@@ -1277,6 +1279,8 @@ Please confirm availability and share status.`;
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
                   activeBookingData.status === 'AVAILABLE'
                     ? 'bg-white text-emerald-800'
+                    : activeBookingData.status === 'TICKET_PROCESSING'
+                    ? 'bg-white text-sky-900 animate-pulse'
                     : activeBookingData.status === 'PENDING'
                     ? 'bg-amber-200 text-amber-950'
                     : 'bg-white/20 text-white'
@@ -1285,6 +1289,8 @@ Please confirm availability and share status.`;
                     ? 'Seat Available!' 
                     : activeBookingData.status === 'FARE_REVISED'
                     ? 'Fare Revised'
+                    : activeBookingData.status === 'TICKET_PROCESSING'
+                    ? '✈️ Under Issuance...'
                     : activeBookingData.status === 'DOCS_SUBMITTED'
                     ? 'Passports Sent'
                     : activeBookingData.status === 'CONFIRMED'

@@ -939,10 +939,24 @@ Thank you for booking with TravelX!`;
   };
 
   // Ticket Upload Handlers
-  const handleOpenTicketModal = (b) => {
+  const handleOpenTicketModal = async (b) => {
+    if (!b) return;
     setTicketUploadBooking(b);
     setTicketPnrInput(b.pnr_code || '');
     setTicketFileInput(null);
+
+    // Auto-update status to TICKET_PROCESSING so agent instantly sees "Under Process" status
+    if (b.status !== 'CONFIRMED' && b.status !== 'TICKET_PROCESSING') {
+      try {
+        const res = await api.updateBookingStatus(b.id, 'TICKET_PROCESSING');
+        if (res && res.success && res.booking) {
+          setBookings(prev => prev.map(item => item.id === b.id ? { ...item, status: 'TICKET_PROCESSING' } : item));
+          setTicketUploadBooking(res.booking);
+        }
+      } catch (e) {
+        console.warn('Auto set TICKET_PROCESSING error:', e);
+      }
+    }
   };
 
   const handleSubmitTicket = async (e) => {
