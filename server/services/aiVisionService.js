@@ -149,6 +149,59 @@ const CITY_IATA_MAP = {
 /**
  * Standardize flight records returned by AI model
  */
+function expandTravelDates(raw, year) {
+  const text = String(raw || '')
+    .replace(/\(all dates\)/ig, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return [];
+
+  const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  const range = text.match(/(\d{1,2})\s*([a-z]{3,9})\s*(?:to|–|-)\s*(\d{1,2})\s*([a-z]{3,9})?/i);
+  if (range && /\bto\b|–/i.test(text)) {
+    const m1 = months[range[2].toLowerCase().slice(0, 3)];
+    const m2 = months[(range[4] || range[2]).toLowerCase().slice(0, 3)];
+    if (m1 !== undefined && m2 !== undefined) {
+      const start = new Date(year, m1, Number(range[1]));
+      let end = new Date(year, m2, Number(range[3]));
+      if (end < start) end = new Date(year + 1, m2, Number(range[3]));
+      const out = [];
+      for (let d = new Date(start); d <= end && out.length < 45; d.setDate(d.getDate() + 1)) {
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        out.push(`${d.getFullYear()}-${mm}-${dd}`);
+      }
+      if (out.length) return out;
+    }
+  }
+
+  const parts = text.split(/\s*(?:&|,|and)\s*/i);
+  const dates = [];
+  for (const part of parts) {
+    const parsed = parseDateString(part, year);
+    if (parsed) dates.push(parsed);
+  }
+  return dates;
+}
+
+function parseModelPayload(rawText) {
+  let text = String(rawText || '').trim();
+  text = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+  const start = text.indexOf('{');
+  const arrStart = text.indexOf('[');
+  if (start === -1 || (arrStart !== -1 && arrStart < start)) {
+    const a0 = text.indexOf('[');
+    const a1 = text.lastIndexOf(']');
+    if (a0 !== -1 && a1 > a0) text = text.slice(a0, a1 + 1);
+  } else {
+    const end = text.lastIndexOf('}');
+    if (end > start) text = text.slice(start, end + 1);
+  }
+  const parsed = JSON.parse(text);
+  if (Array.isArray(parsed)) return parsed;
+  return parsed.records || parsed.fares || parsed.rows || parsed.data || [];
+}
+
 function standardizeAIRecords(rawRecords = [], defaults = {}) {
   const currentYear = new Date().getFullYear();
   const cleaned = [];
@@ -171,24 +224,26 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
     if (origin === 'FCO') origin = 'ROM';
     if (destination === 'FCO') destination = 'ROM';
 
-    // Clean travel date into YYYY-MM-DD
-    const dateStr = parseDateString(item.travel_date, currentYear);
-    const fare = parseFloat(String(item.net_fare).replace(/[^0-9.]/g, ''));
+    const dateSource = item.travel_date || item.date || item.dates || item.date_label || '';
+    const fare = parseFloat(String(item.net_fare || item.fare || item.rate || '').replace(/[^0-9.]/g, ''));
+    const dates = expandTravelDates(dateSource, currentYear);
 
-    if (dateStr && !isNaN(fare) && fare > 500) {
-      cleaned.push({
-        origin: origin.slice(0, 3),
-        destination: destination.slice(0, 3),
-        airline_code: cleanAirline,
-        flight_number: item.flight_number || '',
-        travel_date: dateStr,
-        net_fare: fare,
-        currency: 'INR',
-        cabin: item.cabin || 'ECONOMY',
-        baggage: item.baggage || defaults.baggage || defaults.defaultBaggage || '30kg',
-        is_refundable: item.is_refundable || defaults.is_refundable || defaults.defaultRefundable || 'NON_REFUNDABLE',
-        remarks: item.remarks || 'AI Vision Extracted'
-      });
+    if (dates.length && !isNaN(fare) && fare > 500) {
+      for (const dateStr of dates) {
+        cleaned.push({
+          origin: origin.slice(0, 3),
+          destination: destination.slice(0, 3),
+          airline_code: cleanAirline,
+          flight_number: item.flight_number || '',
+          travel_date: dateStr,
+          net_fare: fare,
+          currency: 'INR',
+          cabin: item.cabin || 'ECONOMY',
+          baggage: item.baggage || defaults.baggage || defaults.defaultBaggage || '30kg',
+          is_refundable: item.is_refundable || defaults.is_refundable || defaults.defaultRefundable || 'NON_REFUNDABLE',
+          remarks: item.remarks || 'AI Vision Extracted'
+        });
+      }
     }
   }
 
@@ -457,8 +512,19 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         continue;
       }
 
-      const parsed = JSON.parse(rawText);
-      const records = standardizeAIRecords(parsed.records || [], defaults);
+      let rawRecords = [];
+      try {
+        rawRecords = parseModelPayload(rawText);
+      } catch (parseErr) {
+        console.warn(`⚠️ JSON parse failed for ${model}:`, parseErr.message);
+        lastError = new Error('Gemini ne image padhi lekin dates samajh nahi aayi. Flyer clear karke dubara scan karein.');
+        continue;
+      }
+      const records = standardizeAIRecords(rawRecords, defaults);
+      if (!records.length) {
+        lastError = new Error(`Gemini ne ${rawRecords.length} row dekhi lekin date/fare match nahi hua. Image thodi zoom karke dubara scan karein.`);
+        continue;
+      }
 
       console.log(`✅ Successfully extracted ${records.length} records using Gemini model: ${model}`);
 

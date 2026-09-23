@@ -389,11 +389,11 @@ export default function ImageOcrUploader({
               allRawTexts.push(`=== FLYER ${flyerNum}: ${fileName} ===\n${result.rawText}`);
             }
           } else {
-            failedFlyers.push(fileName);
+            failedFlyers.push(`${fileName}${result?.error ? `: ${result.error}` : ''}`);
           }
         } catch (itemErr) {
           console.error(`Error processing flyer ${flyerNum} (${fileName}):`, itemErr);
-          failedFlyers.push(fileName);
+          failedFlyers.push(`${fileName}: ${itemErr.message || 'scan failed'}`);
         }
 
         setScanProgress(Math.round(((i + 1) / totalCount) * 100));
@@ -455,7 +455,9 @@ export default function ImageOcrUploader({
       } else {
         setStatus({
           type: 'error',
-          text: `Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.`
+          text: failedFlyers.length
+            ? `Rates nahi nikle. ${failedFlyers.join(' | ')}`
+            : 'Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.'
         });
       }
     } catch (err) {
