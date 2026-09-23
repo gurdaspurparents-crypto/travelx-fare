@@ -381,6 +381,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
   const isFareAccepted = useMemo(() => {
     if (!trackedBooking) return false;
     if (acceptedFares[trackedBooking.request_ref]) return true;
+    if (trackedBooking.status === 'FARE_ACCEPTED') return true;
     if (trackedBooking.admin_notes && trackedBooking.admin_notes.includes('Agent Accepted Revised Fare')) return true;
     return false;
   }, [trackedBooking, acceptedFares]);
@@ -396,6 +397,10 @@ export default function AgentPortal({ onSwitchToAdmin }) {
         try {
           localStorage.setItem('travelx_accepted_fares', JSON.stringify(next));
         } catch (_) {}
+        if (res.booking) {
+          setTrackedBooking(res.booking);
+          setActiveBookingData(res.booking);
+        }
         await handleFetchTracking(trackedBooking.request_ref);
       } else {
         alert(res?.error || 'Failed to accept revised fare');
@@ -428,7 +433,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
       setFareResponding(false);
       setShowTrackerModal(false);
       setTrackedBooking(null);
-      lastPolledStatusRef.current = 'CANCELLED';
+      lastPolledStatusRef.current = 'FARE_DECLINED';
       setActiveBookingRef(null);
       setActiveBookingData(null);
       try {
@@ -3686,7 +3691,7 @@ Please confirm availability and share status.`;
                   {/* ───────────────────────────────────────────────────────── */}
                   {/* PROMINENT FARE REVISED DECISION CARD                      */}
                   {/* ───────────────────────────────────────────────────────── */}
-                  {trackedBooking.status === 'FARE_REVISED' && (
+                  {(trackedBooking.status === 'FARE_REVISED' || (trackedBooking.status === 'FARE_ACCEPTED' && isFareAccepted)) && (
                     <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/15 to-amber-500/10 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
                       {/* Alert Header */}
                       <div className="flex items-start justify-between gap-3">
@@ -3863,7 +3868,7 @@ Please confirm availability and share status.`;
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold shadow-xs ${
                         trackedBooking.has_passports || trackedBooking.status === 'DOCS_SUBMITTED' || trackedBooking.status === 'TICKET_PROCESSING' || trackedBooking.status === 'CONFIRMED'
                           ? 'bg-emerald-600 text-white'
-                          : ['AVAILABLE', 'FARE_REVISED'].includes(trackedBooking.status)
+                          : ['AVAILABLE', 'FARE_REVISED', 'FARE_ACCEPTED'].includes(trackedBooking.status)
                           ? 'bg-blue-600 text-white animate-bounce'
                           : 'bg-slate-300 text-slate-600'
                       }`}>
@@ -3896,7 +3901,7 @@ Please confirm availability and share status.`;
                         )}
 
                         {/* Upload Dropzone (Auto-uploads immediately upon selection, No submit button needed) */}
-                        {((trackedBooking.status === 'AVAILABLE') || (trackedBooking.status === 'FARE_REVISED' && isFareAccepted) || (trackedBooking.status === 'DOCS_SUBMITTED') || (trackedBooking.status === 'TICKET_PROCESSING')) && (
+                        {((trackedBooking.status === 'AVAILABLE') || (trackedBooking.status === 'FARE_REVISED' && isFareAccepted) || (trackedBooking.status === 'FARE_ACCEPTED') || (trackedBooking.status === 'DOCS_SUBMITTED') || (trackedBooking.status === 'TICKET_PROCESSING')) && (
                           <div className="space-y-2 pt-1">
                             <div className={`border-2 border-dashed rounded-xl p-4 bg-white text-center transition ${
                               passportUploading 

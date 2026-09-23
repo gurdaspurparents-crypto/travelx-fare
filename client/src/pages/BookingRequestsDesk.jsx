@@ -335,6 +335,8 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
                 `${b.agency_name} (${b.agent_mobile}) has DECLINED revised fare ₹${Number(b.revised_fare || b.quoted_rate).toLocaleString('en-IN')}/pax for ${b.origin} ➔ ${b.destination}. Request cancelled.`
               );
               startTitleFlashing(`DECLINED #${b.request_ref}`);
+              if (onSwitchToEnquiries) onSwitchToEnquiries();
+              setActiveSubTab('requests');
               setAdminEventModal({
                 type: 'FARE_DECLINED',
                 booking: b,
@@ -353,6 +355,8 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
                 `${b.agency_name} (${b.agent_mobile}) accepted revised rate ₹${Number(b.revised_fare || b.quoted_rate).toLocaleString('en-IN')}/pax for ${b.origin} ➔ ${b.destination}. Passports pending!`
               );
               startTitleFlashing(`ACCEPTED #${b.request_ref}`);
+              if (onSwitchToEnquiries) onSwitchToEnquiries();
+              setActiveSubTab('requests');
               setAdminEventModal({
                 type: 'FARE_ACCEPTED',
                 booking: b,

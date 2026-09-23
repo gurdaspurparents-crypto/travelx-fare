@@ -9,22 +9,26 @@ import { api } from '../utils/api';
 
 export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesCleared, onOpenAgentPortal }) {
   const [showClearModal, setShowClearModal] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [bookingStats, setBookingStats] = useState({ pending: 0, declined: 0, docs_submitted: 0 });
 
-  // Poll pending count for live badge
+  // Poll booking stats for live badges (Pending, Declined, Passports Ready)
   useEffect(() => {
-    const fetchPending = async () => {
+    const fetchStats = async () => {
       try {
-        const res = await api.getBookingRequests({ status: 'PENDING', limit: 1 });
+        const res = await api.getBookingRequests({ limit: 1 });
         if (res && res.success && res.stats) {
-          setPendingCount(res.stats.pending || 0);
+          setBookingStats({
+            pending: res.stats.pending || 0,
+            declined: res.stats.declined || 0,
+            docs_submitted: res.stats.docs_submitted || 0
+          });
         }
       } catch (e) {
         // silent
       }
     };
-    fetchPending();
-    const timer = setInterval(fetchPending, 4000);
+    fetchStats();
+    const timer = setInterval(fetchStats, 3500);
     return () => clearInterval(timer);
   }, []);
 
@@ -145,10 +149,24 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
                   >
                     <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
-                    {item.isBooking && pendingCount > 0 && (
-                      <span className="ml-1 px-1.5 py-0.2 text-[10px] rounded-full font-black bg-amber-500 text-white animate-pulse">
-                        {pendingCount}
-                      </span>
+                    {item.isBooking && (
+                      <div className="flex items-center space-x-1 ml-1">
+                        {bookingStats.pending > 0 && (
+                          <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-amber-500 text-white animate-pulse" title={`${bookingStats.pending} Pending Inquiries`}>
+                            {bookingStats.pending}
+                          </span>
+                        )}
+                        {bookingStats.declined > 0 && (
+                          <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-rose-600 text-white shadow-xs" title={`${bookingStats.declined} Agent Declined Requests`}>
+                            ❌ {bookingStats.declined}
+                          </span>
+                        )}
+                        {bookingStats.docs_submitted > 0 && (
+                          <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-teal-500 text-white shadow-xs" title={`${bookingStats.docs_submitted} Passports Ready`}>
+                            📄 {bookingStats.docs_submitted}
+                          </span>
+                        )}
+                      </div>
                     )}
                     {item.isMaster && (
                       <span className={`ml-1 px-1 py-0.2 text-[9px] rounded font-black border ${

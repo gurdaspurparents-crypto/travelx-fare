@@ -75,12 +75,16 @@ function sendWhatsAppAdminAlert(booking) {
       return; // Alerts disabled
     }
 
-    const phone = phoneSetting?.value ? phoneSetting.value.replace(/\D/g, '') : '';
+    let phone = phoneSetting?.value ? phoneSetting.value.replace(/\D/g, '') : '';
     const apiKey = apiKeySetting?.value ? apiKeySetting.value.trim() : '';
 
     if (!phone || !apiKey) {
       console.log('WhatsApp alert skipped: missing phone or API key');
       return;
+    }
+
+    if (phone.length === 10) {
+      phone = '91' + phone;
     }
 
     const text = `🚨 *TRAVELX NEW BOOKING REQUEST!*
@@ -106,7 +110,7 @@ ${booking.vendor_name ? `• *Winning Vendor:* ${booking.vendor_name} (Net: ₹$
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        console.log(`WhatsApp Alert sent for #${booking.request_ref}: HTTP ${res.statusCode}`);
+        console.log(`WhatsApp Alert sent for #${booking.request_ref}: HTTP ${res.statusCode} -> ${data.slice(0, 80)}`);
       });
     }).on('error', (err) => {
       console.warn('CallMeBot notification warning:', err.message);
@@ -126,21 +130,31 @@ function sendWhatsAppCustomAlert(text) {
     const enabledSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'whatsapp_alerts_enabled'").get();
 
     if (!enabledSetting || enabledSetting.value !== '1') {
+      console.log('WhatsApp custom alert skipped: alerts not enabled');
       return;
     }
 
-    const phone = phoneSetting?.value ? phoneSetting.value.replace(/\D/g, '') : '';
+    let phone = phoneSetting?.value ? phoneSetting.value.replace(/\D/g, '') : '';
     const apiKey = apiKeySetting?.value ? apiKeySetting.value.trim() : '';
 
     if (!phone || !apiKey) {
+      console.log('WhatsApp custom alert skipped: missing phone or API key');
       return;
+    }
+
+    if (phone.length === 10) {
+      phone = '91' + phone;
     }
 
     const encodedText = encodeURIComponent(text);
     const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedText}&apikey=${apiKey}`;
 
     https.get(url, (res) => {
-      console.log(`WhatsApp Custom Alert sent: HTTP ${res.statusCode}`);
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        console.log(`WhatsApp Custom Alert sent: HTTP ${res.statusCode} -> ${data.slice(0, 80)}`);
+      });
     }).on('error', (err) => {
       console.warn('CallMeBot notification warning:', err.message);
     });
@@ -724,15 +738,23 @@ exports.respondToRevisedFare = (req, res) => {
       return res.status(404).json({ success: false, error: 'Booking reference not found' });
     }
 
+    const action = String(req.body?.action || '').trim().toUpperCase();
+
+    const revisedRate = Number(booking.revised_fare || booking.quoted_rate);
+    const seatPax = (booking.pax_adults || 1) + (booking.pax_children || 0);
+    const infantTotal = (booking.pax_infants || 0) * Number(booking.infant_fare || 0);
+    const calculatedTotal = (seatPax * revisedRate) + infantTotal;
+
     if (action === 'ACCEPT') {
-      const noteAppend = ` • [Agent Accepted Revised Fare ₹${Number(booking.revised_fare || booking.quoted_rate).toLocaleString('en-IN')}]`;
+      const noteAppend = ` • [Agent Accepted Revised Fare ₹${revisedRate.toLocaleString('en-IN')}]`;
       db.prepare(`
         UPDATE booking_requests
         SET status = 'FARE_ACCEPTED',
+            total_amount = ?,
             admin_notes = COALESCE(admin_notes, '') || ?,
-            updated_at = CURRENT_TIMESTAMP
+            updated_at = datetime('now', 'localtime')
         WHERE id = ?
-      `).run(noteAppend, booking.id);
+      `).run(calculatedTotal, noteAppend, booking.id);
 
       sendWhatsAppCustomAlert(`✅ *TRAVELX: REVISED FARE ACCEPTED!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -741,20 +763,20 @@ exports.respondToRevisedFare = (req, res) => {
 • *Sector:* ${booking.origin} ➔ ${booking.destination}
 • *Flight:* ${booking.airline_name || booking.airline_code} ${booking.flight_number || ''}
 • *Travel Date:* ${booking.travel_date}
-• *Revised Fare:* ₹${Number(booking.revised_fare).toLocaleString('en-IN')}/pax (ACCEPTED!)
-• *Total Booking:* ₹${Number(booking.total_amount).toLocaleString('en-IN')} (${booking.pax_count} Pax)
+• *Revised Fare:* ₹${revisedRate.toLocaleString('en-IN')}/pax (ACCEPTED!)
+• *Total Booking:* ₹${calculatedTotal.toLocaleString('en-IN')} (${booking.pax_count} Pax)
 • *Status:* Agent agreed to revised rate! Passports upload pending.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
       const updated = db.prepare('SELECT * FROM booking_requests WHERE id = ?').get(booking.id);
       return res.json({ success: true, message: 'Revised fare accepted by agent', action: 'ACCEPT', booking: updated });
-    } else if (action === 'DECLINE') {
+    } else if (action === 'DECLINE' || action === 'REJECT') {
       const noteAppend = ` • [Agent Declined Revised Fare - Request Cancelled]`;
       db.prepare(`
         UPDATE booking_requests
         SET status = 'FARE_DECLINED',
             admin_notes = COALESCE(admin_notes, '') || ?,
-            updated_at = CURRENT_TIMESTAMP
+            updated_at = datetime('now', 'localtime')
         WHERE id = ?
       `).run(noteAppend, booking.id);
 
@@ -766,7 +788,7 @@ exports.respondToRevisedFare = (req, res) => {
 • *Flight:* ${booking.airline_name || booking.airline_code} ${booking.flight_number || ''}
 • *Travel Date:* ${booking.travel_date}
 • *Original Quoted:* ₹${Number(booking.quoted_rate).toLocaleString('en-IN')}/pax
-• *Revised Rate Sent:* ₹${Number(booking.revised_fare).toLocaleString('en-IN')}/pax
+• *Revised Rate Sent:* ₹${revisedRate.toLocaleString('en-IN')}/pax
 • *Status:* Agent DECLINED the revised rate. Booking marked as FARE_DECLINED.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
