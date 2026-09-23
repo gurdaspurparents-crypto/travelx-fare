@@ -19,7 +19,26 @@ function withAdminAuthHeaders(url, options = {}) {
   return { ...options, headers };
 }
 
-const BULK_CHUNK_SIZE = 250;
+const BULK_CHUNK_SIZE = 40;
+
+async function waitForBackend(onProgress) {
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    if (onProgress) {
+      onProgress({
+        phase: 'wake',
+        current: attempt,
+        total: 8,
+        label: attempt === 1
+          ? 'Server check ho raha hai…'
+          : `Render start ho raha hai… (${attempt}/8)`
+      });
+    }
+    const health = await safeFetch('/api/health', {}, 0, 15000, false);
+    if (health && health.status === 'online') return true;
+    await new Promise((r) => setTimeout(r, 4000));
+  }
+  return false;
+}
 
 async function safeFetch(url, options = {}, retries = 2, timeoutMs = 120000, retryOnAbort = true) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -175,6 +194,8 @@ export const api = {
       return { success: false, error: 'No fare records to save' };
     }
 
+    await waitForBackend(onProgress);
+
     const postChunk = (chunk, skipSync) =>
       safeFetch('/api/fares/bulk-save', {
         method: 'POST',
@@ -187,7 +208,7 @@ export const api = {
           skip_inventory_sync: skipSync,
           summary_only: true
         })
-      }, 1, 35000, false);
+      }, 3, 25000, false);
 
     if (fares.length <= BULK_CHUNK_SIZE) {
       return safeFetch('/api/fares/bulk-save', {
@@ -201,7 +222,7 @@ export const api = {
           skip_inventory_sync: false,
           summary_only: fares.length > 15
         })
-      }, 1, 35000, false);
+      }, 3, 25000, false);
     }
 
     const totalChunks = Math.ceil(fares.length / BULK_CHUNK_SIZE);

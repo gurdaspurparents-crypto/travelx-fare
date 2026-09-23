@@ -643,31 +643,31 @@ exports.saveBulkParsedFares = (req, res) => {
   const errors = [];
   let deletedRecords = [];
 
+  const saveRow = db.transaction((f) => saveOrUpdateFareRecord({
+    vendor_id,
+    airline_code: f.airline_code,
+    origin: f.origin,
+    destination: f.destination,
+    travel_date: f.travel_date,
+    flight_number: f.flight_number || '',
+    departure_time: f.departure_time || '',
+    arrival_time: f.arrival_time || '',
+    net_fare: f.net_fare,
+    cabin: f.cabin || 'ECONOMY',
+    baggage: f.baggage || '30kg',
+    is_refundable: f.is_refundable || 'NON_REFUNDABLE',
+    remarks: f.remarks || 'Bulk WhatsApp/Flyer import'
+  }, { bulkMode: true }));
+
   const bulkTx = db.transaction(() => {
     if (replace_missing_dates && !skip_inventory_sync) {
       deletedRecords = runVendorInventorySync(vendor_id, fares, replace_mode);
     }
 
-    // 2. Insert or update incoming fares
     for (let i = 0; i < fares.length; i++) {
       const f = fares[i];
       try {
-        const itemResult = saveOrUpdateFareRecord({
-          vendor_id,
-          airline_code: f.airline_code,
-          origin: f.origin,
-          destination: f.destination,
-          travel_date: f.travel_date,
-          flight_number: f.flight_number || '',
-          departure_time: f.departure_time || '',
-          arrival_time: f.arrival_time || '',
-          net_fare: f.net_fare,
-          cabin: f.cabin || 'ECONOMY',
-          baggage: f.baggage || '30kg',
-          is_refundable: f.is_refundable || 'NON_REFUNDABLE',
-          remarks: f.remarks || 'Bulk WhatsApp/Flyer import'
-        }, { bulkMode: true });
-        results.push(itemResult);
+        results.push(saveRow(f));
       } catch (err) {
         errors.push({ row: i + 1, date: f.travel_date, error: err.message });
       }
