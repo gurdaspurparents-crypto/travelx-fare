@@ -19,7 +19,7 @@ function withAdminAuthHeaders(url, options = {}) {
   return { ...options, headers };
 }
 
-const BULK_CHUNK_SIZE = 40;
+const BULK_CHUNK_SIZE = 8;
 
 async function waitForBackend(onProgress) {
   for (let attempt = 1; attempt <= 8; attempt++) {
@@ -196,89 +196,84 @@ export const api = {
 
     await waitForBackend(onProgress);
 
-    const postChunk = (chunk, skipSync) =>
+    const postRows = (rows) =>
       safeFetch('/api/fares/bulk-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vendor_id,
-          fares: chunk,
-          replace_missing_dates: replace_missing_dates && !skipSync,
+          fares: rows,
+          replace_missing_dates: false,
           replace_mode,
-          skip_inventory_sync: skipSync,
+          skip_inventory_sync: true,
           summary_only: true
         })
-      }, 3, 25000, false);
-
-    if (fares.length <= BULK_CHUNK_SIZE) {
-      return safeFetch('/api/fares/bulk-save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vendor_id,
-          fares,
-          replace_missing_dates,
-          replace_mode,
-          skip_inventory_sync: false,
-          summary_only: fares.length > 15
-        })
-      }, 3, 25000, false);
-    }
+      }, 2, 20000, false);
 
     const totalChunks = Math.ceil(fares.length / BULK_CHUNK_SIZE);
     let savedTotal = 0;
     let createdTotal = 0;
     let updatedTotal = 0;
+    let savedRows = 0;
 
     for (let i = 0; i < totalChunks; i++) {
       const chunk = fares.slice(i * BULK_CHUNK_SIZE, (i + 1) * BULK_CHUNK_SIZE);
       if (onProgress) {
-        onProgress({ phase: 'save', current: i + 1, total: totalChunks, label: `Saving batch ${i + 1} of ${totalChunks}…` });
+        onProgress({
+          phase: 'save',
+          current: i + 1,
+          total: totalChunks,
+          label: `Saving ${Math.min(savedRows + chunk.length, fares.length)} of ${fares.length}…`
+        });
       }
-      const res = await postChunk(chunk, true);
+      let res = await postRows(chunk);
+      if (!res?.success && chunk.length > 1) {
+        res = { success: true, saved_count: 0, created_count: 0, updated_count: 0 };
+        for (let r = 0; r < chunk.length; r++) {
+          if (onProgress) {
+            onProgress({
+              phase: 'save',
+              current: i + 1,
+              total: totalChunks,
+              label: `Saving ${savedRows + r + 1} of ${fares.length}…`
+            });
+          }
+          const one = await postRows([chunk[r]]);
+          if (!one?.success) {
+            const savedNote = savedTotal > 0 ? ` ${savedTotal} fares pehle save ho chuke hain.` : '';
+            return {
+              ...one,
+              partial_saved: savedTotal,
+              error: `${one?.error || 'Excel row save failed'}${savedNote}`
+            };
+          }
+          res.saved_count += one.saved_count || 1;
+          res.created_count += one.created_count || 0;
+          res.updated_count += one.updated_count || 0;
+        }
+      }
       if (!res?.success) {
-        const savedNote = savedTotal > 0 ? ` ${savedTotal} fares pehle save ho chuke hain — dubara Save dabane se baaki add ho jayenge.` : '';
+        const savedNote = savedTotal > 0 ? ` ${savedTotal} fares pehle save ho chuke hain.` : '';
         return {
           ...res,
           partial_saved: savedTotal,
-          error: `${res?.error || `Batch ${i + 1}/${totalChunks} save failed`}${savedNote}`
+          error: `${res?.error || 'Excel save failed'}${savedNote}`
         };
       }
-      savedTotal += res.saved_count || 0;
+      savedTotal += res.saved_count || chunk.length;
       createdTotal += res.created_count || 0;
       updatedTotal += res.updated_count || 0;
-    }
-
-    let deletedCount = 0;
-    if (replace_missing_dates) {
-      if (onProgress) {
-        onProgress({ phase: 'sync', current: totalChunks, total: totalChunks, label: 'Cleaning old sold-out dates…' });
-      }
-      const syncRes = await safeFetch('/api/fares/sync-inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendor_id, fares, replace_mode })
-      }, 3, 180000);
-      if (!syncRes?.success) {
-        return {
-          success: true,
-          saved_count: savedTotal,
-          created_count: createdTotal,
-          updated_count: updatedTotal,
-          warning: syncRes?.error || 'Fares saved but inventory cleanup failed — retry Save once.',
-          deleted_count: 0
-        };
-      }
-      deletedCount = syncRes.deleted_count || 0;
+      savedRows += chunk.length;
     }
 
     return {
-      success: true,
+      success: savedTotal > 0,
       saved_count: savedTotal,
       created_count: createdTotal,
       updated_count: updatedTotal,
-      deleted_count: deletedCount,
-      message: `Saved ${savedTotal} fares in ${totalChunks} batches`
+      deleted_count: 0,
+      replace_missing_dates,
+      message: `Saved ${savedTotal} fares`
     };
   },
 

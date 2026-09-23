@@ -634,9 +634,7 @@ exports.saveBulkParsedFares = (req, res) => {
     return res.status(400).json({ success: false, error: 'No fare records to save' });
   }
 
-  preprocessBulkFares(fares);
-
-  const results = [];
+  let results = [];
   const errors = [];
   let deletedRecords = [];
 
@@ -673,6 +671,7 @@ exports.saveBulkParsedFares = (req, res) => {
 
   try {
     const started = Date.now();
+    preprocessBulkFares(fares);
     bulkTx();
     console.log(`bulk-save vendor=${vendor_id} rows=${fares.length} saved=${results.length} ms=${Date.now() - started}`);
 

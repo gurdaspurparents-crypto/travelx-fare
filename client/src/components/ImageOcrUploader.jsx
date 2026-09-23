@@ -250,31 +250,29 @@ export default function ImageOcrUploader({
       if (!effectiveKey) {
         throw new Error('KEY_REQUIRED_GEMINI');
       }
-      const base64Data = await compressImageForScan(file);
-      const ocrPromise = parseImageFares(file, defaults).catch((err) => ({
+      const ocr = await parseImageFares(file, defaults).catch((err) => ({
         success: false,
         records: [],
         error: err?.message || 'Local OCR failed'
       }));
-      let result = await api.parseImageWithAI({
+      if (ocr?.records?.length) {
+        return { ...ocr, success: true, provider: ocr.provider || 'ocr' };
+      }
+      const base64Data = await compressImageForScan(file);
+      const result = await api.parseImageWithAI({
         imageBase64: base64Data,
         provider: 'gemini',
         apiKey: effectiveKey,
         defaults
       });
-      if (!result?.success || !Array.isArray(result.records) || result.records.length === 0) {
-        const ocr = await ocrPromise;
-        if (ocr?.records?.length) {
-          result = { ...ocr, success: true, provider: 'ocr-fallback' };
-        } else {
-          result = {
-            success: false,
-            records: [],
-            error: `${result?.error || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` Local OCR: ${ocr.error}` : ' Local OCR ne bhi dates nahi padhi.'}`
-          };
-        }
+      if (result?.success && Array.isArray(result.records) && result.records.length > 0) {
+        return result;
       }
-      return result;
+      return {
+        success: false,
+        records: [],
+        error: `${result?.error || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` Local OCR: ${ocr.error}` : ' Local OCR ne bhi dates nahi padhi.'}`
+      };
     } else {
       // Local Browser OCR (Tesseract)
       const result = await parseImageFares(file, defaults);

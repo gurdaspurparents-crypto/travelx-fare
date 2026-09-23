@@ -1,5 +1,6 @@
 import Tesseract from 'tesseract.js';
 import { api } from './api';
+import { parseFlyerText } from './flyerTextParser';
 
 /**
  * Preprocess image on canvas to enhance contrast and readability for OCR
@@ -121,7 +122,19 @@ export async function parseImageFares(imageFileOrBlob, defaults = {}, onProgress
       .replace(/\s*->\s*|\s*–>\s*|\s*—>\s*|\s*→\s*|\s*➔\s*|\s*➜\s*/g, ' -> ')
       .replace(/\s*>\s*/g, ' -> ');
 
-    // Use backend smart WhatsApp / text parser to extract routes, dates, airlines, fares
+    const local = parseFlyerText(cleanedText, defaults);
+    if (local.records.length > 0) {
+      if (onProgress) onProgress(100);
+      return {
+        success: true,
+        rawText,
+        cleanedText,
+        confidence: Math.round(data.confidence || 0),
+        records: local.records,
+        provider: 'local-text'
+      };
+    }
+
     const parsed = await api.parseWhatsApp(cleanedText, defaults);
 
     if (onProgress) onProgress(100);
