@@ -51,7 +51,7 @@ const formatBaggage = (bag) => {
   return clean;
 };
 
-export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff }) {
+export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffEmbedded = false }) {
   const isAllowedB2BSector = (f) => {
     if (!f) return false;
     const s = f.sector_code || `${f.origin}-${f.destination}`;
@@ -1371,20 +1371,24 @@ Please confirm availability and share status.`;
                     <span>Refresh Live Rates</span>
                   </button>
 
-                  <div className="my-1 border-t border-slate-100"></div>
+                  {!isStaffEmbedded && (
+                    <>
+                      <div className="my-1 border-t border-slate-100"></div>
 
-                  {/* Admin Switch */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMenuDropdown(false);
-                      setShowAdminPinModal(true);
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center space-x-2 hover:bg-rose-50 text-slate-700 hover:text-rose-700"
-                  >
-                    <Lock className="w-4 h-4 text-rose-600" />
-                    <span>Admin Desk Access (PIN 7860)</span>
-                  </button>
+                      {/* Admin Switch */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMenuDropdown(false);
+                          setShowAdminPinModal(true);
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs font-semibold flex items-center space-x-2 hover:bg-rose-50 text-slate-700 hover:text-rose-700"
+                      >
+                        <Lock className="w-4 h-4 text-rose-600" />
+                        <span>Admin Desk Access</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -4106,27 +4110,29 @@ Please confirm availability and share status.`;
             <span>B2B Fixed Departure Special Air Fares Engine</span>
           </div>
 
-          <div className="flex items-center space-x-4 text-[11px]">
-            <span>Rates verified live</span>
-            <span>•</span>
-            <button
-              type="button"
-              onClick={() => onSwitchToStaff && onSwitchToStaff()}
-              className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
-            >
-              <Users className="w-3 h-3" />
-              <span>Staff Desk</span>
-            </button>
-            <span>•</span>
-            <button
-              type="button"
-              onClick={() => onSwitchToAdmin && onSwitchToAdmin()}
-              className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
-            >
-              <Lock className="w-3 h-3" />
-              <span>Admin Desk</span>
-            </button>
-          </div>
+          {!isStaffEmbedded && (
+            <div className="flex items-center space-x-4 text-[11px]">
+              <span>Rates verified live</span>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => onSwitchToStaff && onSwitchToStaff()}
+                className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
+              >
+                <Users className="w-3 h-3" />
+                <span>Staff Desk</span>
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => onSwitchToAdmin && onSwitchToAdmin()}
+                className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
+              >
+                <Lock className="w-3 h-3" />
+                <span>Admin Desk</span>
+              </button>
+            </div>
+          )}
         </div>
       </footer>
 

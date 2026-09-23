@@ -51,6 +51,7 @@ function checkIsStaffRoute() {
 export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(checkAdminRoute);
   const [isStaffRoute, setIsStaffRoute] = useState(checkIsStaffRoute);
+  const [staffTab, setStaffTab] = useState('requests'); // 'requests' | 'portal'
   const [userRole, setUserRole] = useState(() => {
     return (typeof localStorage !== 'undefined' && localStorage.getItem('travelx_user_role')) || 'admin';
   });
@@ -67,6 +68,9 @@ export default function App() {
     routes: []
   });
   const [selectedRoute, setSelectedRoute] = useState(null);
+
+  // Active Staff Mode is true whenever on /staff route OR authenticated as staff
+  const isCurrentStaff = isStaffRoute || userRole === 'staff';
 
   useEffect(() => {
     const handlePopState = () => {
@@ -99,6 +103,7 @@ export default function App() {
     }
     setIsAdminMode(true);
     setIsStaffRoute(true);
+    setStaffTab('requests');
   };
 
   const handlePinSubmit = async (e) => {
@@ -114,7 +119,7 @@ export default function App() {
         setAdminUnlocked(true);
         setPinError(false);
         setPinInput('');
-        if (role !== 'staff') {
+        if (role !== 'staff' && !isStaffRoute) {
           await loadMasters();
         }
       } else {
@@ -138,7 +143,7 @@ export default function App() {
 
   const handleRatesChanged = () => {
     setFaresRefreshKey(k => k + 1);
-    if (userRole !== 'staff') {
+    if (!isCurrentStaff) {
       loadMasters();
     }
   };
@@ -176,7 +181,7 @@ export default function App() {
         const role = res.role || userRole || 'admin';
         setUserRole(role);
         localStorage.setItem('travelx_user_role', role);
-        if (role !== 'staff') {
+        if (role !== 'staff' && !isStaffRoute) {
           loadMasters();
         }
       } else {
@@ -189,7 +194,7 @@ export default function App() {
       localStorage.removeItem('travelx_user_role');
       setAdminUnlocked(false);
     });
-  }, [isAdminMode, adminUnlocked]);
+  }, [isAdminMode, adminUnlocked, isStaffRoute]);
 
   const handleSelectRouteFromDashboard = (origin, destination) => {
     setSelectedRoute({ origin, destination });
@@ -203,7 +208,7 @@ export default function App() {
 
   // If in Admin/Staff Mode but not yet authenticated with PIN
   if (!adminUnlocked) {
-    const isStaffScreen = isStaffRoute;
+    const isStaffScreen = isCurrentStaff;
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-blue-600 selection:text-white">
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl relative overflow-hidden">
@@ -255,7 +260,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleSwitchToStaff}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
               >
                 Switch to Staff Operations Login (PIN 2233) →
               </button>
@@ -263,7 +268,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleSwitchToAdmin}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
               >
                 Switch to Master Admin Login (PIN 7788) →
               </button>
@@ -271,7 +276,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleOpenAgentPortal}
-              className="text-xs text-slate-400 hover:text-white transition-colors"
+              className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               ← Back to Public B2B Agent Portal
             </button>
@@ -281,16 +286,19 @@ export default function App() {
     );
   }
 
-  // If authenticated as STAFF (or on staff route with staff role):
-  // Renders the clean Staff Operations Desk (no Admin Navbar, no profit margins, no vendor heads)
-  if (userRole === 'staff') {
+  // If in Staff Mode (either on /staff route or authenticated as staff):
+  // Renders the clean Staff Operations Desk with ONLY TWO TABS:
+  // Tab 1: Booking Requests (Live inquiries with vendor net rates & profit masked)
+  // Tab 2: B2B Agent Portal (Live flight rates & search)
+  if (isCurrentStaff) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col selection:bg-blue-600 selection:text-white">
         {/* Staff Top Navigation Bar */}
-        <header className="bg-slate-900 border-b border-slate-800 text-white px-4 py-3 shadow-md sticky top-0 z-30">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <header className="bg-slate-900 border-b border-slate-800 text-white px-3 sm:px-6 py-2.5 shadow-md sticky top-0 z-40 backdrop-blur-md">
+          <div className="max-w-[1750px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Left Brand Identity */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-blue-500/20">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow-md shadow-blue-500/20 shrink-0">
                 TX
               </div>
               <div>
@@ -299,27 +307,58 @@ export default function App() {
                     TRAVELX <span className="text-blue-400">STAFF OPERATIONS DESK</span>
                   </h1>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                    Staff Ops
+                    Staff Mode
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 font-medium">
-                  Live Agent Inquiries • Passports & Availability Verification
+                  Live Inquiries Desk & B2B Rates Portal
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            {/* Center: The ONLY 2 Tabs for Staff */}
+            <div className="flex items-center bg-slate-950/90 p-1 rounded-xl border border-slate-800 shadow-inner self-start sm:self-center">
               <button
                 type="button"
-                onClick={handleOpenAgentPortal}
-                className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                onClick={() => setStaffTab('requests')}
+                className={`px-4 py-2 rounded-lg text-xs font-black transition flex items-center space-x-2 cursor-pointer ${
+                  staffTab === 'requests'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
               >
-                🌐 Agent Portal
+                <span>📥</span>
+                <span>1. Booking Requests</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStaffTab('portal')}
+                className={`px-4 py-2 rounded-lg text-xs font-black transition flex items-center space-x-2 cursor-pointer ${
+                  staffTab === 'portal'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <span>🌐</span>
+                <span>2. B2B Agent Portal</span>
+              </button>
+            </div>
+
+            {/* Right Controls: Switch to Master Admin & Logout */}
+            <div className="flex items-center space-x-2 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={handleSwitchToAdmin}
+                className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                title="Switch to Master Admin Desk (PIN 7788)"
+              >
+                🔒 Admin Login
               </button>
               <button
                 type="button"
                 onClick={handleAdminLogout}
-                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition flex items-center space-x-1"
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition flex items-center space-x-1 cursor-pointer"
               >
                 <span>Logout</span>
               </button>
@@ -327,9 +366,18 @@ export default function App() {
           </div>
         </header>
 
-        {/* Main Staff Body - strictly Booking Requests Desk with vendor rates masked */}
-        <main className="flex-1 w-full mx-auto max-w-full px-1.5 sm:px-2.5 py-1.5">
-          <BookingRequestsDesk isStaffMode={true} />
+        {/* Main Staff Body - strictly Tab 1 (Booking Requests) or Tab 2 (B2B Agent Portal) */}
+        <main className="flex-1 w-full mx-auto max-w-full">
+          <div style={{ display: staffTab === 'requests' ? 'block' : 'none' }}>
+            <BookingRequestsDesk 
+              isStaffMode={true} 
+              onSwitchToEnquiries={() => setStaffTab('requests')}
+            />
+          </div>
+
+          <div style={{ display: staffTab === 'portal' ? 'block' : 'none' }}>
+            <AgentPortal isStaffEmbedded={true} />
+          </div>
         </main>
       </div>
     );
