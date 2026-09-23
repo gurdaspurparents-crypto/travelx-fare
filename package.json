@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "description": "Smart Manual Input + Automatic Fare Comparison System for Travelx",
   "main": "server/index.js",
+  "engines": {
+    "node": ">=20.0.0 <23.0.0"
+  },
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node --max-old-space-size=400 server/index.js",
     "build": "node -e \"console.log('Using pre-built client dist')\"",
     "build:local": "cd client && npm install && npm run build",
     "dev:client": "npm --prefix client run dev",

@@ -272,8 +272,8 @@ function initSchema() {
     insertSetting.run('auto_expiry_enabled', '1');
   } catch (e) {}
 
-  collapseDuplicateFares();
   wipeFaresOnce();
+  collapseDuplicateFares();
   seedMasterData();
   ensureAppSettingsDefaults();
 }
@@ -283,11 +283,13 @@ function wipeFaresOnce() {
   try {
     const existing = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(flag);
     if (existing) return;
-    db.exec('DELETE FROM published_specials; DELETE FROM fare_history; DELETE FROM fares;');
-    db.prepare(`
-      INSERT INTO app_settings (key, value, updated_at)
-      VALUES (?, '1', datetime('now', 'localtime'))
-    `).run(flag);
+    db.exec(`
+      DELETE FROM published_specials;
+      DELETE FROM fare_history;
+      DELETE FROM fares;
+      INSERT OR REPLACE INTO app_settings (key, value, updated_at)
+      VALUES ('${flag}', '1', datetime('now', 'localtime'));
+    `);
     try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
     console.log('Cleared all saved fares for a clean start');
   } catch (e) {
@@ -297,25 +299,16 @@ function wipeFaresOnce() {
 
 function collapseDuplicateFares() {
   try {
-    db.prepare(`UPDATE fares SET cabin = UPPER(TRIM(cabin)) WHERE cabin IS NOT NULL`).run();
-    db.prepare(`UPDATE fares SET cabin = 'ECONOMY' WHERE cabin IS NULL OR TRIM(cabin) = ''`).run();
-    const dupes = db.prepare(`
-      SELECT id FROM fares
+    db.exec(`
+      UPDATE fares SET cabin = 'ECONOMY' WHERE cabin IS NULL OR TRIM(cabin) = '';
+      DELETE FROM fares
       WHERE id NOT IN (
         SELECT MAX(id) FROM fares
         GROUP BY vendor_id, airline_code, origin, destination, travel_date, cabin
-      )
-    `).all();
-    const removeOne = db.prepare('DELETE FROM fares WHERE id = ?');
-    for (const row of dupes) removeOne.run(row.id);
-    const removed = { changes: dupes.length };
-    db.exec(`
+      );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_fares_identity
-      ON fares (vendor_id, airline_code, origin, destination, travel_date, cabin)
+      ON fares (vendor_id, airline_code, origin, destination, travel_date, cabin);
     `);
-    if (removed.changes) {
-      console.log(`Removed ${removed.changes} duplicate fare row(s)`);
-    }
   } catch (e) {
     console.warn('Duplicate fare cleanup note:', e.message);
   }
@@ -531,8 +524,9 @@ function seedMasterData() {
       { min: 22001, max: 99999999, add: 500, label: '22001+: Add 500' }
     ];
 
+    const findVendorByName = db.prepare("SELECT id FROM vendors WHERE name = ? COLLATE NOCASE");
     for (const vName of gulfVendorNames) {
-      const vRec = db.prepare("SELECT id FROM vendors WHERE name = ? COLLATE NOCASE").get(vName);
+      const vRec = findVendorByName.get(vName);
       const vId = vRec ? vRec.id : null;
       for (const sec of gulfSectors) {
         for (const slab of slabs) {
@@ -572,11 +566,13 @@ function seedMasterData() {
         min_fare, max_fare, adjustment_type, adjustment_amount, priority, is_active, description
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
     `);
+    const countVendorRules = db.prepare("SELECT COUNT(*) as count FROM vendor_pricing_rules WHERE vendor_name = ? COLLATE NOCASE");
+    const findVendorByName = db.prepare("SELECT id FROM vendors WHERE name = ? COLLATE NOCASE");
 
     for (const vName of gulfVendorNames) {
-      const existing = db.prepare("SELECT COUNT(*) as count FROM vendor_pricing_rules WHERE vendor_name = ? COLLATE NOCASE").get(vName);
+      const existing = countVendorRules.get(vName);
       if (existing.count === 0) {
-        const vRec = db.prepare("SELECT id FROM vendors WHERE name = ? COLLATE NOCASE").get(vName);
+        const vRec = findVendorByName.get(vName);
         const vId = vRec ? vRec.id : null;
         for (const sec of gulfSectors) {
           for (const slab of slabs) {
