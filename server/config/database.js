@@ -404,7 +404,49 @@ function seedMasterData() {
     }
   }
 
-  // Vendors are managed by user (auto-seed removed)
+  // Seed initial vendors if missing
+  const initialVendors = [
+    'MMT',
+    'Monga',
+    'Kandhari',
+    'Ghai',
+    'Air IQ',
+    'Bittu',
+    'Akbar',
+    'MTC',
+    'Speed',
+    'Bipasha',
+    'Mayank'
+  ];
+  const findVendorCaseInsensitive = db.prepare('SELECT id FROM vendors WHERE name = ? COLLATE NOCASE');
+  const insertVendor = db.prepare('INSERT INTO vendors (name, phone, email, notes, is_active) VALUES (?, ?, ?, ?, 1)');
+  for (const vName of initialVendors) {
+    if (!findVendorCaseInsensitive.get(vName)) {
+      insertVendor.run(vName, '', '', '');
+    }
+  }
+
+  // Deduplicate and normalize Air IQ if multiple case variants exist
+  try {
+    const airIqRows = db.prepare("SELECT id, name FROM vendors WHERE name = 'Air IQ' OR name = 'AIr IQ'").all();
+    if (airIqRows.length > 1) {
+      const canonical = airIqRows[0];
+      const dup = airIqRows[1];
+      db.prepare("UPDATE fares SET vendor_id = ? WHERE vendor_id = ?").run(canonical.id, dup.id);
+      db.prepare("UPDATE vendor_pricing_rules SET vendor_id = ? WHERE vendor_id = ?").run(canonical.id, dup.id);
+      db.prepare("DELETE FROM vendors WHERE id = ?").run(dup.id);
+      db.prepare("UPDATE vendors SET name = 'Air IQ' WHERE id = ?").run(canonical.id);
+    }
+  } catch (_) {}
+
+  // Update vendor_id in vendor_pricing_rules if it was null
+  try {
+    db.exec(`
+      UPDATE vendor_pricing_rules 
+      SET vendor_id = (SELECT id FROM vendors WHERE vendors.name = vendor_pricing_rules.vendor_name COLLATE NOCASE)
+      WHERE vendor_id IS NULL;
+    `);
+  } catch (_) {}
 
 
   // Seed initial routes if empty
