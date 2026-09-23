@@ -160,7 +160,7 @@ exports.generateWhatsAppMessage = (req, res) => {
 
 const fs = require('fs');
 const path = require('path');
-const ExcelJS = require(path.resolve(__dirname, '../../client/node_modules/exceljs'));
+const ExcelJS = require('exceljs');
 
 const corporateHeaderNavy = {
   type: 'pattern',
