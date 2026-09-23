@@ -675,7 +675,9 @@ exports.saveBulkParsedFares = (req, res) => {
   });
 
   try {
+    const started = Date.now();
     bulkTx();
+    console.log(`bulk-save vendor=${vendor_id} rows=${fares.length} saved=${results.length} ms=${Date.now() - started}`);
 
     const createdCount = results.filter(r => r.status === 'CREATED').length;
     const updatedCount = results.filter(r => r.status === 'UPDATED_WITH_HISTORY' || r.status === 'DUPLICATE_AFFIRMED').length;

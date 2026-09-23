@@ -1,5 +1,28 @@
 const db = require('../config/database');
 
+let vendorRuleCache = { at: 0, rules: [] };
+const vendorNameCache = new Map();
+
+function loadVendorRules() {
+  const now = Date.now();
+  if (!vendorRuleCache.rules.length || now - vendorRuleCache.at > 20000) {
+    vendorRuleCache = {
+      at: now,
+      rules: db.prepare(`SELECT * FROM vendor_pricing_rules WHERE is_active = 1`).all()
+    };
+  }
+  return vendorRuleCache.rules;
+}
+
+function lookupVendorName(vendor_id) {
+  if (!vendor_id) return null;
+  if (vendorNameCache.has(vendor_id)) return vendorNameCache.get(vendor_id);
+  const v = db.prepare('SELECT name FROM vendors WHERE id = ?').get(vendor_id);
+  const name = v ? v.name : null;
+  vendorNameCache.set(vendor_id, name);
+  return name;
+}
+
 /**
  * Normalizes airport code aliases so MXP/MIL and FCO/ROM match rules seamlessly
  */
@@ -36,28 +59,19 @@ function evaluateVendorAdjustment({ vendor_id, vendor_name = null, airline_code 
 
   // Resolve vendor name if not provided
   let vName = vendor_name;
-  if (!vName && vendor_id) {
-    const v = db.prepare('SELECT name FROM vendors WHERE id = ?').get(vendor_id);
-    if (v) vName = v.name;
-  }
+  if (!vName && vendor_id) vName = lookupVendorName(vendor_id);
 
   const origList = getAirportAliases(origin);
   const destList = getAirportAliases(destination);
   const airlineUpper = airline_code ? String(airline_code).trim().toUpperCase() : null;
+  const vendorIdNum = vendor_id == null ? null : Number(vendor_id);
 
-  // Query active rules that could match this vendor
-  let query = `
-    SELECT * FROM vendor_pricing_rules
-    WHERE is_active = 1
-      AND (
-        (vendor_id IS NOT NULL AND vendor_id = ?)
-        OR (? IS NOT NULL AND vendor_name = ? COLLATE NOCASE)
-      )
-      AND (min_fare <= ? AND max_fare >= ?)
-  `;
-  const params = [vendor_id, vName, vName, fare, fare];
-
-  const candidateRules = db.prepare(query).all(...params);
+  const candidateRules = loadVendorRules().filter((r) => {
+    if (!(Number(r.min_fare) <= fare && Number(r.max_fare) >= fare)) return false;
+    const idMatch = r.vendor_id != null && Number(r.vendor_id) === vendorIdNum;
+    const nameMatch = vName && r.vendor_name && String(r.vendor_name).toLowerCase() === String(vName).toLowerCase();
+    return idMatch || nameMatch;
+  });
 
   // Filter candidates by airline and sector matching aliases
   let matchedRule = null;

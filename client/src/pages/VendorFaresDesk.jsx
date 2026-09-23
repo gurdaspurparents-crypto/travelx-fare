@@ -340,6 +340,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
         }
       } else {
         setStatus({ type: 'error', text: res.error || 'Failed to save fares.' });
+        if (res.partial_saved > 0) loadActiveVendorFares(selectedVendorId);
       }
     } catch (err) {
       setStatus({ type: 'error', text: 'Error saving fares to database.' });
@@ -382,6 +383,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
       } else {
         const errorMsg = res.error || (res.errors && res.errors[0]?.error) || 'Failed to save fares: 0 records saved.';
         setStatus({ type: 'error', text: errorMsg });
+        if (res.partial_saved > 0) loadActiveVendorFares(selectedVendorId);
         return { success: false, error: errorMsg };
       }
     } catch (err) {

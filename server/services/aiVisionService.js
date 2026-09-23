@@ -2,7 +2,7 @@
  * AI Vision Extraction Service using OpenAI ChatGPT (GPT-4o-mini Vision) & Google Gemini Vision
  */
 
-const { parseDateString, normalizeAirlineCode } = require('./whatsappParser');
+const { parseDateString, normalizeAirlineCode, parseWhatsAppFareText } = require('./whatsappParser');
 
 const AIRLINE_CODE_MAP = {
   'air india express': 'IX',
@@ -157,8 +157,8 @@ function expandTravelDates(raw, year) {
   if (!text) return [];
 
   const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-  const range = text.match(/(\d{1,2})\s*([a-z]{3,9})\s*(?:to|–|-)\s*(\d{1,2})\s*([a-z]{3,9})?/i);
-  if (range && /\bto\b|–/i.test(text)) {
+  const range = text.match(/(\d{1,2})\s+([a-z]{3,9})\s+(?:to|till|thru|until|–|—|-)\s+(\d{1,2})\s*([a-z]{3,9})?/i);
+  if (range && Number(range[1]) <= 31 && Number(range[3]) <= 31) {
     const m1 = months[range[2].toLowerCase().slice(0, 3)];
     const m2 = months[(range[4] || range[2]).toLowerCase().slice(0, 3)];
     if (m1 !== undefined && m2 !== undefined) {
@@ -198,8 +198,30 @@ function parseModelPayload(rawText) {
     if (end > start) text = text.slice(start, end + 1);
   }
   const parsed = JSON.parse(text);
-  if (Array.isArray(parsed)) return parsed;
-  return parsed.records || parsed.fares || parsed.rows || parsed.data || [];
+  if (Array.isArray(parsed)) return { records: parsed, flyerText: '' };
+  const records = parsed.records || parsed.fares || parsed.rows || parsed.data || [];
+  const flyerText = String(parsed.flyer_text || parsed.transcript || parsed.text || parsed.raw_text || '').trim();
+  return { records: Array.isArray(records) ? records : [], flyerText };
+}
+
+function pickNumericFare(item) {
+  const candidates = [item.net_fare, item.fare, item.rate, item.price, item.amount, item.fare_amount];
+  for (const c of candidates) {
+    if (c && typeof c === 'object') {
+      const nested = parseFloat(String(c.amount || c.value || c.net || '').replace(/[^0-9.]/g, ''));
+      if (!isNaN(nested) && nested > 500) return nested;
+    }
+    const n = parseFloat(String(c ?? '').replace(/[^0-9.]/g, ''));
+    if (!isNaN(n) && n > 500) return n;
+  }
+  return NaN;
+}
+
+function dateSourceFromItem(item) {
+  const direct = item.travel_date || item.date || item.dates || item.date_label || item.date_text || item.date_range || item.travel_dates || item.period || '';
+  if (Array.isArray(direct)) return direct.join(', ');
+  if (direct && typeof direct === 'object') return String(direct.text || direct.label || direct.value || '');
+  return String(direct || '');
 }
 
 function standardizeAIRecords(rawRecords = [], defaults = {}) {
@@ -207,8 +229,16 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
   const cleaned = [];
 
   for (const item of rawRecords) {
-    let origin = (item.origin || defaults.origin || defaults.defaultOrigin || 'ATQ').toUpperCase().trim();
-    let destination = (item.destination || defaults.destination || defaults.defaultDestination || 'DXB').toUpperCase().trim();
+    let routeOrigin = '';
+    let routeDest = '';
+    const routeBlob = String(item.route || item.sector || '');
+    const routePair = routeBlob.toUpperCase().match(/\b([A-Z]{3})\b[\s\-\/→>]+(?:TO[\s]+)?\b([A-Z]{3})\b/);
+    if (routePair) {
+      routeOrigin = routePair[1];
+      routeDest = routePair[2];
+    }
+    let origin = (item.origin || routeOrigin || defaults.origin || defaults.defaultOrigin || 'ATQ').toUpperCase().trim();
+    let destination = (item.destination || routeDest || defaults.destination || defaults.defaultDestination || 'DXB').toUpperCase().trim();
     
     // Clean airline code using normalizeAirlineCode (never slices raw string into invalid code like "IN")
     const rawAirline = item.airline_code || item.airline || defaults.airline || defaults.defaultAirline || 'AI';
@@ -224,8 +254,8 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
     if (origin === 'FCO') origin = 'ROM';
     if (destination === 'FCO') destination = 'ROM';
 
-    const dateSource = item.travel_date || item.date || item.dates || item.date_label || '';
-    const fare = parseFloat(String(item.net_fare || item.fare || item.rate || '').replace(/[^0-9.]/g, ''));
+    const dateSource = dateSourceFromItem(item);
+    const fare = pickNumericFare(item);
     const dates = expandTravelDates(dateSource, currentYear);
 
     if (dates.length && !isNaN(fare) && fare > 500) {
@@ -262,6 +292,61 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
     return (a.travel_date || '').localeCompare(b.travel_date || '');
   });
   return cleaned;
+}
+
+function asVisionRecord(row) {
+  return {
+    origin: String(row.origin || 'ATQ').toUpperCase().slice(0, 3),
+    destination: String(row.destination || 'DXB').toUpperCase().slice(0, 3),
+    airline_code: normalizeAirlineCode(row.airline_code, row.flight_number, row.airline_code || 'AI'),
+    flight_number: row.flight_number || '',
+    travel_date: row.travel_date,
+    net_fare: Number(row.net_fare),
+    currency: 'INR',
+    cabin: row.cabin || 'ECONOMY',
+    baggage: row.baggage || '30kg',
+    is_refundable: row.is_refundable || 'NON_REFUNDABLE',
+    remarks: row.remarks || 'AI Vision Extracted'
+  };
+}
+
+function unionVisionRecords(lists) {
+  const map = new Map();
+  for (const row of lists.flat()) {
+    if (!row || !row.travel_date || !(Number(row.net_fare) > 500)) continue;
+    const norm = asVisionRecord(row);
+    const key = `${norm.airline_code}|${norm.origin}|${norm.destination}|${norm.travel_date}`;
+    if (!map.has(key)) map.set(key, norm);
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const routeA = `${a.origin}-${a.destination}`;
+    const routeB = `${b.origin}-${b.destination}`;
+    if (routeA !== routeB) return routeA.localeCompare(routeB);
+    if (a.airline_code !== b.airline_code) return a.airline_code.localeCompare(b.airline_code);
+    return a.travel_date.localeCompare(b.travel_date);
+  });
+}
+
+function buildRecordsFromModelText(rawText, defaults = {}) {
+  let flyerText = '';
+  let rawRecords = [];
+  try {
+    const parsed = parseModelPayload(rawText);
+    flyerText = parsed.flyerText || '';
+    rawRecords = parsed.records || [];
+  } catch (_) {
+    flyerText = String(rawText || '');
+  }
+
+  const fromJson = standardizeAIRecords(rawRecords, defaults);
+  const textForParser = flyerText || (!fromJson.length ? String(rawText || '') : '');
+  let fromText = [];
+  if (textForParser && /\d/.test(textForParser) && /[a-z]/i.test(textForParser)) {
+    try {
+      fromText = parseWhatsAppFareText(textForParser, defaults).records || [];
+    } catch (_) {}
+  }
+  return unionVisionRecords([fromJson, fromText]);
 }
 
 const VISION_SYSTEM_PROMPT = `You are an expert AI flight data extractor for travel agents.
@@ -339,17 +424,20 @@ CRITICAL INSTRUCTIONS:
    - Extract clean numeric Net Fare (e.g. 9700 from "Rs 9700.00", 20800 from "₹20,800"). Ignore timing brackets like "(08.25 AM - 02.55 AM)" or seat labels like "AS - 1".
 7. Detect Baggage (e.g., "15kg", "30kg", "30 + 07 KG") and Refundability ("NON_REFUNDABLE" or "REFUNDABLE").
 
-Return ONLY a valid JSON object matching this schema:
+Return ONLY a valid JSON object matching this schema.
+Copy each table line into flyer_text exactly as printed (keep "20 SEP & 21 SEP" and "01 OCT TO 05 OCT" — do not expand them).
+Also put one records[] item per printed row, with date_text copied exactly and net_fare as a number.
 {
+  "flyer_text": "AIR INDIA EXPRESS\\nAMRITSAR DUBAI\\n20 SEP & 21 SEP 17000\\n01 OCT TO 05 OCT (ALL DATES) 18000",
   "records": [
     {
-      "origin": "AIP",
-      "destination": "NDC",
-      "airline_code": "S5",
-      "flight_number": "S5 235/186",
-      "travel_date": "2026-09-15",
-      "net_fare": 9700,
-      "baggage": "15kg",
+      "origin": "ATQ",
+      "destination": "DXB",
+      "airline_code": "IX",
+      "flight_number": "",
+      "date_text": "20 SEP & 21 SEP",
+      "net_fare": 17000,
+      "baggage": "30kg",
       "is_refundable": "NON_REFUNDABLE"
     },
     {
@@ -425,8 +513,10 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
     throw new Error('No content received from ChatGPT.');
   }
 
-  const parsed = JSON.parse(rawContent);
-  const records = standardizeAIRecords(parsed.records || [], defaults);
+  const records = buildRecordsFromModelText(rawContent, defaults);
+  if (!records.length) {
+    throw new Error('Image padh li gayi lekin date/fare match nahi hua. Flyer clear karke dubara scan karein.');
+  }
 
   return {
     success: true,
@@ -434,7 +524,7 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
     model: 'gpt-4o-mini',
     records,
     count: records.length,
-    rawText: JSON.stringify(parsed, null, 2)
+    rawText: rawContent
   };
 }
 
@@ -442,8 +532,8 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
  * Dynamically find the best active Gemini model for the user's API Key
  */
 function getGeminiCandidateModels() {
-  // Fixed fast models only. Listing every account model made scans try 5–10 APIs in a row.
-  return ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  // Two fast models. A third slow retry pushed the request past Render's gateway timeout.
+  return ['gemini-2.0-flash', 'gemini-2.5-flash'];
 }
 
 /**
@@ -462,14 +552,19 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
   const models = getGeminiCandidateModels();
 
   let lastError = null;
+  const startedAt = Date.now();
 
   for (const model of models) {
+    if (Date.now() - startedAt > 50000) break;
+    const abort = new AbortController();
+    const abortTimer = setTimeout(() => abort.abort(), 28000);
     try {
       console.log(`🚀 Scanning flyer with Gemini model: ${model}...`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
 
       const response = await fetch(url, {
         method: 'POST',
+        signal: abort.signal,
         headers: {
           'Content-Type': 'application/json'
         },
@@ -512,17 +607,9 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         continue;
       }
 
-      let rawRecords = [];
-      try {
-        rawRecords = parseModelPayload(rawText);
-      } catch (parseErr) {
-        console.warn(`⚠️ JSON parse failed for ${model}:`, parseErr.message);
-        lastError = new Error('Gemini ne image padhi lekin dates samajh nahi aayi. Flyer clear karke dubara scan karein.');
-        continue;
-      }
-      const records = standardizeAIRecords(rawRecords, defaults);
+      const records = buildRecordsFromModelText(rawText, defaults);
       if (!records.length) {
-        lastError = new Error(`Gemini ne ${rawRecords.length} row dekhi lekin date/fare match nahi hua. Image thodi zoom karke dubara scan karein.`);
+        lastError = new Error('Gemini ne image padhi lekin date/fare match nahi hua. Image thodi zoom karke dubara scan karein.');
         continue;
       }
 
@@ -537,9 +624,14 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         rawText
       };
     } catch (err) {
-      lastError = err;
+      const timedOut = err && (err.name === 'AbortError' || String(err.message || '').includes('aborted'));
+      lastError = timedOut
+        ? new Error('Gemini response time se bahar chala gaya. Dubara scan karein.')
+        : err;
       console.warn(`❌ Exception with model ${model}:`, err.message);
       continue;
+    } finally {
+      clearTimeout(abortTimer);
     }
   }
 
@@ -548,5 +640,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
 
 module.exports = {
   parseImageWithOpenAI,
-  parseImageWithGemini
+  parseImageWithGemini,
+  buildRecordsFromModelText,
+  expandTravelDates
 };

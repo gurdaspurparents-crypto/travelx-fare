@@ -1,5 +1,21 @@
 const db = require('../config/database');
 
+let cachedMarginRules = null;
+let cachedMarginRulesAt = 0;
+
+function loadActiveMarginRules() {
+  const now = Date.now();
+  if (!cachedMarginRules || now - cachedMarginRulesAt > 20000) {
+    cachedMarginRules = db.prepare(`
+      SELECT * FROM margin_rules
+      WHERE is_active = 1
+      ORDER BY priority DESC, id ASC
+    `).all();
+    cachedMarginRulesAt = now;
+  }
+  return cachedMarginRules;
+}
+
 /**
  * Normalizes airport code aliases so MXP/MIL and FCO/ROM match rules seamlessly
  */
@@ -41,13 +57,7 @@ function calculateMargin(netFare, airlineCode = null, origin = null, destination
     const destList = getAirportAliases(destination);
     const airlineUpper = airlineCode ? String(airlineCode).trim().toUpperCase() : null;
 
-    // Fetch active rules applicable for this fare range
-    const candidateRules = db.prepare(`
-      SELECT * FROM margin_rules
-      WHERE is_active = 1
-        AND min_fare <= ? AND max_fare >= ?
-      ORDER BY priority DESC, id ASC
-    `).all(fare, fare);
+    const candidateRules = loadActiveMarginRules().filter((r) => r.min_fare <= fare && r.max_fare >= fare);
 
     for (const r of candidateRules) {
       // Check airline filter

@@ -19,9 +19,9 @@ function withAdminAuthHeaders(url, options = {}) {
   return { ...options, headers };
 }
 
-const BULK_CHUNK_SIZE = 25;
+const BULK_CHUNK_SIZE = 250;
 
-async function safeFetch(url, options = {}, retries = 2, timeoutMs = 120000) {
+async function safeFetch(url, options = {}, retries = 2, timeoutMs = 120000, retryOnAbort = true) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
@@ -32,7 +32,7 @@ async function safeFetch(url, options = {}, retries = 2, timeoutMs = 120000) {
     if ((res.status === 502 || res.status === 503 || res.status === 504) && retries > 0) {
       console.warn(`Server waking up (${res.status}). Retrying in 4s... (${retries} attempts left)`);
       await new Promise(r => setTimeout(r, 4000));
-      return safeFetch(url, options, retries - 1, timeoutMs);
+      return safeFetch(url, options, retries - 1, timeoutMs, retryOnAbort);
     }
 
     const text = await res.text();
@@ -52,10 +52,11 @@ async function safeFetch(url, options = {}, retries = 2, timeoutMs = 120000) {
       };
     }
   } catch (err) {
-    if (retries > 0) {
+    const abortedNow = err && (err.name === 'AbortError' || String(err.message || '').includes('aborted'));
+    if (retries > 0 && (retryOnAbort || !abortedNow)) {
       console.warn('Network connection interrupted, retrying in 2.5s...', err.message);
       await new Promise(r => setTimeout(r, 2500));
-      return safeFetch(url, options, retries - 1, timeoutMs);
+      return safeFetch(url, options, retries - 1, timeoutMs, retryOnAbort);
     }
     const aborted = err && (err.name === 'AbortError' || String(err.message || '').includes('aborted'));
     const refused = String(err.message || '').includes('Failed to fetch');
@@ -158,7 +159,7 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageBase64, provider, apiKey, defaults })
-    }, 2, 180000);
+    }, 1, 70000, false);
   },
 
   syncVendorInventory: async (vendor_id, fares, replace_mode = 'sector') => {
@@ -186,7 +187,7 @@ export const api = {
           skip_inventory_sync: skipSync,
           summary_only: true
         })
-      }, 4, 180000);
+      }, 1, 35000, false);
 
     if (fares.length <= BULK_CHUNK_SIZE) {
       return safeFetch('/api/fares/bulk-save', {
@@ -200,7 +201,7 @@ export const api = {
           skip_inventory_sync: false,
           summary_only: fares.length > 15
         })
-      }, 4, 180000);
+      }, 1, 35000, false);
     }
 
     const totalChunks = Math.ceil(fares.length / BULK_CHUNK_SIZE);
@@ -215,10 +216,11 @@ export const api = {
       }
       const res = await postChunk(chunk, true);
       if (!res?.success) {
+        const savedNote = savedTotal > 0 ? ` ${savedTotal} fares pehle save ho chuke hain — dubara Save dabane se baaki add ho jayenge.` : '';
         return {
           ...res,
           partial_saved: savedTotal,
-          error: res?.error || `Batch ${i + 1}/${totalChunks} save failed`
+          error: `${res?.error || `Batch ${i + 1}/${totalChunks} save failed`}${savedNote}`
         };
       }
       savedTotal += res.saved_count || 0;

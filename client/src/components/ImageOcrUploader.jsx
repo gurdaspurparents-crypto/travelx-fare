@@ -111,6 +111,7 @@ export default function ImageOcrUploader({
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanResult, setScanResult] = useState(null);
+  const [extractError, setExtractError] = useState('');
   const [status, setStatus] = useState(null);
   const [isRawTextOpen, setIsRawTextOpen] = useState(false);
   const [rawTextEdit, setRawTextEdit] = useState('');
@@ -209,7 +210,7 @@ export default function ImageOcrUploader({
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
-        const maxW = 1280;
+        const maxW = 1600;
         const scale = img.width > maxW ? maxW / img.width : 1;
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -217,7 +218,7 @@ export default function ImageOcrUploader({
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.72));
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
@@ -250,12 +251,23 @@ export default function ImageOcrUploader({
         throw new Error('KEY_REQUIRED_GEMINI');
       }
       const base64Data = await compressImageForScan(file);
-      const result = await api.parseImageWithAI({
+      let result = await api.parseImageWithAI({
         imageBase64: base64Data,
         provider: 'gemini',
         apiKey: effectiveKey,
         defaults
       });
+      if (!result?.success || !Array.isArray(result.records) || result.records.length === 0) {
+        const ocr = await parseImageFares(file, defaults);
+        if (ocr?.records?.length) {
+          result = { ...ocr, success: true, provider: 'ocr-fallback' };
+        } else if (result && !result.success) {
+          result = {
+            ...result,
+            error: `${result.error || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` Local OCR: ${ocr.error}` : ''}`
+          };
+        }
+      }
       return result;
     } else {
       // Local Browser OCR (Tesseract)
@@ -335,6 +347,7 @@ export default function ImageOcrUploader({
     setScanning(true);
     setScanProgress(8);
     setStatus(null);
+    setExtractError('');
     const progressTimer = setInterval(() => {
       setScanProgress((p) => (p < 88 ? p + 2 : p));
     }, 1200);
@@ -453,11 +466,13 @@ export default function ImageOcrUploader({
           text: statusText
         });
       } else {
+        const failText = failedFlyers.length
+          ? `Rates nahi nikle. ${failedFlyers.join(' | ')}`
+          : 'Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.';
+        setExtractError(failText);
         setStatus({
           type: 'error',
-          text: failedFlyers.length
-            ? `Rates nahi nikle. ${failedFlyers.join(' | ')}`
-            : 'Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.'
+          text: failText
         });
       }
     } catch (err) {
@@ -1509,6 +1524,11 @@ Instructions:
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
                     Neeche button par click karein — Google Gemini flyer se sabhi <strong>100+ dates aur fares</strong> nikal kar is table mein daal dega!
                   </p>
+                  {extractError && (
+                    <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 max-w-md mx-auto text-left">
+                      {extractError}
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
