@@ -8,12 +8,17 @@ export default function FastEntry({ masterData, onFareAdded }) {
 
   // Initialize sticky fields from localStorage or sensible defaults
   const [formData, setFormData] = useState(() => {
+    let savedVendorId = '';
+    try {
+      savedVendorId = localStorage.getItem('travelx_active_vendor_id') || '';
+    } catch (_) {}
+
     const saved = localStorage.getItem('travelx_fast_entry_sticky');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         return {
-          vendor_id: parsed.vendor_id || (vendors[0]?.id || 1),
+          vendor_id: savedVendorId || parsed.vendor_id || (vendors[0]?.id || 1),
           airline_code: parsed.airline_code || (airlines[0]?.code || 'AI'),
           origin: parsed.origin || 'ATQ',
           destination: parsed.destination || 'DXB',
@@ -31,7 +36,7 @@ export default function FastEntry({ masterData, onFareAdded }) {
       } catch (e) {}
     }
     return {
-      vendor_id: vendors[0]?.id || 1,
+      vendor_id: savedVendorId || (vendors[0]?.id || 1),
       airline_code: airlines[0]?.code || 'AI',
       origin: 'ATQ',
       destination: 'DXB',
@@ -76,6 +81,11 @@ export default function FastEntry({ masterData, onFareAdded }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'vendor_id' && value) {
+      try {
+        localStorage.setItem('travelx_active_vendor_id', String(value));
+      } catch (_) {}
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 

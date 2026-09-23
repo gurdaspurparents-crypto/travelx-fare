@@ -18,8 +18,14 @@ export default function ExcelImportModal({
 
   const { vendors = [], airlines = [] } = masterData;
 
-  // Selected Vendor - start empty so user explicitly selects vendor before updating
-  const [selectedVendorId, setSelectedVendorId] = useState('');
+  // Selected Vendor
+  const [selectedVendorId, setSelectedVendorId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('travelx_active_vendor_id');
+      if (saved) return saved;
+    } catch (_) {}
+    return '';
+  });
   const [isAddingVendor, setIsAddingVendor] = useState(false);
   const [newVendorName, setNewVendorName] = useState('');
   const [newVendorPhone, setNewVendorPhone] = useState('');
@@ -50,12 +56,21 @@ export default function ExcelImportModal({
     }
   }, [parsedResult]);
 
-  // Set default vendor if available
+  // Set default vendor if available from active selection or fallback
   useEffect(() => {
     if (vendors.length > 0 && !selectedVendorId) {
-      setSelectedVendorId(vendors[0].id);
+      let saved = '';
+      try {
+        saved = localStorage.getItem('travelx_active_vendor_id') || '';
+      } catch (_) {}
+      const exists = vendors.some(v => String(v.id) === String(saved));
+      if (saved && exists) {
+        setSelectedVendorId(saved);
+      } else if (vendors[0]?.id) {
+        setSelectedVendorId(vendors[0].id);
+      }
     }
-  }, [vendors]);
+  }, [vendors, selectedVendorId]);
 
   // Handle adding new vendor inline
   const handleCreateNewVendor = async (e) => {

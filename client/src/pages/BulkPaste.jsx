@@ -9,7 +9,20 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
   const { airlines = [], vendors = [], routes = [] } = masterData;
 
   const [rawText, setRawText] = useState('');
-  const [vendorId, setVendorId] = useState(vendors[0]?.id || 1);
+  const [vendorId, setVendorId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('travelx_active_vendor_id');
+      if (saved) return saved;
+    } catch (_) {}
+    return vendors[0]?.id || 1;
+  });
+
+  const handleSelectVendor = (vId) => {
+    setVendorId(vId);
+    try {
+      if (vId) localStorage.setItem('travelx_active_vendor_id', String(vId));
+    } catch (_) {}
+  };
   const [parsedData, setParsedData] = useState(null);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [parsedExcelResult, setParsedExcelResult] = useState(null);
@@ -236,7 +249,7 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
             </label>
             <select
               value={vendorId}
-              onChange={(e) => setVendorId(e.target.value)}
+              onChange={(e) => handleSelectVendor(e.target.value)}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-900"
             >
               {vendors.length === 0 ? (

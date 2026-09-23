@@ -467,14 +467,14 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'vendor-heads' && (
+        <div style={{ display: activeTab === 'vendor-heads' ? 'block' : 'none' }}>
           <VendorFaresDesk
             masterData={masterData}
             onFaresSaved={handleRatesChanged}
             setActiveTab={setActiveTab}
             faresRefreshKey={faresRefreshKey}
           />
-        )}
+        </div>
 
         {activeTab === 'fast-entry' && (
           <FastEntry

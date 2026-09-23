@@ -11,7 +11,23 @@ import ExcelImportModal from '../components/ExcelImportModal';
 export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
   const { airlines = [], vendors = [], routes = [] } = masterData;
 
-  const [vendorId, setVendorId] = useState(vendors[0]?.id || '');
+  const [vendorId, setVendorId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('travelx_active_vendor_id');
+      if (saved) return saved;
+    } catch (_) {}
+    return vendors[0]?.id || '';
+  });
+
+  const handleSelectVendor = (vId) => {
+    if (!vId) return;
+    const idStr = String(vId);
+    setVendorId(idStr);
+    try {
+      localStorage.setItem('travelx_active_vendor_id', idStr);
+    } catch (_) {}
+  };
+
   const [airlineCode, setAirlineCode] = useState(airlines[0]?.code || 'AI');
   const [origin, setOrigin] = useState('ATQ');
   const [destination, setDestination] = useState('DXB');
@@ -22,9 +38,16 @@ export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
   // Auto-sync vendorId and airlineCode when masterData loads
   useEffect(() => {
     if (vendors && vendors.length > 0) {
-      const exists = vendors.some(v => v.id === Number(vendorId));
-      if (!exists) {
-        setVendorId(vendors[0].id);
+      let saved = '';
+      try {
+        saved = localStorage.getItem('travelx_active_vendor_id') || '';
+      } catch (_) {}
+      const target = vendorId || saved;
+      const exists = vendors.some(v => String(v.id) === String(target));
+      if (exists) {
+        if (String(vendorId) !== String(target)) setVendorId(String(target));
+      } else if (vendors[0]?.id) {
+        setVendorId(String(vendors[0].id));
       }
     }
   }, [vendors, vendorId]);
@@ -531,7 +554,7 @@ export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
                   <button
                     key={v.id}
                     type="button"
-                    onClick={() => setVendorId(v.id)}
+                    onClick={() => handleSelectVendor(v.id)}
                     className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
                       isSelected
                         ? 'bg-slate-900 text-white shadow-xs ring-2 ring-emerald-500'
@@ -552,7 +575,7 @@ export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
             <label className="block text-xs font-bold text-slate-700 mb-1">Vendor *</label>
             <select
               value={vendorId}
-              onChange={(e) => setVendorId(e.target.value)}
+              onChange={(e) => handleSelectVendor(e.target.value)}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900"
             >
               {vendors.length === 0 ? (

@@ -27,7 +27,11 @@ export default function ClearRatesModal({
     if (isOpen) {
       setStatus(null);
       setLoading(false);
-      const initialVendor = defaultVendorId || (vendors.length > 0 ? String(vendors[0].id) : '');
+      let savedActiveVendor = '';
+      try {
+        savedActiveVendor = localStorage.getItem('travelx_active_vendor_id') || '';
+      } catch (_) {}
+      const initialVendor = defaultVendorId || savedActiveVendor || (vendors.length > 0 ? String(vendors[0].id) : '');
       setSelectedVendorId(initialVendor);
       if (defaultOrigin && defaultDestination) {
         setSelectedSector(`${defaultOrigin.toUpperCase()}-${defaultDestination.toUpperCase()}`);
@@ -36,12 +40,6 @@ export default function ClearRatesModal({
       }
       setVendorScope(initialScope || 'all');
       setMode('vendor'); // Default to vendor mode for safety
-      api.getDashboardStats()
-        .then((dash) => {
-          const fare = (dash?.recentFares || []).find((f) => f.vendor_id);
-          if (fare?.vendor_id) setSelectedVendorId(String(fare.vendor_id));
-        })
-        .catch(() => {});
 
       // Fetch overall system fares count for Full System Reset tab
       api.getDashboardStats()

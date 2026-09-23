@@ -274,9 +274,30 @@ function initSchema() {
   } catch (e) {}
 
   wipeFaresOnce();
+  removeSeededDummyFares();
   collapseDuplicateFares();
   seedMasterData();
   ensureAppSettingsDefaults();
+}
+
+function removeSeededDummyFares() {
+  try {
+    const del = db.prepare(`
+      DELETE FROM fares 
+      WHERE remarks IN (
+        'Series Direct Flight',
+        'SpiceJet Direct Saver',
+        'Direct Sharjah Express',
+        'IndiGo Non-Stop',
+        'Direct Abu Dhabi Special'
+      )
+    `).run();
+    if (del.changes > 0) {
+      console.log(`[Database] Removed ${del.changes} legacy dummy seed fares from Air IQ/default vendor.`);
+    }
+  } catch (e) {
+    console.warn('Dummy fares cleanup note:', e.message);
+  }
 }
 
 function wipeFaresOnce() {
@@ -662,13 +683,4 @@ function maybeDailyAutoBackup() {
 }
 
 module.exports = db;
-
-setImmediate(() => {
-  try {
-    const { seedRealisticFares } = require('./seedFares');
-    seedRealisticFares();
-  } catch (e) {
-    console.warn('Seed fares check skipped:', e.message);
-  }
-});
 

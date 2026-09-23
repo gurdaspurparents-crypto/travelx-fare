@@ -143,6 +143,9 @@ function seedRealisticFares() {
   }
 }
 
-seedRealisticFares();
+// Only seed mock fares if explicitly enabled via env var; NEVER pollute live vendor desks in production
+if (process.env.SEED_MOCK_FARES === 'true') {
+  seedRealisticFares();
+}
 
 module.exports = { seedRealisticFares };

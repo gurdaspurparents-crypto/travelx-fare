@@ -14,8 +14,24 @@ import ClearRatesModal from '../components/ClearRatesModal';
 export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActiveTab }) {
   const { vendors = [], airlines = [], routes = [] } = masterData;
 
-  // Selected Vendor Head
-  const [selectedVendorId, setSelectedVendorId] = useState(vendors[0]?.id || '');
+  // Selected Vendor Head (persisted in localStorage so it NEVER resets on tab switch or page refresh)
+  const [selectedVendorId, setSelectedVendorId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('travelx_active_vendor_id');
+      if (saved) return saved;
+    } catch (_) {}
+    return vendors[0]?.id ? String(vendors[0].id) : '';
+  });
+
+  const handleSelectVendor = (vId) => {
+    if (!vId) return;
+    const idStr = String(vId);
+    setSelectedVendorId(idStr);
+    try {
+      localStorage.setItem('travelx_active_vendor_id', idStr);
+    } catch (_) {}
+  };
+
   const [activeVendorTab, setActiveVendorTab] = useState('image'); // 'image' (Tareeqa 1), 'excel', 'grid', 'range', 'whatsapp', 'saved'
 
   // New Vendor creation modal / form
@@ -95,10 +111,29 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
   const [parsedWhatsApp, setParsedWhatsApp] = useState(null);
   const [whatsappParsing, setWhatsappParsing] = useState(false);
 
-  // Auto-select first vendor if none selected
+  // Keep active vendor synchronized with master vendors list without resetting user selection
   useEffect(() => {
-    if (vendors.length > 0 && !selectedVendorId) {
-      setSelectedVendorId(vendors[0].id);
+    if (vendors.length > 0) {
+      let savedId = '';
+      try {
+        savedId = localStorage.getItem('travelx_active_vendor_id') || '';
+      } catch (_) {}
+
+      const candidateId = selectedVendorId || savedId;
+      const exists = vendors.some(v => String(v.id) === String(candidateId));
+
+      if (exists) {
+        if (String(selectedVendorId) !== String(candidateId)) {
+          setSelectedVendorId(String(candidateId));
+        }
+      } else if (vendors[0]?.id) {
+        // Fallback only if no saved vendor exists or saved vendor was deleted
+        const fallback = String(vendors[0].id);
+        setSelectedVendorId(fallback);
+        try {
+          localStorage.setItem('travelx_active_vendor_id', fallback);
+        } catch (_) {}
+      }
     }
   }, [vendors, selectedVendorId]);
 
@@ -149,7 +184,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
         if (masterData.vendors) {
           masterData.vendors.push(res.vendor);
         }
-        setSelectedVendorId(res.vendor.id);
+        handleSelectVendor(res.vendor.id);
         setIsAddingVendor(false);
         setNewVendorName('');
         setNewVendorPhone('');
@@ -695,7 +730,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
               <button
                 key={v.id}
                 type="button"
-                onClick={() => setSelectedVendorId(v.id)}
+                onClick={() => handleSelectVendor(v.id)}
                 className={`group relative px-4 py-2.5 rounded-xl text-left transition-all flex items-center space-x-2.5 ${
                   isSelected
                     ? 'bg-slate-900 text-white shadow-md ring-2 ring-emerald-500 scale-[1.02]'
