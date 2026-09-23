@@ -661,3 +661,13 @@ function maybeDailyAutoBackup() {
 }
 
 module.exports = db;
+
+setImmediate(() => {
+  try {
+    const { seedRealisticFares } = require('./seedFares');
+    seedRealisticFares();
+  } catch (e) {
+    console.warn('Seed fares check skipped:', e.message);
+  }
+});
+
