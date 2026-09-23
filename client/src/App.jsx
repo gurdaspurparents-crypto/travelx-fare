@@ -79,6 +79,7 @@ export default function App() {
         setAdminUnlocked(true);
         setPinError(false);
         setPinInput('');
+        await loadMasters();
       } else {
         setPinError(true);
       }
@@ -119,8 +120,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadMasters();
-
     // Heartbeat ping every 8 minutes to keep backend warm while user has tab open
     const interval = setInterval(() => {
       api.getHealth().catch(() => {});
@@ -131,6 +130,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isAdminMode || !adminUnlocked) return;
+    loadMasters();
     api.verifyAdminSession().then((res) => {
       if (!res?.success) {
         localStorage.removeItem('travelx_admin_token');
