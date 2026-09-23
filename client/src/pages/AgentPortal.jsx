@@ -4009,29 +4009,9 @@ Please confirm availability and share status.`;
             <span>B2B Fixed Departure Special Air Fares Engine</span>
           </div>
 
-          {!isStaffEmbedded && (
-            <div className="flex items-center space-x-4 text-[11px]">
-              <span>Rates verified live</span>
-              <span>•</span>
-              <button
-                type="button"
-                onClick={() => onSwitchToStaff && onSwitchToStaff()}
-                className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
-              >
-                <Users className="w-3 h-3" />
-                <span>Staff Desk</span>
-              </button>
-              <span>•</span>
-              <button
-                type="button"
-                onClick={() => onSwitchToAdmin && onSwitchToAdmin()}
-                className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
-              >
-                <Lock className="w-3 h-3" />
-                <span>Admin Desk</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center space-x-4 text-[11px]">
+            <span>Rates verified live</span>
+          </div>
         </div>
       </footer>
 

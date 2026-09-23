@@ -153,7 +153,15 @@ app.get('/api/export/excel', exportController.exportToExcel);
 
 // Serve static frontend in production if built
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDist));
+app.use(express.static(clientDist, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 app.use((req, res, next) => {
   if (req.path.startsWith('/api')) {
@@ -162,6 +170,9 @@ app.use((req, res, next) => {
   const fs = require('fs');
   const indexHtml = path.join(clientDist, 'index.html');
   if (fs.existsSync(indexHtml)) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return res.sendFile(indexHtml);
   }
   res.send('Travelx API is running. Frontend dev server is running on port 5173.');
