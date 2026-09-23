@@ -21,7 +21,6 @@ const STMT_GET_EXISTING_FARE = db.prepare(`
     AND destination = ? 
     AND travel_date = ? 
     AND cabin = ?
-    AND (flight_number = ? OR (flight_number IS NULL AND ? = ''))
   LIMIT 1
 `);
 
@@ -119,9 +118,7 @@ function saveOrUpdateFareRecord(data, options = {}) {
     origin.toUpperCase(),
     destination.toUpperCase(),
     cleanTravelDate,
-    cabin,
-    flight_number,
-    flight_number
+    cabin
   );
 
   if (existing) {
@@ -949,9 +946,35 @@ exports.updateFare = (req, res) => {
 exports.deleteFare = (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM fares WHERE id = ?').run(id);
+    const fare = db.prepare('SELECT * FROM fares WHERE id = ?').get(id);
+    if (!fare) {
+      safeInvalidateFaresCache();
+      return res.json({ success: true, deleted_count: 0, message: 'Fare already deleted' });
+    }
+    const twins = db.prepare(`
+      SELECT id FROM fares
+      WHERE vendor_id = ?
+        AND airline_code = ?
+        AND origin = ?
+        AND destination = ?
+        AND travel_date = ?
+        AND COALESCE(cabin, 'ECONOMY') = ?
+    `).all(
+      fare.vendor_id,
+      fare.airline_code,
+      fare.origin,
+      fare.destination,
+      fare.travel_date,
+      fare.cabin || 'ECONOMY'
+    );
+    const ids = twins.map((row) => row.id);
+    if (ids.length) {
+      const placeholders = ids.map(() => '?').join(',');
+      db.prepare(`DELETE FROM fare_history WHERE fare_id IN (${placeholders})`).run(...ids);
+      db.prepare(`DELETE FROM fares WHERE id IN (${placeholders})`).run(...ids);
+    }
     safeInvalidateFaresCache();
-    return res.json({ success: true, message: 'Fare deleted successfully' });
+    return res.json({ success: true, deleted_count: ids.length, message: 'Fare deleted successfully' });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }

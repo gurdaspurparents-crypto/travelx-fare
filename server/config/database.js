@@ -272,8 +272,35 @@ function initSchema() {
     insertSetting.run('auto_expiry_enabled', '1');
   } catch (e) {}
 
+  collapseDuplicateFares();
   seedMasterData();
   ensureAppSettingsDefaults();
+}
+
+function collapseDuplicateFares() {
+  try {
+    db.prepare(`UPDATE fares SET cabin = UPPER(TRIM(cabin)) WHERE cabin IS NOT NULL`).run();
+    db.prepare(`UPDATE fares SET cabin = 'ECONOMY' WHERE cabin IS NULL OR TRIM(cabin) = ''`).run();
+    const dupes = db.prepare(`
+      SELECT id FROM fares
+      WHERE id NOT IN (
+        SELECT MAX(id) FROM fares
+        GROUP BY vendor_id, airline_code, origin, destination, travel_date, cabin
+      )
+    `).all();
+    const removeOne = db.prepare('DELETE FROM fares WHERE id = ?');
+    for (const row of dupes) removeOne.run(row.id);
+    const removed = { changes: dupes.length };
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_fares_identity
+      ON fares (vendor_id, airline_code, origin, destination, travel_date, cabin)
+    `);
+    if (removed.changes) {
+      console.log(`Removed ${removed.changes} duplicate fare row(s)`);
+    }
+  } catch (e) {
+    console.warn('Duplicate fare cleanup note:', e.message);
+  }
 }
 
 function ensureAppSettingsDefaults() {

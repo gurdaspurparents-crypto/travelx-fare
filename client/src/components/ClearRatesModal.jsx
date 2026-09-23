@@ -11,7 +11,7 @@ export default function ClearRatesModal({
   defaultVendorId = '',
   defaultOrigin = '',
   defaultDestination = '',
-  initialScope = 'today' // 'today' | 'all'
+  initialScope = 'all' // 'today' | 'all'
 }) {
   const [mode, setMode] = useState('vendor'); // 'vendor' | 'all'
   const [selectedVendorId, setSelectedVendorId] = useState('');
@@ -36,6 +36,12 @@ export default function ClearRatesModal({
       }
       setVendorScope(initialScope || 'all');
       setMode('vendor'); // Default to vendor mode for safety
+      api.getDashboardStats()
+        .then((dash) => {
+          const fare = (dash?.recentFares || []).find((f) => f.vendor_id);
+          if (fare?.vendor_id) setSelectedVendorId(String(fare.vendor_id));
+        })
+        .catch(() => {});
 
       // Fetch overall system fares count for Full System Reset tab
       api.getDashboardStats()
@@ -126,7 +132,7 @@ export default function ClearRatesModal({
           destination: selDest || undefined
         });
 
-        if (res.success) {
+        if (res.success && (res.deleted_count || 0) > 0) {
           const vName = selectedVendor ? selectedVendor.name : 'Selected vendor';
           const scopeLabel = isOnlyToday ? "today's updated rates" : "rates";
           const sectorLabel = selectedSector ? ` on sector ${selectedSector}` : '';
@@ -138,6 +144,11 @@ export default function ClearRatesModal({
           setTimeout(() => {
             onClose();
           }, 800);
+        } else if (res.success) {
+          setStatus({
+            type: 'error',
+            text: 'Is vendor pe koi fare nahi mila, isliye list same reh gayi. Jis vendor ke fares dikh rahe hain (jaise Ghai) usko select karke dubara delete karein.'
+          });
         } else {
           setStatus({ type: 'error', text: res.error || 'Failed to clear vendor fares.' });
         }

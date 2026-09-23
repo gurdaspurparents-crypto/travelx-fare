@@ -130,6 +130,23 @@ export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}
     }
   };
 
+  const handleDeleteFare = async (fare) => {
+    const label = `${fare.origin} → ${fare.destination} ${fare.airline_name || fare.airline_code} ₹${fare.net_fare}`;
+    if (!window.confirm(`Delete ${label}? Same duplicate row bhi hat jayegi.`)) return;
+    try {
+      const res = await api.deleteFare(fare.id);
+      if (res?.success) {
+        loadDashboard();
+        if (onRatesCleared) onRatesCleared();
+      } else {
+        alert(res?.error || 'Delete failed');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Delete failed');
+    }
+  };
+
   const handleClearAllFares = async () => {
     if (!window.confirm('⚠️ Are you sure you want to delete all fare records and history? (Airlines, Vendors, Routes will remain safe)')) {
       return;
@@ -374,12 +391,13 @@ export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}
                 <th className="px-4 py-2.5 text-center">Refundable</th>
                 <th className="px-4 py-2.5 text-center">Published</th>
                 <th className="px-4 py-2.5 text-right">Updated</th>
+                <th className="px-2 py-2.5 text-right"> </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredRecentFares.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan={10} className="px-4 py-6 text-center text-slate-400">
                     {data.recentFares.length > 0
                       ? 'No fares matching current dropdown filters. Click Reset to show all.'
                       : 'No fares entered yet today. Click "+ Add Fare" or "WhatsApp Paste" to get started.'}
@@ -430,6 +448,16 @@ export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-400 text-[11px] whitespace-nowrap">
                       {f.updated_at ? f.updated_at.split(' ')[1]?.slice(0, 5) || f.updated_at : ''}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFare(f)}
+                        className="p-1.5 rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
+                        title="Delete this fare"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))
