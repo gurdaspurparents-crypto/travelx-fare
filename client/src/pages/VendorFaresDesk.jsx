@@ -30,9 +30,21 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
   const [apiOnline, setApiOnline] = useState(true);
 
   useEffect(() => {
-    api.getHealth().then((h) => {
-      setApiOnline(h && h.status === 'online');
-    }).catch(() => setApiOnline(false));
+    let cancelled = false;
+    const check = async () => {
+      for (let i = 0; i < 3; i++) {
+        const h = await api.getHealth();
+        if (cancelled) return;
+        if (h && h.status === 'online') {
+          setApiOnline(true);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      if (!cancelled) setApiOnline(false);
+    };
+    check();
+    return () => { cancelled = true; };
   }, []);
   const [showClearModal, setShowClearModal] = useState(false);
 
@@ -715,8 +727,8 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
       </div>
 
       {!apiOnline && (
-        <div className="p-4 rounded-xl bg-rose-950 text-rose-100 border border-rose-700 text-xs font-bold">
-          Backend API offline — Save kaam nahi karega. Local: RESTART_TRAVELX.bat chalao. Live site: Render par service Restart + latest deploy.
+        <div className="p-4 rounded-xl bg-amber-50 text-amber-950 border border-amber-300 text-xs font-bold">
+          Server slow response de raha hai. Page refresh (Ctrl+F5) karke Save dubara try karein. Excel file loaded rehti hai — save rukne se data delete nahi hota.
         </div>
       )}
 

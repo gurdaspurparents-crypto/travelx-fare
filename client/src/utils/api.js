@@ -174,14 +174,6 @@ export const api = {
       return { success: false, error: 'No fare records to save' };
     }
 
-    const health = await safeFetch('/api/health', {}, 1, 15000);
-    if (!health || health.status !== 'online') {
-      return {
-        success: false,
-        error: 'Backend server offline lag raha hai. START_TRAVELX.bat chalao aur black CMD window minimize karke rakho.'
-      };
-    }
-
     const postChunk = (chunk, skipSync) =>
       safeFetch('/api/fares/bulk-save', {
         method: 'POST',
