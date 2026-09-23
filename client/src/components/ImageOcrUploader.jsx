@@ -251,6 +251,11 @@ export default function ImageOcrUploader({
         throw new Error('KEY_REQUIRED_GEMINI');
       }
       const base64Data = await compressImageForScan(file);
+      const ocrPromise = parseImageFares(file, defaults).catch((err) => ({
+        success: false,
+        records: [],
+        error: err?.message || 'Local OCR failed'
+      }));
       let result = await api.parseImageWithAI({
         imageBase64: base64Data,
         provider: 'gemini',
@@ -258,13 +263,14 @@ export default function ImageOcrUploader({
         defaults
       });
       if (!result?.success || !Array.isArray(result.records) || result.records.length === 0) {
-        const ocr = await parseImageFares(file, defaults);
+        const ocr = await ocrPromise;
         if (ocr?.records?.length) {
           result = { ...ocr, success: true, provider: 'ocr-fallback' };
-        } else if (result && !result.success) {
+        } else {
           result = {
-            ...result,
-            error: `${result.error || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` Local OCR: ${ocr.error}` : ''}`
+            success: false,
+            records: [],
+            error: `${result?.error || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` Local OCR: ${ocr.error}` : ' Local OCR ne bhi dates nahi padhi.'}`
           };
         }
       }
@@ -382,8 +388,8 @@ export default function ImageOcrUploader({
         });
 
         // Calculate progress percentage
-        const baseProgress = Math.round((i / totalCount) * 100);
-        setScanProgress(Math.max(5, baseProgress));
+        const baseProgress = Math.round(((i + 0.15) / totalCount) * 100);
+        setScanProgress((p) => Math.max(p, baseProgress));
 
         try {
           const result = await processSingleFile(file, engineToUse, defaults);
@@ -481,6 +487,7 @@ export default function ImageOcrUploader({
       if (msg.includes('no credits') || msg.includes('billing') || msg.includes('quota')) {
         msg = '⚠️ OpenAI Account Notice: Aapke OpenAI account mein balance/credits nahi hai ($0 balance). Solution: Upar "✨ Google Gemini Vision" select karein (yeh 100% Free hai bina kisi payment ke!) ya "📋 Copy Prompt for chatgpt.com" use karein.';
       }
+      setExtractError(msg);
       setStatus({ type: 'error', text: msg });
     } finally {
       clearInterval(progressTimer);

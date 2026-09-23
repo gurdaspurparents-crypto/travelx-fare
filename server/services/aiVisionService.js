@@ -532,8 +532,15 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
  * Dynamically find the best active Gemini model for the user's API Key
  */
 function getGeminiCandidateModels() {
-  // 2.0 / 2.5 flash are closed for new keys. Google's error names the replacement.
-  return ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  // 2.0 and 2.5 flash are closed for new keys and were overwriting a real 3.6 result.
+  return ['gemini-3.6-flash'];
+}
+
+function extractCandidateText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const visible = parts.filter((p) => p && p.text && p.thought !== true).map((p) => p.text);
+  if (visible.length) return visible.join('\n');
+  return parts.map((p) => p && p.text).filter(Boolean).join('\n');
 }
 
 function queueSuggestedModel(models, current, message) {
@@ -565,11 +572,13 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
 
   for (const model of models) {
     if (Date.now() - startedAt > 50000) break;
+    const plain = String(model).endsWith('#plain');
+    const modelId = plain ? String(model).slice(0, -6) : model;
     const abort = new AbortController();
-    const abortTimer = setTimeout(() => abort.abort(), 28000);
+    const abortTimer = setTimeout(() => abort.abort(), 45000);
     try {
-      console.log(`🚀 Scanning flyer with Gemini model: ${model}...`);
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      console.log(`🚀 Scanning flyer with Gemini model: ${modelId}...`);
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
 
       const response = await fetch(url, {
         method: 'POST',
@@ -591,11 +600,14 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
               ]
             }
           ],
-          generationConfig: {
-            response_mime_type: 'application/json',
-            temperature: 0.1,
-            maxOutputTokens: 8192
-          }
+          generationConfig: plain
+            ? { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 8192 }
+            : {
+                responseMimeType: 'application/json',
+                temperature: 0.1,
+                maxOutputTokens: 8192,
+                thinkingConfig: { thinkingLevel: 'MINIMAL' }
+              }
         })
       });
 
@@ -606,21 +618,28 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         const msg = errJson?.error?.message || `Gemini API Error (${response.status}): ${errText}`;
         lastError = new Error(msg);
         queueSuggestedModel(models, model, msg);
-        console.warn(`❌ Model ${model} failed (${response.status}): ${msg}`);
-        continue;
+        if (/thinking/i.test(msg) && !plain && !models.includes(`${modelId}#plain`)) {
+          models.splice(models.indexOf(model) + 1, 0, `${modelId}#plain`);
+        }
+        console.warn(`❌ Model ${modelId} failed (${response.status}): ${msg}`);
+        const retired = response.status === 404 || /no longer available|not found|is not supported/i.test(msg);
+        if (retired) continue;
+        break;
       }
 
       const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const rawText = extractCandidateText(data);
       if (!rawText) {
-        console.warn(`⚠️ No candidate text returned for ${model}, trying next...`);
-        continue;
+        const block = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason || 'empty';
+        lastError = new Error(`Gemini ne koi fare text nahi bheja (${block}).`);
+        console.warn(`⚠️ No candidate text returned for ${model}: ${block}`);
+        break;
       }
 
       const records = buildRecordsFromModelText(rawText, defaults);
       if (!records.length) {
         lastError = new Error('Gemini ne image padhi lekin date/fare match nahi hua. Image thodi zoom karke dubara scan karein.');
-        continue;
+        break;
       }
 
       console.log(`✅ Successfully extracted ${records.length} records using Gemini model: ${model}`);
