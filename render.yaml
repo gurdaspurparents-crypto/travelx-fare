@@ -3,12 +3,8 @@ services:
     name: travelx-fare
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build:local
+    buildCommand: npm install
     startCommand: npm start
-    disk:
-      name: travelx-sqlite-data
-      mountPath: /opt/render/project/src/server/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
