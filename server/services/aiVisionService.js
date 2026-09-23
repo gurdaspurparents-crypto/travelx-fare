@@ -531,13 +531,65 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
 /**
  * Dynamically find the best active Gemini model for the user's API Key
  */
-function getGeminiCandidateModels() {
-  // 2.0 and 2.5 flash are closed for new keys. 3.5 models are the backup when 3.6 is busy.
-  return ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+async function getGeminiCandidateModels(apiKey) {
+  const fallbackModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash-8b',
+    'gemini-3.6-flash',
+    'gemini-2.5-pro',
+    'gemini-1.5-pro'
+  ];
+
+  if (!apiKey) return fallbackModels;
+
+  try {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 6000);
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`, {
+      signal: abort.signal
+    });
+    clearTimeout(timer);
+
+    if (listRes.ok) {
+      const data = await listRes.json();
+      if (Array.isArray(data.models)) {
+        const available = data.models
+          .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''))
+          .filter(m => !m.includes('embedding') && !m.includes('aqa') && !m.includes('imagen') && !m.includes('bison'));
+
+        // Rank models: flash first, then lite, then others
+        const score = (name) => {
+          if (name === 'gemini-2.5-flash') return 120;
+          if (name === 'gemini-2.0-flash') return 110;
+          if (name === 'gemini-1.5-flash') return 100;
+          if (name.includes('flash') && !name.includes('lite') && !name.includes('8b')) return 95;
+          if (name.includes('flash-lite')) return 90;
+          if (name.includes('flash-8b')) return 85;
+          if (name.includes('pro')) return 60;
+          return 50;
+        };
+
+        const ranked = available.sort((a, b) => score(b) - score(a));
+
+        if (ranked.length > 0) {
+          console.log(`📡 Dynamically discovered ${ranked.length} Gemini models for user key:`, ranked.slice(0, 6).join(', '));
+          return ranked;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not auto-fetch Gemini models list:', e.message);
+  }
+
+  return fallbackModels;
 }
 
 function isGeminiCapacityError(status, message) {
-  return status === 429 || status === 503 || /high demand|try again later|unavailable|overloaded|resource exhausted|currently experiencing/i.test(String(message || ''));
+  return status === 429 || status === 503 || /high demand|try again later|unavailable|overloaded|resource exhausted|currently experiencing|quota/i.test(String(message || ''));
 }
 
 function extractCandidateText(data) {
@@ -557,7 +609,7 @@ function queueSuggestedModel(models, current, message) {
 }
 
 /**
- * Parse Image using Google Gemini Vision (Auto-discovers active model e.g. gemini-3.6-flash)
+ * Parse Image using Google Gemini Vision (Auto-discovers active models and falls back seamlessly)
  */
 async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
   if (!apiKey) {
@@ -569,20 +621,30 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
     ? imageBase64.slice(5, imageBase64.indexOf(';'))
     : 'image/jpeg';
 
-  const models = getGeminiCandidateModels();
+  const models = await getGeminiCandidateModels(apiKey);
 
   let lastError = null;
   const startedAt = Date.now();
 
   for (const model of models) {
-    if (Date.now() - startedAt > 62000) break;
+    if (Date.now() - startedAt > 58000) break;
     const plain = String(model).endsWith('#plain');
     const modelId = plain ? String(model).slice(0, -6) : model;
     const abort = new AbortController();
-    const abortTimer = setTimeout(() => abort.abort(), 22000);
+    const abortTimer = setTimeout(() => abort.abort(), 18000);
     try {
       console.log(`🚀 Scanning flyer with Gemini model: ${modelId}...`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
+
+      const genConfig = {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+        maxOutputTokens: 8192
+      };
+
+      if (!plain && (modelId.includes('thinking') || modelId.includes('3.6'))) {
+        genConfig.thinkingConfig = { thinkingLevel: 'MINIMAL' };
+      }
 
       const response = await fetch(url, {
         method: 'POST',
@@ -604,14 +666,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
               ]
             }
           ],
-          generationConfig: plain
-            ? { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 8192 }
-            : {
-                responseMimeType: 'application/json',
-                temperature: 0.1,
-                maxOutputTokens: 8192,
-                thinkingConfig: { thinkingLevel: 'MINIMAL' }
-              }
+          generationConfig: genConfig
         })
       });
 
@@ -626,9 +681,12 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         if (queuePlain) {
           models.splice(models.indexOf(model) + 1, 0, `${modelId}#plain`);
         }
-        console.warn(`❌ Model ${modelId} failed (${response.status}): ${msg}`);
+        console.warn(`❌ Model ${modelId} returned (${response.status}): ${msg}`);
         const retired = response.status === 404 || /no longer available|not found|is not supported/i.test(msg);
-        if (queuePlain || retired || isGeminiCapacityError(response.status, msg)) continue;
+        if (queuePlain || retired || isGeminiCapacityError(response.status, msg)) {
+          console.log(`🔄 Switching to next Gemini candidate model...`);
+          continue;
+        }
         break;
       }
 
@@ -638,13 +696,14 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         const block = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason || 'empty';
         lastError = new Error(`Gemini ne koi fare text nahi bheja (${block}).`);
         console.warn(`⚠️ No candidate text returned for ${model}: ${block}`);
-        break;
+        continue;
       }
 
       const records = buildRecordsFromModelText(rawText, defaults);
       if (!records.length) {
-        lastError = new Error('Gemini ne image padhi lekin date/fare match nahi hua. Image thodi zoom karke dubara scan karein.');
-        break;
+        lastError = new Error('Gemini ne image padhi lekin date/fare match nahi hua.');
+        console.warn(`⚠️ No records parsed from ${model} output, trying next model...`);
+        continue;
       }
 
       console.log(`✅ Successfully extracted ${records.length} records using Gemini model: ${model}`);
@@ -660,7 +719,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
     } catch (err) {
       const timedOut = err && (err.name === 'AbortError' || String(err.message || '').includes('aborted'));
       lastError = timedOut
-        ? new Error('Gemini response time se bahar chala gaya. Dubara scan karein.')
+        ? new Error('Gemini response time se bahar chala gaya. Agle model par switch kar rahe hain...')
         : err;
       console.warn(`❌ Exception with model ${model}:`, err.message);
       continue;

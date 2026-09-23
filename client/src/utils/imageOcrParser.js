@@ -37,11 +37,10 @@ async function preprocessImage(imageSource) {
           const d = imgData.data;
           for (let i = 0; i < d.length; i += 4) {
             const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-            // Increase contrast
-            const contrast = 1.35;
+            // Gentle contrast enhancement without harsh binary clipping
+            const contrast = 1.15;
             const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-            let c = factor * (gray - 128) + 128;
-            c = c > 210 ? 255 : (c < 75 ? 0 : c);
+            const c = Math.max(0, Math.min(255, factor * (gray - 128) + 128));
             d[i] = c;
             d[i + 1] = c;
             d[i + 2] = c;

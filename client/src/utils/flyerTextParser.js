@@ -54,10 +54,15 @@ function expandRange(startDay, startMonth, endDay, endMonth, year) {
 }
 
 function pickFare(line) {
-  const matches = [...line.matchAll(/\b(\d{4,6})\b/g)];
+  // Strip out parenthesized times or timings first
+  const cleanForFare = line
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b\d{1,2}[:.]\d{2}\s*(?:am|pm)?\b/ig, ' ')
+    .replace(/\b\d{1,2}[:.]\d{2}\s*-\s*\d{1,2}[:.]\d{2}\b/ig, ' ');
+  const matches = [...cleanForFare.matchAll(/\b(\d{4,6})\b/g)];
   for (let i = matches.length - 1; i >= 0; i--) {
     const n = Number(matches[i][1]);
-    if (n >= 1000 && n <= 500000 && !(n >= 2020 && n <= 2035)) return n;
+    if (n >= 4000 && n <= 500000 && !(n >= 2024 && n <= 2035)) return n;
   }
   return null;
 }
@@ -97,7 +102,11 @@ export function parseFlyerText(raw, defaults = {}) {
   for (const rawLine of lines) {
     const line = rawLine
       .replace(/[|₹]/g, ' ')
-      .replace(/\((?:all dates|timings?)\)/ig, ' ')
+      .replace(/\([^)]*timings?[^)]*\)/ig, ' ')
+      .replace(/\([^)]*\b(?:am|pm|\d{1,2}[:.]\d{2})\b[^)]*\)/ig, ' ')
+      .replace(/\b\d{1,2}[:.]\d{2}\s*(?:am|pm)?\s*(?:-|to)\s*\d{1,2}[:.]\d{2}\s*(?:am|pm)?\b/ig, ' ')
+      .replace(/\b(?:all\s+dates?|timings?)\b/ig, ' ')
+      .replace(/\((?:all dates?|timings?)\)/ig, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     if (!line) continue;
@@ -128,6 +137,15 @@ export function parseFlyerText(raw, defaults = {}) {
       const m1 = monthIndex(range[2]);
       const m2 = monthIndex(range[4]);
       for (const date of expandRange(Number(range[1]), m1, Number(range[3]), m2, year)) {
+        pushRecord(records, seen, base, date, fare);
+      }
+      continue;
+    }
+
+    const rangeSameMonth = line.match(/(\d{1,2})\s+(?:to|till|-)\s+(\d{1,2})\s+([a-z]{3,9})/i);
+    if (rangeSameMonth) {
+      const m = monthIndex(rangeSameMonth[3]);
+      for (const date of expandRange(Number(rangeSameMonth[1]), m, Number(rangeSameMonth[2]), m, year)) {
         pushRecord(records, seen, base, date, fare);
       }
       continue;
