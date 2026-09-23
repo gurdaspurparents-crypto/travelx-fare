@@ -256,21 +256,13 @@ export default function App() {
           </form>
 
           <div className="mt-6 pt-5 border-t border-slate-800/80 text-center flex flex-col space-y-2">
-            {!isStaffScreen ? (
+            {!isStaffScreen && (
               <button
                 type="button"
                 onClick={handleSwitchToStaff}
                 className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
               >
                 Switch to Staff Operations Login (PIN 2233) →
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSwitchToAdmin}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
-              >
-                Switch to Master Admin Login (PIN 7788) →
               </button>
             )}
             <button
@@ -345,16 +337,8 @@ export default function App() {
               </button>
             </div>
 
-            {/* Right Controls: Switch to Master Admin & Logout */}
+            {/* Right Controls: Logout */}
             <div className="flex items-center space-x-2 self-end sm:self-center">
-              <button
-                type="button"
-                onClick={handleSwitchToAdmin}
-                className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                title="Switch to Master Admin Desk (PIN 7788)"
-              >
-                🔒 Admin Login
-              </button>
               <button
                 type="button"
                 onClick={handleAdminLogout}
