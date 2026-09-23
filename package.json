@@ -4,7 +4,7 @@
   "description": "Smart Manual Input + Automatic Fare Comparison System for Travelx",
   "main": "server/index.js",
   "engines": {
-    "node": ">=20.0.0 <23.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "start": "node --max-old-space-size=400 server/index.js",
