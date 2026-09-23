@@ -532,8 +532,17 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
  * Dynamically find the best active Gemini model for the user's API Key
  */
 function getGeminiCandidateModels() {
-  // Two fast models. A third slow retry pushed the request past Render's gateway timeout.
-  return ['gemini-2.0-flash', 'gemini-2.5-flash'];
+  // 2.0 / 2.5 flash are closed for new keys. Google's error names the replacement.
+  return ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+}
+
+function queueSuggestedModel(models, current, message) {
+  const match = String(message || '').match(/models\/(gemini-[a-z0-9.\-]+)/i);
+  if (!match) return;
+  const next = match[1];
+  if (models.includes(next)) return;
+  const at = models.indexOf(current);
+  models.splice(at + 1, 0, next);
 }
 
 /**
@@ -596,6 +605,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         try { errJson = JSON.parse(errText); } catch (_) {}
         const msg = errJson?.error?.message || `Gemini API Error (${response.status}): ${errText}`;
         lastError = new Error(msg);
+        queueSuggestedModel(models, model, msg);
         console.warn(`❌ Model ${model} failed (${response.status}): ${msg}`);
         continue;
       }
