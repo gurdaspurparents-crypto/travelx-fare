@@ -386,37 +386,9 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
 /**
  * Dynamically find the best active Gemini model for the user's API Key
  */
-async function getGeminiCandidateModels(apiKey) {
-  const fallbackModels = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-  try {
-    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`);
-    if (listRes.ok) {
-      const data = await listRes.json();
-      const available = (data.models || [])
-        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-        .map(m => m.name.replace(/^models\//, ''));
-
-      console.log('🤖 Available Gemini models for API key:', available);
-
-      const flashModels = available.filter(m => m.toLowerCase().includes('flash'));
-      if (flashModels.length > 0) {
-        flashModels.sort((a, b) => {
-          if (a.includes('3.6')) return -1;
-          if (b.includes('3.6')) return 1;
-          if (a.includes('2.0')) return -1;
-          if (b.includes('2.0')) return 1;
-          return 0;
-        });
-        return [...flashModels, ...fallbackModels];
-      }
-      if (available.length > 0) {
-        return [...available, ...fallbackModels];
-      }
-    }
-  } catch (err) {
-    console.warn('⚠️ Could not list Gemini models:', err.message);
-  }
-  return fallbackModels;
+function getGeminiCandidateModels() {
+  // Fixed fast models only. Listing every account model made scans try 5–10 APIs in a row.
+  return ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
 }
 
 /**
@@ -432,9 +404,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
     ? imageBase64.slice(5, imageBase64.indexOf(';'))
     : 'image/jpeg';
 
-  const candidateModels = await getGeminiCandidateModels(apiKey);
-  // Exclude deprecated models
-  const models = [...new Set(candidateModels.filter(m => !m.includes('2.5')))];
+  const models = getGeminiCandidateModels();
 
   let lastError = null;
 

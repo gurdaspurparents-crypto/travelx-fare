@@ -204,6 +204,29 @@ export default function ImageOcrUploader({
     });
   };
 
+  const compressImageForScan = (file) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const maxW = 1280;
+        const scale = img.width > maxW ? maxW / img.width : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        fileToBase64(file).then(resolve).catch(() => resolve(''));
+      };
+      img.src = url;
+    });
+  };
+
   /**
    * Helper: Process a single file through the selected AI engine
    */
@@ -213,7 +236,7 @@ export default function ImageOcrUploader({
       if (!effectiveKey) {
         throw new Error('KEY_REQUIRED_OPENAI');
       }
-      const base64Data = await fileToBase64(file);
+      const base64Data = await compressImageForScan(file);
       const result = await api.parseImageWithAI({
         imageBase64: base64Data,
         provider: 'openai',
@@ -226,7 +249,7 @@ export default function ImageOcrUploader({
       if (!effectiveKey) {
         throw new Error('KEY_REQUIRED_GEMINI');
       }
-      const base64Data = await fileToBase64(file);
+      const base64Data = await compressImageForScan(file);
       const result = await api.parseImageWithAI({
         imageBase64: base64Data,
         provider: 'gemini',
@@ -310,8 +333,11 @@ export default function ImageOcrUploader({
     setImagePreview(newPreviews[0].url);
 
     setScanning(true);
-    setScanProgress(5);
+    setScanProgress(8);
     setStatus(null);
+    const progressTimer = setInterval(() => {
+      setScanProgress((p) => (p < 88 ? p + 2 : p));
+    }, 1200);
 
     const defaults = {
       defaultOrigin,
@@ -440,6 +466,7 @@ export default function ImageOcrUploader({
       }
       setStatus({ type: 'error', text: msg });
     } finally {
+      clearInterval(progressTimer);
       setScanning(false);
       setBatchStatus(null);
     }
@@ -1341,9 +1368,9 @@ Instructions:
                       </p>
                     )}
                     <p className="text-[11px] text-emerald-300 font-mono font-bold">{scanProgress}%</p>
-                    {selectedEngine === 'gemini' && scanProgress <= 15 && (
+                    {selectedEngine === 'gemini' && scanProgress < 90 && (
                       <p className="text-[10px] text-slate-300 max-w-[220px] leading-snug">
-                        Gemini Vision ko 30–90 second lag sakte hain — 5% par stuck lagna normal hai, wait karein.
+                        Screenshot compress ho rahi hai, phir Gemini dates nikalega. Excel isse tez hai.
                       </p>
                     )}
                   </div>
