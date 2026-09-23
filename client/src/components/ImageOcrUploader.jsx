@@ -250,6 +250,28 @@ export default function ImageOcrUploader({
       if (!effectiveKey) {
         throw new Error('KEY_REQUIRED_GEMINI');
       }
+      const base64Data = await compressImageForScan(file);
+      let geminiResult = null;
+      let geminiErrorMsg = '';
+      try {
+        geminiResult = await api.parseImageWithAI({
+          imageBase64: base64Data,
+          provider: 'gemini',
+          apiKey: effectiveKey,
+          defaults
+        });
+        if (geminiResult?.success && Array.isArray(geminiResult.records) && geminiResult.records.length > 0) {
+          return geminiResult;
+        }
+        if (geminiResult?.error) {
+          geminiErrorMsg = geminiResult.error;
+        }
+      } catch (geminiErr) {
+        geminiErrorMsg = geminiErr?.message || 'Gemini scan failed';
+        console.warn('Gemini scan error, trying local OCR fallback:', geminiErrorMsg);
+      }
+
+      // Fallback: Local OCR if Gemini fails or yields 0 records
       const ocr = await parseImageFares(file, defaults).catch((err) => ({
         success: false,
         records: [],
@@ -258,20 +280,11 @@ export default function ImageOcrUploader({
       if (ocr?.records?.length) {
         return { ...ocr, success: true, provider: ocr.provider || 'ocr' };
       }
-      const base64Data = await compressImageForScan(file);
-      const result = await api.parseImageWithAI({
-        imageBase64: base64Data,
-        provider: 'gemini',
-        apiKey: effectiveKey,
-        defaults
-      });
-      if (result?.success && Array.isArray(result.records) && result.records.length > 0) {
-        return result;
-      }
+
       return {
         success: false,
         records: [],
-        error: `${result?.error || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` Local OCR: ${ocr.error}` : ' Local OCR ne bhi dates nahi padhi.'}`
+        error: `${geminiErrorMsg || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` (Local OCR: ${ocr.error})` : ''}`
       };
     } else {
       // Local Browser OCR (Tesseract)

@@ -533,13 +533,11 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
  */
 async function getGeminiCandidateModels(apiKey) {
   const fallbackModels = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
     'gemini-1.5-flash',
-    'gemini-2.0-flash-lite',
     'gemini-1.5-flash-8b',
-    'gemini-3.6-flash',
-    'gemini-2.5-pro',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-2.5-flash',
     'gemini-1.5-pro'
   ];
 
@@ -571,17 +569,18 @@ async function getGeminiCandidateModels(apiKey) {
             !m.includes('live')
           );
 
-        // Rank vision-capable models: standard flash first, then lite, then pro
+        // Rank vision-capable models: standard stable GA flash first (least likely to be overloaded)
         const score = (name) => {
-          if (name === 'gemini-2.5-flash') return 150;
-          if (name === 'gemini-2.0-flash') return 140;
-          if (name === 'gemini-1.5-flash') return 130;
-          if (name === 'gemini-2.0-flash-lite' || name === 'gemini-2.0-flash-lite-preview-02-05') return 120;
-          if (name === 'gemini-1.5-flash-8b') return 110;
-          if (name.includes('flash') && !name.includes('preview')) return 105;
-          if (name.includes('flash')) return 100;
-          if (name === 'gemini-2.5-pro') return 90;
-          if (name === 'gemini-1.5-pro') return 80;
+          if (name === 'gemini-1.5-flash') return 200;
+          if (name === 'gemini-1.5-flash-latest') return 195;
+          if (name === 'gemini-1.5-flash-8b') return 180;
+          if (name === 'gemini-2.0-flash') return 160;
+          if (name === 'gemini-2.0-flash-lite' || name === 'gemini-2.0-flash-lite-preview-02-05') return 150;
+          if (name.includes('flash') && !name.includes('preview') && !name.includes('exp')) return 140;
+          if (name === 'gemini-2.5-flash') return 120;
+          if (name.includes('flash')) return 110;
+          if (name === 'gemini-1.5-pro') return 90;
+          if (name === 'gemini-2.5-pro') return 80;
           return 50;
         };
 
@@ -670,8 +669,8 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
               parts: [
                 { text: VISION_SYSTEM_PROMPT },
                 {
-                  inline_data: {
-                    mime_type: mimeType,
+                  inlineData: {
+                    mimeType: mimeType,
                     data: pureBase64
                   }
                 }
