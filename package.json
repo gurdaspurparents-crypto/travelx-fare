@@ -7,8 +7,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node --max-old-space-size=400 server/index.js",
-    "build": "node -e \"console.log('Using pre-built client dist')\"",
+    "start": "npm rebuild better-sqlite3 && node --max-old-space-size=400 server/index.js",
+    "postinstall": "npm rebuild better-sqlite3",
+    "build": "npm rebuild better-sqlite3 && node -e \"console.log('Using pre-built client dist')\"",
     "build:local": "cd client && npm install && npm run build",
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build",

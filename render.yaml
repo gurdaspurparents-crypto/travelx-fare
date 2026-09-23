@@ -1,9 +1,24 @@
 services:
   - type: web
+    name: travelx-fare-2
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm rebuild better-sqlite3
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ADMIN_TOKEN_SECRET
+        generateValue: true
+  - type: web
     name: travelx-fare
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && npm rebuild better-sqlite3
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
