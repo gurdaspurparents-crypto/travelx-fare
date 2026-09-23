@@ -1,21 +1,36 @@
-const { getAdminPin, issueAdminToken, requireAdmin } = require('../middleware/adminAuth');
+const { getAdminPin, getStaffPin, issueToken, requireAdmin } = require('../middleware/adminAuth');
 
 exports.login = (req, res) => {
   const pin = String(req.body?.pin || '').trim();
   if (!pin) {
     return res.status(400).json({ success: false, error: 'PIN is required' });
   }
-  if (pin !== getAdminPin()) {
-    return res.status(401).json({ success: false, error: 'Incorrect Security PIN' });
+
+  const adminPin = getAdminPin();
+  const staffPin = getStaffPin();
+
+  if (pin === adminPin) {
+    return res.json({
+      success: true,
+      role: 'admin',
+      token: issueToken('admin')
+    });
   }
-  return res.json({
-    success: true,
-    token: issueAdminToken()
-  });
+
+  if (pin === staffPin) {
+    return res.json({
+      success: true,
+      role: 'staff',
+      token: issueToken('staff')
+    });
+  }
+
+  return res.status(401).json({ success: false, error: 'Incorrect Security PIN' });
 };
 
 exports.session = (req, res) => {
-  return res.json({ success: true, authenticated: true });
+  const role = req.auth?.role || 'admin';
+  return res.json({ success: true, authenticated: true, role });
 };
 
 exports.requireAdmin = requireAdmin;

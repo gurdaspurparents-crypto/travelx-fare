@@ -51,7 +51,7 @@ const formatBaggage = (bag) => {
   return clean;
 };
 
-export default function AgentPortal({ onSwitchToAdmin }) {
+export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff }) {
   const isAllowedB2BSector = (f) => {
     if (!f) return false;
     const s = f.sector_code || `${f.origin}-${f.destination}`;
@@ -4108,6 +4108,15 @@ Please confirm availability and share status.`;
 
           <div className="flex items-center space-x-4 text-[11px]">
             <span>Rates verified live</span>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => onSwitchToStaff && onSwitchToStaff()}
+              className="text-slate-400 hover:text-slate-700 flex items-center space-x-1 cursor-pointer"
+            >
+              <Users className="w-3 h-3" />
+              <span>Staff Desk</span>
+            </button>
             <span>•</span>
             <button
               type="button"

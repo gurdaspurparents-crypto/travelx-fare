@@ -265,6 +265,7 @@ function initSchema() {
     const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');
     insertSetting.run('admin_whatsapp_phone', '919888888888');
     insertSetting.run('admin_pin', process.env.ADMIN_PIN || '7788');
+    insertSetting.run('staff_pin', process.env.STAFF_PIN || '2233');
     insertSetting.run('agency_contact_phone', '+91 98888 88888');
     insertSetting.run('agency_email', 'desk@travelx.co.in');
     insertSetting.run('callmebot_api_key', '');

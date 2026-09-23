@@ -16,7 +16,87 @@ const INDIAN_STATES = [
   'Tamil Nadu', 'Kerala', 'Bihar', 'Madhya Pradesh', 'Other'
 ];
 
-export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
+let persistentAudioCtx = null;
+function getPersistentAudioCtx() {
+  if (typeof window === 'undefined') return null;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!persistentAudioCtx || persistentAudioCtx.state === 'closed') {
+    persistentAudioCtx = new AudioCtx();
+  }
+  return persistentAudioCtx;
+}
+
+// Generate base64 PCM WAV fallback so HTML5 Audio plays reliably even if WebAudio is suspended
+let cachedDingDongWavUrl = null;
+function getDingDongWavUrl() {
+  if (cachedDingDongWavUrl) return cachedDingDongWavUrl;
+  try {
+    const sampleRate = 8000;
+    const duration = 1.1;
+    const numSamples = Math.floor(sampleRate * duration);
+    const buffer = new Uint8Array(44 + numSamples);
+
+    const writeString = (offset, str) => {
+      for (let i = 0; i < str.length; i++) buffer[offset + i] = str.charCodeAt(i);
+    };
+    const writeUint32 = (offset, val) => {
+      buffer[offset] = val & 0xff;
+      buffer[offset + 1] = (val >> 8) & 0xff;
+      buffer[offset + 2] = (val >> 16) & 0xff;
+      buffer[offset + 3] = (val >> 24) & 0xff;
+    };
+    const writeUint16 = (offset, val) => {
+      buffer[offset] = val & 0xff;
+      buffer[offset + 1] = (val >> 8) & 0xff;
+    };
+
+    writeString(0, 'RIFF');
+    writeUint32(4, 36 + numSamples);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    writeUint32(16, 16);
+    writeUint16(20, 1);
+    writeUint16(22, 1);
+    writeUint32(24, sampleRate);
+    writeUint32(28, sampleRate);
+    writeUint16(32, 1);
+    writeUint16(34, 8);
+    writeString(36, 'data');
+    writeUint32(40, numSamples);
+
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      let freq = 0;
+      let env = 0;
+      if (t < 0.28) {
+        freq = 587.33; // D5
+        env = Math.max(0, 1 - t / 0.28);
+      } else if (t < 0.75) {
+        freq = 880.0; // A5
+        env = Math.max(0, 1 - (t - 0.28) / 0.47);
+      } else {
+        freq = 1046.5; // C6
+        env = Math.max(0, 1 - (t - 0.75) / 0.35);
+      }
+      const sample = Math.sin(2 * Math.PI * freq * t) * env;
+      buffer[44 + i] = Math.floor(128 + 120 * sample);
+    }
+
+    let binary = '';
+    const len = buffer.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(buffer[i]);
+    }
+    cachedDingDongWavUrl = 'data:audio/wav;base64,' + btoa(binary);
+    return cachedDingDongWavUrl;
+  } catch (err) {
+    console.warn('Failed to build fallback wav url:', err);
+    return null;
+  }
+}
+
+export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode = false }) {
   const [activeSubTab, setActiveSubTab] = useState('requests'); // 'requests' | 'directory'
   const [bookings, setBookings] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -104,17 +184,14 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   useEffect(() => {
     const unlockAudio = () => {
       try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          if (ctx.state === 'suspended') {
-            ctx.resume();
-          }
+        const ctx = getPersistentAudioCtx();
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume();
         }
       } catch (e) {}
     };
     ['click', 'keydown', 'pointerdown', 'touchstart'].forEach(evt => {
-      window.addEventListener(evt, unlockAudio, { once: true });
+      window.addEventListener(evt, unlockAudio, { passive: true });
     });
     return () => {
       ['click', 'keydown', 'pointerdown', 'touchstart'].forEach(evt => {
@@ -207,36 +284,70 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
     window.addEventListener('focus', handleFocus);
   };
 
+  // HTML5 audio fallback using synthesized base64 WAV
+  const playHtml5AudioFallback = () => {
+    if (!soundEnabled) return;
+    try {
+      const url = getDingDongWavUrl();
+      if (url && typeof Audio !== 'undefined') {
+        const audio = new Audio(url);
+        audio.volume = 0.85;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((e) => {
+            console.warn('HTML5 Audio fallback play error:', e);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('HTML5 Audio error:', e);
+    }
+  };
+
   // Play attention-grabbing double chime when a new query arrives
   const playNotificationChime = () => {
     if (!soundEnabled) return;
-    try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      const now = audioCtx.currentTime;
 
-      const playTone = (startTime, freq, duration) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, startTime);
-        gain.gain.setValueAtTime(0.35, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-        osc.start(startTime);
-        osc.stop(startTime + duration);
+    // Trigger HTML5 audio fallback concurrently for maximum reliability
+    playHtml5AudioFallback();
+
+    try {
+      const audioCtx = getPersistentAudioCtx();
+      if (!audioCtx) return;
+
+      const runDingDong = () => {
+        try {
+          const now = audioCtx.currentTime;
+          const playTone = (startTime, freq, duration) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(0.55, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+          };
+
+          // Tone 1: Ding-Dong (D5 -> A5)
+          playTone(now, 587.33, 0.25);
+          playTone(now + 0.15, 880.00, 0.35);
+
+          // Tone 2: Echo Ding-Dong for attention even if minimized (E5 -> C6)
+          playTone(now + 0.55, 659.25, 0.25);
+          playTone(now + 0.70, 1046.50, 0.50);
+        } catch (err) {
+          console.warn('DingDong tone error:', err);
+        }
       };
 
-      // Tone 1: Ding-Dong (D5 -> A5)
-      playTone(now, 587.33, 0.25);
-      playTone(now + 0.15, 880.00, 0.35);
-
-      // Tone 2: Echo Ding-Dong for attention even if minimized (E5 -> C6)
-      playTone(now + 0.55, 659.25, 0.25);
-      playTone(now + 0.70, 1046.50, 0.45);
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(runDingDong).catch(runDingDong);
+      } else {
+        runDingDong();
+      }
     } catch (e) {
       console.warn('Audio play error:', e);
     }
@@ -246,31 +357,75 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   const playDeclineChime = () => {
     if (!soundEnabled) return;
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      const now = audioCtx.currentTime;
+      const audioCtx = getPersistentAudioCtx();
+      if (!audioCtx) return;
 
-      const playTone = (startTime, freq, duration) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(freq, startTime);
-        gain.gain.setValueAtTime(0.3, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-        osc.start(startTime);
-        osc.stop(startTime + duration);
+      const runDeclineTone = () => {
+        try {
+          const now = audioCtx.currentTime;
+          const playTone = (startTime, freq, duration) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(0.45, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+          };
+
+          // 3-Tone Descending Warning Chime (Agent Declined)
+          playTone(now, 493.88, 0.22); // B4
+          playTone(now + 0.18, 392.00, 0.30); // G4
+          playTone(now + 0.42, 293.66, 0.45); // D4
+        } catch (err) {
+          console.warn('Decline tone error:', err);
+        }
       };
 
-      // 3-Tone Descending Warning Chime (Agent Declined)
-      playTone(now, 493.88, 0.22); // B4
-      playTone(now + 0.18, 392.00, 0.30); // G4
-      playTone(now + 0.42, 293.66, 0.45); // D4
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(runDeclineTone).catch(runDeclineTone);
+      } else {
+        runDeclineTone();
+      }
     } catch (e) {
       console.warn('Audio play error:', e);
+    }
+  };
+
+  // Immediate manual test button so staff can verify speaker & activate Windows desktop popups
+  const handleTestAlerts = async () => {
+    // Unconditionally resume AudioContext on this direct click gesture
+    try {
+      const audioCtx = getPersistentAudioCtx();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+    } catch (_) {}
+
+    // Play chime immediately so user can hear speaker volume
+    playNotificationChime();
+
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        let perm = Notification.permission;
+        if (perm !== 'granted') {
+          perm = await Notification.requestPermission();
+        }
+        if (perm === 'granted') {
+          setDesktopNotifsEnabled(true);
+          new Notification('🔔 TravelX Alerts Active!', {
+            body: 'Sound chime and Windows popup alerts are working properly on this computer.',
+            icon: '/favicon.svg'
+          });
+        } else if (perm === 'denied') {
+          alert('Windows notifications permission is blocked in browser settings. Please click the lock or settings icon in the Chrome address bar and change Notifications to "Allow".');
+        }
+      } catch (err) {
+        console.warn('Permission test error:', err);
+      }
     }
   };
 
@@ -992,6 +1147,54 @@ Thank you for booking with TravelX!`;
     <div className="max-w-[1750px] mx-auto px-4 sm:px-6 py-4 space-y-4">
       
       {/* ───────────────────────────────────────────────────────────── */}
+      {/* 0. NOTIFICATION & SOUND SETUP BANNER (STAFF & DESK)           */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {!desktopNotifsEnabled ? (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-3 sm:p-4 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-pulse">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 text-xl shadow-inner">
+              🔔
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm sm:text-base leading-snug">
+                Notification & Sound Chime Permission Required on this Computer!
+              </h3>
+              <p className="text-xs text-amber-100 font-medium">
+                Click the button below to enable Windows desktop popups and chime sounds on this computer for incoming queries.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleTestAlerts}
+            className="shrink-0 px-4 py-2.5 rounded-xl bg-white text-amber-900 font-black text-xs sm:text-sm hover:bg-amber-50 active:scale-95 transition shadow-md flex items-center space-x-2 cursor-pointer"
+          >
+            <span>🔊 Enable & Test Sound / Popups</span>
+            <span>➔</span>
+          </button>
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs shadow-2xs">
+          <div className="flex items-center space-x-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="font-bold">
+              🔔 Sound Chime & Windows Desktop Alerts are ACTIVE on this computer
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleTestAlerts}
+            className="text-[11px] font-black text-emerald-800 hover:text-emerald-950 underline cursor-pointer flex items-center space-x-1"
+          >
+            <span>🔊 Test Speaker Volume</span>
+          </button>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. TOP HEADER & SUB-TABS                                      */}
       {/* ───────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1042,6 +1245,17 @@ Thank you for booking with TravelX!`;
             </button>
           </div>
 
+          {/* Test Sound & Desktop Alerts Button */}
+          <button
+            type="button"
+            onClick={handleTestAlerts}
+            className="px-3 py-1.5 rounded-xl border text-xs font-black transition cursor-pointer flex items-center space-x-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-xs active:scale-95"
+            title="Click to test chime sound on your speaker and enable Windows popup alerts"
+          >
+            <Volume2 className="w-3.5 h-3.5" />
+            <span>🔊 Test Chime & Alerts</span>
+          </button>
+
           {/* Desktop Push Notification Toggle */}
           <button
             type="button"
@@ -1082,19 +1296,21 @@ Thank you for booking with TravelX!`;
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-700' : ''}`} />
           </button>
 
-          {/* WhatsApp Alert & Automation Settings */}
-          <button
-            type="button"
-            onClick={() => setShowSettingsModal(true)}
-            className="px-3 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs"
-            title="Configure Live WhatsApp Alerts & Automation"
-          >
-            <Settings className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">WhatsApp Alerts</span>
-            {settingsData.whatsapp_alerts_enabled && (
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            )}
-          </button>
+          {/* WhatsApp Alert & Automation Settings (Hidden for Staff) */}
+          {!isStaffMode && (
+            <button
+              type="button"
+              onClick={() => setShowSettingsModal(true)}
+              className="px-3 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs"
+              title="Configure Live WhatsApp Alerts & Automation"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">WhatsApp Alerts</span>
+              {settingsData.whatsapp_alerts_enabled && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1379,8 +1595,8 @@ Thank you for booking with TravelX!`;
                           </div>
                           <p className="text-[10px] text-slate-400 mt-0.5">{b.baggage || '30+7 KG'}</p>
 
-                          {/* Winning Vendor & Admin Profit Info */}
-                          {b.vendor_name && (
+                          {/* Winning Vendor & Admin Profit Info (Admin only, hidden from Staff) */}
+                          {!isStaffMode && b.vendor_name && (
                             <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
                               <span className="font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
                                 Vendor: {b.vendor_name}
@@ -1586,17 +1802,19 @@ Thank you for booking with TravelX!`;
                               <span>Ticket</span>
                             </button>
 
-                            {/* 3. Vendor 1-Click WhatsApp */}
-                            <a
-                              href={getVendorWhatsAppUrl(b)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-[11px] transition flex items-center space-x-1 shadow-xs cursor-pointer active:scale-95"
-                              title={`1-Click WhatsApp to Vendor: ${b.vendor_name || 'Partner'}`}
-                            >
-                              <Send className="w-3.5 h-3.5" />
-                              <span>Vendor</span>
-                            </a>
+                            {/* 3. Vendor 1-Click WhatsApp (Admin only) */}
+                            {!isStaffMode && (
+                              <a
+                                href={getVendorWhatsAppUrl(b)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-[11px] transition flex items-center space-x-1 shadow-xs cursor-pointer active:scale-95"
+                                title={`1-Click WhatsApp to Vendor: ${b.vendor_name || 'Partner'}`}
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                <span>Vendor</span>
+                              </a>
+                            )}
 
                             {/* 4. Smart WhatsApp Button to Agent */}
                             {b.status === 'CONFIRMED' ? (
@@ -1990,7 +2208,7 @@ Thank you for booking with TravelX!`;
                     ₹{Number(confirmingBooking.total_amount).toLocaleString('en-IN')}/-
                   </span>
                 </div>
-                {confirmingBooking.vendor_name && (
+                {!isStaffMode && confirmingBooking.vendor_name && (
                   <div className="flex justify-between pt-1 border-t border-slate-200">
                     <span className="text-indigo-700 font-semibold">Winning Vendor:</span>
                     <span className="font-bold text-indigo-900">
@@ -2381,10 +2599,10 @@ Thank you for booking with TravelX!`;
                 </div>
 
                 {/* Baggage & Vendor info if any */}
-                {(reviewingBooking.baggage || reviewingBooking.vendor_name) && (
+                {(reviewingBooking.baggage || (!isStaffMode && reviewingBooking.vendor_name)) && (
                   <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between text-[11px] text-slate-500">
                     <span>🧳 Baggage: <b>{reviewingBooking.baggage || '30+7 KG'}</b></span>
-                    {reviewingBooking.vendor_name && (
+                    {!isStaffMode && reviewingBooking.vendor_name && (
                       <span className="font-semibold text-indigo-900">
                         Vendor: <b>{reviewingBooking.vendor_name}</b> {reviewingBooking.net_fare ? `(₹${Number(reviewingBooking.net_fare).toLocaleString('en-IN')})` : ''}
                       </span>
