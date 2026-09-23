@@ -13,6 +13,9 @@ const exportController = require('./controllers/exportController');
 const vendorRuleController = require('./controllers/vendorRuleController');
 const publicAgentController = require('./controllers/publicAgentController');
 const bookingController = require('./controllers/bookingController');
+const authController = require('./controllers/authController');
+const settingsController = require('./controllers/settingsController');
+const { requireAdmin } = require('./middleware/adminAuth');
 
 process.on('uncaughtException', (err) => {
   console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
@@ -26,8 +29,8 @@ const PORT = process.env.PORT || 5001;
 const HOST = '0.0.0.0';
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -49,6 +52,22 @@ app.post('/api/public/bookings/:ref/passports', bookingController.uploadPassport
 app.post('/api/public/bookings/:ref/fare-response', bookingController.respondToRevisedFare);
 app.get('/api/public/bookings/:ref/ticket-download', bookingController.downloadTicket);
 
+app.post('/api/auth/admin/login', authController.login);
+
+function isPublicApiPath(path) {
+  if (path === '/api/health') return true;
+  if (path === '/api/auth/admin/login') return true;
+  return path.startsWith('/api/public/');
+}
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) return next();
+  if (isPublicApiPath(req.path)) return next();
+  return requireAdmin(req, res, next);
+});
+
+app.get('/api/auth/admin/session', authController.session);
+
 // Admin Booking Requests & B2B Agent Directory APIs
 app.get('/api/bookings', bookingController.getBookingRequests);
 app.patch('/api/bookings/:id/status', bookingController.updateBookingStatus);
@@ -63,6 +82,8 @@ app.put('/api/agents/:id', bookingController.updateAgentFromAdmin);
 app.get('/api/settings/whatsapp', bookingController.getWhatsAppSettings);
 app.post('/api/settings/whatsapp', bookingController.saveWhatsAppSettings);
 app.post('/api/settings/whatsapp/test', bookingController.testWhatsAppAlert);
+app.get('/api/settings/backup/download', settingsController.downloadDatabaseBackup);
+app.post('/api/settings/backup/restore', settingsController.uploadBackupMiddleware, settingsController.restoreDatabaseBackup);
 
 // Dashboard APIs
 app.get('/api/dashboard/stats', compareController.getDashboardStats);
@@ -75,6 +96,7 @@ app.post('/api/fares/date-range', fareController.saveDateRangeFares);
 app.post('/api/fares/parse-whatsapp', fareController.parseWhatsAppText);
 app.post('/api/fares/parse-image-ai', fareController.parseImageWithAI);
 app.post('/api/fares/bulk-save', fareController.saveBulkParsedFares);
+app.post('/api/fares/sync-inventory', fareController.syncVendorInventory);
 app.post('/api/fares/batch-update-margins', fareController.batchUpdateMargins);
 app.put('/api/fares/:id', fareController.updateFare);
 app.delete('/api/fares/:id', fareController.deleteFare);
@@ -119,6 +141,7 @@ app.delete('/api/masters/routes/:id', masterController.deleteRoute);
 
 // Publishing, WhatsApp & Excel APIs
 app.post('/api/export/toggle-publish', exportController.togglePublishFares);
+app.post('/api/export/publish-all-future', exportController.publishAllFutureFares);
 app.post('/api/export/whatsapp-message', exportController.generateWhatsAppMessage);
 app.get('/api/export/excel', exportController.exportToExcel);
 

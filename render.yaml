@@ -3,10 +3,16 @@ services:
     name: travelx-fare
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && npm run build:local
     startCommand: npm start
+    disk:
+      name: travelx-sqlite-data
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
+      - key: ADMIN_TOKEN_SECRET
+        generateValue: true

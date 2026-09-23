@@ -91,6 +91,12 @@ exports.getDashboardStats = (req, res) => {
       SELECT COUNT(*) as count FROM fares
     `).get().count;
 
+    const unpublishedFuture = db.prepare(`
+      SELECT COUNT(*) as count FROM fares
+      WHERE travel_date >= date('now', 'localtime')
+        AND COALESCE(is_published, 0) = 0
+    `).get().count;
+
     // 7. Today's price drops vs price increases from history
     const priceTrendsToday = db.prepare(`
       SELECT 
@@ -126,6 +132,7 @@ exports.getDashboardStats = (req, res) => {
         total_routes: totalRoutes,
         total_vendors: totalVendors,
         published_fares: publishedCount,
+        unpublished_future_fares: unpublishedFuture,
         total_fares: totalFares,
         price_drops_today: priceTrendsToday.price_drops || 0,
         price_hikes_today: priceTrendsToday.price_hikes || 0

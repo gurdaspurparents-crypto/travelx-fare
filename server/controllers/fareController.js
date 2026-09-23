@@ -13,17 +13,58 @@ function safeInvalidateFaresCache() {
   } catch (_) {}
 }
 
+const STMT_GET_EXISTING_FARE = db.prepare(`
+  SELECT * FROM fares 
+  WHERE vendor_id = ? 
+    AND airline_code = ? 
+    AND origin = ? 
+    AND destination = ? 
+    AND travel_date = ? 
+    AND cabin = ?
+    AND (flight_number = ? OR (flight_number IS NULL AND ? = ''))
+  LIMIT 1
+`);
+
+const STMT_AFFIRM_DUPLICATE = db.prepare(`
+  UPDATE fares 
+  SET updated_at = datetime('now', 'localtime'),
+      baggage = COALESCE(?, baggage),
+      is_refundable = COALESCE(?, is_refundable),
+      remarks = COALESCE(?, remarks)
+  WHERE id = ?
+`);
+
+const STMT_INSERT_FARE_HISTORY = db.prepare(`
+  INSERT INTO fare_history (fare_id, vendor_id, airline_code, origin, destination, travel_date, flight_number, old_fare, new_fare, fare_diff, recorded_at, reason)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
+`);
+
+const STMT_UPDATE_FARE_PRICE = db.prepare(`
+  UPDATE fares 
+  SET net_fare = ?,
+      margin_amount = ?,
+      publish_fare = ?,
+      baggage = ?,
+      is_refundable = ?,
+      remarks = ?,
+      updated_at = datetime('now', 'localtime')
+  WHERE id = ?
+`);
+
+const STMT_INSERT_FARE = db.prepare(`
+  INSERT INTO fares (
+    vendor_id, airline_code, origin, destination, travel_date, 
+    flight_number, departure_time, arrival_time, net_fare, currency, 
+    cabin, baggage, is_refundable, remarks, margin_amount, publish_fare, is_published, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now', 'localtime'), datetime('now', 'localtime'))
+`);
+
 /**
  * Helper to save or update a single fare with duplicate handling and history tracking
+ * @param {object} options.bulkMode — skip per-row cache invalidation (bulk import)
  */
-function saveOrUpdateFareRecord(data, transaction = null) {
-  const executeRun = (query, ...params) => {
-    return db.prepare(query).run(...params);
-  };
-
-  const executeGet = (query, ...params) => {
-    return db.prepare(query).get(...params);
-  };
+function saveOrUpdateFareRecord(data, options = {}) {
+  const bulkMode = options.bulkMode === true;
 
   const {
     vendor_id,
@@ -72,31 +113,27 @@ function saveOrUpdateFareRecord(data, transaction = null) {
   const marginCalc = calculateMargin(effectiveFare, effectiveAirline, origin, destination, custom_margin);
 
   // Check for existing matching active fare for this vendor
-  const existing = executeGet(`
-    SELECT * FROM fares 
-    WHERE vendor_id = ? 
-      AND airline_code = ? 
-      AND origin = ? 
-      AND destination = ? 
-      AND travel_date = ? 
-      AND cabin = ?
-      AND (flight_number = ? OR (flight_number IS NULL AND ? = ''))
-    LIMIT 1
-  `, vendor_id, effectiveAirline, origin.toUpperCase(), destination.toUpperCase(), cleanTravelDate, cabin, flight_number, flight_number);
+  const existing = STMT_GET_EXISTING_FARE.get(
+    vendor_id,
+    effectiveAirline,
+    origin.toUpperCase(),
+    destination.toUpperCase(),
+    cleanTravelDate,
+    cabin,
+    flight_number,
+    flight_number
+  );
 
   if (existing) {
     // Duplicate Detection:
     // Case 1: Exact same fare
     if (Math.abs(existing.net_fare - effectiveFare) < 0.01) {
-      // Same vendor sends same fare -> refresh updated_at, do not create duplicate
-      executeRun(`
-        UPDATE fares 
-        SET updated_at = datetime('now', 'localtime'),
-            baggage = COALESCE(?, baggage),
-            is_refundable = COALESCE(?, is_refundable),
-            remarks = COALESCE(?, remarks)
-        WHERE id = ?
-      `, baggage, is_refundable, effectiveRemarks || existing.remarks, existing.id);
+      STMT_AFFIRM_DUPLICATE.run(
+        baggage,
+        is_refundable,
+        effectiveRemarks || existing.remarks,
+        existing.id
+      );
 
       return {
         id: existing.id,
@@ -109,24 +146,31 @@ function saveOrUpdateFareRecord(data, transaction = null) {
 
     // Case 2: Price changed! Record in history and update fare
     const fareDiff = effectiveFare - existing.net_fare;
-    executeRun(`
-      INSERT INTO fare_history (fare_id, vendor_id, airline_code, origin, destination, travel_date, flight_number, old_fare, new_fare, fare_diff, recorded_at, reason)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
-    `, existing.id, vendor_id, effectiveAirline, origin.toUpperCase(), destination.toUpperCase(), cleanTravelDate, flight_number, existing.net_fare, effectiveFare, fareDiff, `Intraday fare change: ${fareDiff > 0 ? '+' : ''}${fareDiff}`);
+    STMT_INSERT_FARE_HISTORY.run(
+      existing.id,
+      vendor_id,
+      effectiveAirline,
+      origin.toUpperCase(),
+      destination.toUpperCase(),
+      cleanTravelDate,
+      flight_number,
+      existing.net_fare,
+      effectiveFare,
+      fareDiff,
+      `Intraday fare change: ${fareDiff > 0 ? '+' : ''}${fareDiff}`
+    );
 
-    executeRun(`
-      UPDATE fares 
-      SET net_fare = ?,
-          margin_amount = ?,
-          publish_fare = ?,
-          baggage = ?,
-          is_refundable = ?,
-          remarks = ?,
-          updated_at = datetime('now', 'localtime')
-      WHERE id = ?
-    `, effectiveFare, marginCalc.marginAmount, marginCalc.publishFare, baggage, is_refundable, effectiveRemarks, existing.id);
+    STMT_UPDATE_FARE_PRICE.run(
+      effectiveFare,
+      marginCalc.marginAmount,
+      marginCalc.publishFare,
+      baggage,
+      is_refundable,
+      effectiveRemarks,
+      existing.id
+    );
 
-    safeInvalidateFaresCache();
+    if (!bulkMode) safeInvalidateFaresCache();
 
     return {
       id: existing.id,
@@ -140,17 +184,26 @@ function saveOrUpdateFareRecord(data, transaction = null) {
   }
 
   // Case 3: Brand new fare record
-  const result = executeRun(`
-    INSERT INTO fares (
-      vendor_id, airline_code, origin, destination, travel_date, 
-      flight_number, departure_time, arrival_time, net_fare, currency, 
-      cabin, baggage, is_refundable, remarks, margin_amount, publish_fare, is_published, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now', 'localtime'), datetime('now', 'localtime'))
-  `, vendor_id, effectiveAirline, origin.toUpperCase(), destination.toUpperCase(), cleanTravelDate,
-     flight_number, departure_time, arrival_time, effectiveFare, currency,
-     cabin, baggage, is_refundable, effectiveRemarks, marginCalc.marginAmount, marginCalc.publishFare);
+  const result = STMT_INSERT_FARE.run(
+    vendor_id,
+    effectiveAirline,
+    origin.toUpperCase(),
+    destination.toUpperCase(),
+    cleanTravelDate,
+    flight_number,
+    departure_time,
+    arrival_time,
+    effectiveFare,
+    currency,
+    cabin,
+    baggage,
+    is_refundable,
+    effectiveRemarks,
+    marginCalc.marginAmount,
+    marginCalc.publishFare
+  );
 
-  safeInvalidateFaresCache();
+  if (!bulkMode) safeInvalidateFaresCache();
 
   return {
     id: result.lastInsertRowid,
@@ -441,19 +494,7 @@ exports.parseImageWithAI = async (req, res) => {
   }
 };
 
-/**
- * Controller: Save Bulk Parsed Fares after user review with Sector Inventory Sync
- */
-exports.saveBulkParsedFares = (req, res) => {
-  const { vendor_id, fares = [], replace_missing_dates = true, replace_mode = 'sector' } = req.body;
-  if (!vendor_id) {
-    return res.status(400).json({ success: false, error: 'Vendor must be selected to save fares' });
-  }
-  if (!fares || fares.length === 0) {
-    return res.status(400).json({ success: false, error: 'No fare records to save' });
-  }
-
-  // Pre-process fares: normalize airline codes and parse dates to ISO YYYY-MM-DD
+function preprocessBulkFares(fares) {
   const currentYear = new Date().getFullYear();
   for (const f of fares) {
     f.airline_code = normalizeAirlineCode(f.airline_code, f.flight_number, 'AI');
@@ -462,110 +503,149 @@ exports.saveBulkParsedFares = (req, res) => {
       f.travel_date = parsedD;
     }
   }
+  return fares;
+}
+
+function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
+  const deletedRecords = [];
+  const deleteStmt = db.prepare('DELETE FROM fares WHERE id = ?');
+  const historyStmt = db.prepare(`
+    INSERT INTO fare_history (fare_id, vendor_id, airline_code, origin, destination, travel_date, flight_number, old_fare, new_fare, fare_diff, recorded_at, reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now', 'localtime'), 'Sold out / removed from vendor rate sheet')
+  `);
+
+  if (replace_mode === 'entire_vendor') {
+    const incomingKeySet = new Set();
+    for (const f of fares) {
+      if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
+      const key = `${f.airline_code.trim().toUpperCase()}_${f.origin.trim().toUpperCase()}_${f.destination.trim().toUpperCase()}_${(f.cabin || 'ECONOMY').trim().toUpperCase()}_${f.travel_date}`;
+      incomingKeySet.add(key);
+    }
+
+    const allVendorFares = db.prepare(`
+      SELECT id, travel_date, net_fare, airline_code, origin, destination, cabin, flight_number
+      FROM fares
+      WHERE vendor_id = ?
+    `).all(vendor_id);
+
+    for (const ef of allVendorFares) {
+      const efKey = `${(ef.airline_code || '').trim().toUpperCase()}_${(ef.origin || '').trim().toUpperCase()}_${(ef.destination || '').trim().toUpperCase()}_${(ef.cabin || 'ECONOMY').trim().toUpperCase()}_${ef.travel_date}`;
+      if (!incomingKeySet.has(efKey)) {
+        try {
+          historyStmt.run(ef.id, vendor_id, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
+        } catch (hErr) {
+          console.warn('Could not record delete history:', hErr.message);
+        }
+        deleteStmt.run(ef.id);
+        deletedRecords.push(ef);
+      }
+    }
+  } else {
+    const sectorMap = new Map();
+    for (const f of fares) {
+      if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
+      const airline = f.airline_code.trim().toUpperCase();
+      const origin = f.origin.trim().toUpperCase();
+      const dest = f.destination.trim().toUpperCase();
+      const cabin = (f.cabin || 'ECONOMY').trim().toUpperCase();
+      const key = `${airline}_${origin}_${dest}_${cabin}`;
+
+      if (!sectorMap.has(key)) {
+        sectorMap.set(key, { airline_code: airline, origin, destination: dest, cabin, dates: new Set() });
+      }
+      sectorMap.get(key).dates.add(f.travel_date);
+    }
+
+    const existingStmt = db.prepare(`
+      SELECT id, travel_date, net_fare, airline_code, origin, destination, cabin, flight_number 
+      FROM fares
+      WHERE vendor_id = ?
+        AND UPPER(airline_code) = ?
+        AND UPPER(origin) = ?
+        AND UPPER(destination) = ?
+        AND UPPER(COALESCE(cabin, 'ECONOMY')) = ?
+    `);
+
+    for (const sector of sectorMap.values()) {
+      const existingFares = existingStmt.all(
+        vendor_id,
+        sector.airline_code,
+        sector.origin,
+        sector.destination,
+        sector.cabin
+      );
+
+      for (const ef of existingFares) {
+        if (!sector.dates.has(ef.travel_date)) {
+          try {
+            historyStmt.run(ef.id, vendor_id, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
+          } catch (hErr) {
+            console.warn('Could not record delete history:', hErr.message);
+          }
+          deleteStmt.run(ef.id);
+          deletedRecords.push(ef);
+        }
+      }
+    }
+  }
+
+  return deletedRecords;
+}
+
+/**
+ * Sync vendor inventory after chunked bulk import (removes dates not in new sheet).
+ */
+exports.syncVendorInventory = (req, res) => {
+  try {
+    const { vendor_id, fares = [], replace_mode = 'sector' } = req.body;
+    if (!vendor_id) {
+      return res.status(400).json({ success: false, error: 'vendor_id required' });
+    }
+    if (!fares || fares.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fare keys provided for inventory sync' });
+    }
+    preprocessBulkFares(fares);
+    const deletedRecords = runVendorInventorySync(vendor_id, fares, replace_mode);
+    safeInvalidateFaresCache();
+    return res.json({
+      success: true,
+      deleted_count: deletedRecords.length,
+      deleted_dates: deletedRecords.slice(0, 100).map(d => `${d.origin}-${d.destination} (${d.airline_code}): ${d.travel_date}`)
+    });
+  } catch (err) {
+    console.error('Inventory sync failed:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * Controller: Save Bulk Parsed Fares after user review with Sector Inventory Sync
+ */
+exports.saveBulkParsedFares = (req, res) => {
+  const {
+    vendor_id,
+    fares = [],
+    replace_missing_dates = true,
+    replace_mode = 'sector',
+    skip_inventory_sync = false,
+    summary_only = false
+  } = req.body;
+  if (!vendor_id) {
+    return res.status(400).json({ success: false, error: 'Vendor must be selected to save fares' });
+  }
+  if (!fares || fares.length === 0) {
+    return res.status(400).json({ success: false, error: 'No fare records to save' });
+  }
+
+  preprocessBulkFares(fares);
 
   const results = [];
   const errors = [];
-  const deletedRecords = [];
+  let deletedRecords = [];
 
   const bulkTx = db.transaction(() => {
-    // 1. Sector / Vendor Inventory Sync: if replace_missing_dates is true,
-    // delete old dates in the database that are absent in this new rate sheet (sold out / removed).
-    if (replace_missing_dates) {
-      const deleteStmt = db.prepare('DELETE FROM fares WHERE id = ?');
-      const historyStmt = db.prepare(`
-        INSERT INTO fare_history (fare_id, vendor_id, airline_code, origin, destination, travel_date, flight_number, old_fare, new_fare, fare_diff, recorded_at, reason)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now', 'localtime'), 'Sold out / removed from vendor rate sheet')
-      `);
-
-      if (replace_mode === 'entire_vendor') {
-        const incomingKeySet = new Set();
-        for (const f of fares) {
-          if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
-          const key = `${f.airline_code.trim().toUpperCase()}_${f.origin.trim().toUpperCase()}_${f.destination.trim().toUpperCase()}_${(f.cabin || 'ECONOMY').trim().toUpperCase()}_${f.travel_date}`;
-          incomingKeySet.add(key);
-        }
-
-        const allVendorFares = db.prepare(`
-          SELECT id, travel_date, net_fare, airline_code, origin, destination, cabin, flight_number
-          FROM fares
-          WHERE vendor_id = ?
-        `).all(vendor_id);
-
-        for (const ef of allVendorFares) {
-          const efKey = `${(ef.airline_code || '').trim().toUpperCase()}_${(ef.origin || '').trim().toUpperCase()}_${(ef.destination || '').trim().toUpperCase()}_${(ef.cabin || 'ECONOMY').trim().toUpperCase()}_${ef.travel_date}`;
-          if (!incomingKeySet.has(efKey)) {
-            try {
-              historyStmt.run(ef.id, vendor_id, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
-            } catch (hErr) {
-              console.warn('Could not record delete history:', hErr.message);
-            }
-            deleteStmt.run(ef.id);
-            deletedRecords.push({
-              id: ef.id,
-              travel_date: ef.travel_date,
-              origin: ef.origin,
-              destination: ef.destination,
-              airline_code: ef.airline_code,
-              net_fare: ef.net_fare
-            });
-          }
-        }
-      } else {
-        // Sector-wise Inventory Sync (default):
-        // Group incoming fares by sector
-        const sectorMap = new Map();
-        for (const f of fares) {
-          if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
-          const airline = f.airline_code.trim().toUpperCase();
-          const origin = f.origin.trim().toUpperCase();
-          const dest = f.destination.trim().toUpperCase();
-          const cabin = (f.cabin || 'ECONOMY').trim().toUpperCase();
-          const key = `${airline}_${origin}_${dest}_${cabin}`;
-
-          if (!sectorMap.has(key)) {
-            sectorMap.set(key, {
-              airline_code: airline,
-              origin,
-              destination: dest,
-              cabin,
-              dates: new Set()
-            });
-          }
-          sectorMap.get(key).dates.add(f.travel_date);
-        }
-
-        for (const sector of sectorMap.values()) {
-          // Fetch ALL existing fares for this vendor in this sector and cabin (no min/max date restriction!)
-          const existingFares = db.prepare(`
-            SELECT id, travel_date, net_fare, airline_code, origin, destination, cabin, flight_number 
-            FROM fares
-            WHERE vendor_id = ?
-              AND UPPER(airline_code) = ?
-              AND UPPER(origin) = ?
-              AND UPPER(destination) = ?
-              AND UPPER(COALESCE(cabin, 'ECONOMY')) = ?
-          `).all(vendor_id, sector.airline_code, sector.origin, sector.destination, sector.cabin);
-
-          for (const ef of existingFares) {
-            if (!sector.dates.has(ef.travel_date)) {
-              try {
-                historyStmt.run(ef.id, vendor_id, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
-              } catch (hErr) {
-                console.warn('Could not record delete history:', hErr.message);
-              }
-              deleteStmt.run(ef.id);
-              deletedRecords.push({
-                id: ef.id,
-                travel_date: ef.travel_date,
-                origin: ef.origin,
-                destination: ef.destination,
-                airline_code: ef.airline_code,
-                net_fare: ef.net_fare
-              });
-            }
-          }
-        }
-      }
+    if (replace_missing_dates && !skip_inventory_sync) {
+      deletedRecords = runVendorInventorySync(vendor_id, fares, replace_mode);
     }
 
     // 2. Insert or update incoming fares
@@ -586,7 +666,7 @@ exports.saveBulkParsedFares = (req, res) => {
           baggage: f.baggage || '30kg',
           is_refundable: f.is_refundable || 'NON_REFUNDABLE',
           remarks: f.remarks || 'Bulk WhatsApp/Flyer import'
-        });
+        }, { bulkMode: true });
         results.push(itemResult);
       } catch (err) {
         errors.push({ row: i + 1, date: f.travel_date, error: err.message });
@@ -603,6 +683,8 @@ exports.saveBulkParsedFares = (req, res) => {
     const hikedCount = results.filter(r => r.fare_diff && r.fare_diff > 0).length;
 
     const isSuccess = results.length > 0;
+    const omitDetails = summary_only || fares.length > 40;
+    safeInvalidateFaresCache();
     return res.json({
       success: isSuccess,
       saved_count: results.length,
@@ -611,9 +693,9 @@ exports.saveBulkParsedFares = (req, res) => {
       dropped_count: droppedCount,
       hiked_count: hikedCount,
       deleted_count: deletedRecords.length,
-      deleted_dates: deletedRecords.map(d => `${d.origin}-${d.destination} (${d.airline_code}): ${d.travel_date}`),
-      results,
-      errors: errors.length > 0 ? errors : undefined,
+      deleted_dates: deletedRecords.slice(0, 80).map(d => `${d.origin}-${d.destination} (${d.airline_code}): ${d.travel_date}`),
+      results: omitDetails ? undefined : results,
+      errors: errors.length > 0 ? errors.slice(0, 20) : undefined,
       error: !isSuccess && errors.length > 0 ? `Failed to save: ${errors[0].error || 'Validation error'}` : undefined
     });
   } catch (err) {

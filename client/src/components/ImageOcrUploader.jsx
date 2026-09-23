@@ -1341,6 +1341,11 @@ Instructions:
                       </p>
                     )}
                     <p className="text-[11px] text-emerald-300 font-mono font-bold">{scanProgress}%</p>
+                    {selectedEngine === 'gemini' && scanProgress <= 15 && (
+                      <p className="text-[10px] text-slate-300 max-w-[220px] leading-snug">
+                        Gemini Vision ko 30–90 second lag sakte hain — 5% par stuck lagna normal hai, wait karein.
+                      </p>
+                    )}
                   </div>
                   <div className="w-48 bg-slate-700 rounded-full h-2 overflow-hidden">
                     <div 

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const db = require('../config/database');
+const { invalidateFaresCache } = require('./publicAgentController');
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const passportDir = path.join(uploadsDir, 'passports');
@@ -1084,7 +1085,11 @@ exports.getWhatsAppSettings = (req, res) => {
     return res.json({
       success: true,
       settings: {
-        admin_whatsapp_phone: settings.admin_whatsapp_phone || '919888888888',
+        admin_whatsapp_phone: settings.admin_whatsapp_phone || '',
+        agency_contact_phone: settings.agency_contact_phone || '',
+        agency_email: settings.agency_email || 'desk@travelx.co.in',
+        admin_pin: settings.admin_pin ? '********' : '',
+        admin_pin_set: !!settings.admin_pin,
         callmebot_api_key: settings.callmebot_api_key || '',
         whatsapp_alerts_enabled: settings.whatsapp_alerts_enabled === '1',
         auto_expiry_enabled: settings.auto_expiry_enabled !== '0'
@@ -1101,7 +1106,15 @@ exports.getWhatsAppSettings = (req, res) => {
  */
 exports.saveWhatsAppSettings = (req, res) => {
   try {
-    const { admin_whatsapp_phone, callmebot_api_key, whatsapp_alerts_enabled, auto_expiry_enabled } = req.body;
+    const {
+      admin_whatsapp_phone,
+      agency_contact_phone,
+      agency_email,
+      admin_pin,
+      callmebot_api_key,
+      whatsapp_alerts_enabled,
+      auto_expiry_enabled
+    } = req.body;
 
     const upsert = db.prepare(`
       INSERT INTO app_settings (key, value, updated_at) 
@@ -1114,6 +1127,15 @@ exports.saveWhatsAppSettings = (req, res) => {
     if (admin_whatsapp_phone !== undefined) {
       upsert.run('admin_whatsapp_phone', String(admin_whatsapp_phone).replace(/\D/g, ''));
     }
+    if (agency_contact_phone !== undefined) {
+      upsert.run('agency_contact_phone', String(agency_contact_phone).trim());
+    }
+    if (agency_email !== undefined) {
+      upsert.run('agency_email', String(agency_email).trim());
+    }
+    if (admin_pin !== undefined && String(admin_pin).trim() && String(admin_pin).trim() !== '********') {
+      upsert.run('admin_pin', String(admin_pin).trim());
+    }
     if (callmebot_api_key !== undefined) {
       upsert.run('callmebot_api_key', String(callmebot_api_key).trim());
     }
@@ -1124,6 +1146,7 @@ exports.saveWhatsAppSettings = (req, res) => {
       upsert.run('auto_expiry_enabled', auto_expiry_enabled ? '1' : '0');
     }
 
+    invalidateFaresCache();
     return res.json({ success: true, message: 'Settings saved successfully' });
   } catch (err) {
     console.error('Error saving settings:', err);

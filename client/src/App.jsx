@@ -34,7 +34,7 @@ function checkAdminRoute() {
 export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(checkAdminRoute);
   const [adminUnlocked, setAdminUnlocked] = useState(() => {
-    return localStorage.getItem('travelx_admin_auth') === 'true';
+    return !!localStorage.getItem('travelx_admin_token');
   });
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -69,20 +69,26 @@ export default function App() {
     setIsAdminMode(true);
   };
 
-  const handlePinSubmit = (e) => {
+  const handlePinSubmit = async (e) => {
     e?.preventDefault();
-    // Default PIN: 7788 or 1234
-    if (pinInput.trim() === '7788' || pinInput.trim() === '1234') {
-      localStorage.setItem('travelx_admin_auth', 'true');
-      setAdminUnlocked(true);
-      setPinError(false);
-      setPinInput('');
-    } else {
+    try {
+      const res = await api.adminLogin(pinInput.trim());
+      if (res?.success && res.token) {
+        localStorage.setItem('travelx_admin_token', res.token);
+        localStorage.removeItem('travelx_admin_auth');
+        setAdminUnlocked(true);
+        setPinError(false);
+        setPinInput('');
+      } else {
+        setPinError(true);
+      }
+    } catch (_) {
       setPinError(true);
     }
   };
 
   const handleAdminLogout = () => {
+    localStorage.removeItem('travelx_admin_token');
     localStorage.removeItem('travelx_admin_auth');
     setAdminUnlocked(false);
     handleOpenAgentPortal();
@@ -122,6 +128,19 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!isAdminMode || !adminUnlocked) return;
+    api.verifyAdminSession().then((res) => {
+      if (!res?.success) {
+        localStorage.removeItem('travelx_admin_token');
+        setAdminUnlocked(false);
+      }
+    }).catch(() => {
+      localStorage.removeItem('travelx_admin_token');
+      setAdminUnlocked(false);
+    });
+  }, [isAdminMode, adminUnlocked]);
 
   const handleSelectRouteFromDashboard = (origin, destination) => {
     setSelectedRoute({ origin, destination });

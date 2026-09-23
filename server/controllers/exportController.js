@@ -2,6 +2,7 @@ const db = require('../config/database');
 const XLSX = require('xlsx');
 const { groupFaresByDateRanges, formatWhatsAppBroadcast } = require('../services/dateGroupingHelper');
 const { formatRouteName } = require('../services/airportHelper');
+const { invalidateFaresCache } = require('./publicAgentController');
 
 /**
  * Toggle publish status of fares (batch or single)
@@ -30,6 +31,7 @@ exports.togglePublishFares = (req, res) => {
     });
 
     updateTx();
+    invalidateFaresCache();
     return res.json({
       success: true,
       updated_count: fare_ids.length,
@@ -38,6 +40,49 @@ exports.togglePublishFares = (req, res) => {
     });
   } catch (err) {
     console.error('Error toggling published status:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * Publish all future fares to the public B2B agent portal in one action.
+ */
+exports.publishAllFutureFares = (req, res) => {
+  try {
+    const batchId = `BATCH-ALL-${Date.now()}`;
+    const ids = db.prepare(`
+      SELECT id FROM fares
+      WHERE travel_date >= date('now', 'localtime')
+        AND COALESCE(is_published, 0) = 0
+    `).all().map(r => r.id);
+
+    if (ids.length === 0) {
+      return res.json({ success: true, updated_count: 0, message: 'All future fares are already published.' });
+    }
+
+    const updateStmt = db.prepare('UPDATE fares SET is_published = 1 WHERE id = ?');
+    const insertPublished = db.prepare(`
+      INSERT INTO published_specials (fare_id, batch_id, custom_title, published_at)
+      VALUES (?, ?, ?, datetime('now', 'localtime'))
+    `);
+
+    const tx = db.transaction(() => {
+      for (const id of ids) {
+        updateStmt.run(id);
+        insertPublished.run(id, batchId, 'Bulk Portal Publish');
+      }
+    });
+    tx();
+    invalidateFaresCache();
+
+    return res.json({
+      success: true,
+      updated_count: ids.length,
+      batch_id: batchId,
+      message: `${ids.length} future fare(s) are now live on the agent portal.`
+    });
+  } catch (err) {
+    console.error('Error publishing all future fares:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 };

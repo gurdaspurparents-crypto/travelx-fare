@@ -23,6 +23,8 @@ yarn-debug.log*
 yarn-error.log*
 *.db-shm
 *.db-wal
+server/data/backups/
+.tools/
 
 # OS Files
 Thumbs.db

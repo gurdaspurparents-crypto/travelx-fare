@@ -1,5 +1,27 @@
 const db = require('../config/database');
 
+function getPublicAgencyFromSettings() {
+  const defaults = {
+    whatsapp: '',
+    phone: '',
+    email: 'desk@travelx.co.in'
+  };
+  try {
+    const rows = db.prepare(
+      "SELECT key, value FROM app_settings WHERE key IN ('admin_whatsapp_phone', 'agency_contact_phone', 'agency_email')"
+    ).all();
+    const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    const wa = String(map.admin_whatsapp_phone || '').replace(/\D/g, '');
+    return {
+      whatsapp: wa,
+      phone: map.agency_contact_phone || (wa ? `+${wa}` : defaults.phone),
+      email: map.agency_email || defaults.email
+    };
+  } catch (_) {
+    return defaults;
+  }
+}
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function parseDateParts(dateStr) {
@@ -187,6 +209,7 @@ function computeMasterPublicFares() {
     FROM fares f
     JOIN airlines a ON f.airline_code = a.code
     WHERE f.travel_date >= date('now', 'localtime')
+      AND f.is_published = 1
     ORDER BY f.travel_date ASC
   `;
 
@@ -472,11 +495,6 @@ function getCachedMasterFares() {
   return cachedMasterFares;
 }
 
-exports.invalidateFaresCache = () => {
-  cachedMasterFares = null;
-  lastCacheTimestamp = 0;
-};
-
 /**
  * Controller: Get Sanitized Public Rates for B2B Agents
  * In-Memory Cached for Lightning Speed & Zero 502 Timeouts on Render
@@ -525,14 +543,15 @@ exports.getPublicFares = (req, res) => {
       );
     }
 
+    const agencyContact = getPublicAgencyFromSettings();
     return res.json({
       success: true,
       agency: {
         name: 'TravelX',
         title: 'TravelX Special Fares | B2B Agent Desk',
-        whatsapp: '919888888888',
-        contact: '+91 98888 88888',
-        email: 'desk@travelx.co.in',
+        whatsapp: agencyContact.whatsapp,
+        contact: agencyContact.phone,
+        email: agencyContact.email,
         updated_at: new Date().toISOString()
       },
       sectors: master.sectors,
@@ -552,15 +571,16 @@ exports.getPublicFares = (req, res) => {
  * Controller: Get Public Agency Config
  */
 exports.getPublicConfig = (req, res) => {
+  const agencyContact = getPublicAgencyFromSettings();
   return res.json({
     success: true,
     agency: {
       name: 'TravelX',
       portalTitle: 'TravelX B2B Special Air Fares',
       tagline: 'Exclusive Group & Special Fares for Verified B2B Agents',
-      whatsapp: '919888888888',
-      phone: '+91 98888 88888',
-      email: 'desk@travelx.co.in',
+      whatsapp: agencyContact.whatsapp,
+      phone: agencyContact.phone,
+      email: agencyContact.email,
       farePolicy: '100% Non-Refundable & Non-Changeable Special Fares'
     }
   });

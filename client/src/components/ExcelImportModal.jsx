@@ -36,6 +36,7 @@ export default function ExcelImportModal({
 
   // State
   const [saving, setSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(null);
   const [error, setError] = useState(null);
 
@@ -163,6 +164,7 @@ export default function ExcelImportModal({
     try {
       setSaving(true);
       setError(null);
+      setSaveProgress('Preparing Excel fares…');
 
       const formattedFares = rows.map(r => ({
         airline_code: (r.airline_code || fallbackAirline).toUpperCase(),
@@ -177,7 +179,13 @@ export default function ExcelImportModal({
         remarks: `Excel Import: ${parsedResult.fileName || ''}`
       }));
 
-      const res = await api.saveBulkFares(Number(selectedVendorId), formattedFares, true, 'sector');
+      const res = await api.saveBulkFares(
+        Number(selectedVendorId),
+        formattedFares,
+        true,
+        'sector',
+        (p) => setSaveProgress(p.label || `Saving batch ${p.current}/${p.total}…`)
+      );
 
       if (res.success) {
         const vendorObj = vendors.find(v => v.id === Number(selectedVendorId));
@@ -187,7 +195,8 @@ export default function ExcelImportModal({
           count: res.saved_count || formattedFares.length,
           vendorName,
           routeCount: groups.length,
-          deletedCount: res.deleted_count || 0
+          deletedCount: res.deleted_count || 0,
+          warning: res.warning || null
         });
 
         if (onFaresSaved) onFaresSaved();
@@ -203,9 +212,10 @@ export default function ExcelImportModal({
       }
     } catch (err) {
       console.error(err);
-      setError('Server error saving fares to database.');
+      setError(err.message || 'Server error saving fares to database.');
     } finally {
       setSaving(false);
+      setSaveProgress('');
     }
   };
 
@@ -613,7 +623,7 @@ export default function ExcelImportModal({
               className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center space-x-1.5 disabled:opacity-50"
             >
               <Save className="w-4 h-4 text-emerald-400" />
-              <span>{saving ? 'Saving...' : `Save ${rows.length} Fares`}</span>
+              <span>{saving ? (saveProgress || 'Saving…') : `Save ${rows.length} Fares`}</span>
             </button>
 
             <button
@@ -624,7 +634,7 @@ export default function ExcelImportModal({
               title="Save and immediately navigate to Comparison Desk"
             >
               <Zap className="w-4 h-4 text-amber-300" />
-              <span>{saving ? 'Saving...' : '⚡ Save & Sort (Comparison Desk)'}</span>
+              <span>{saving ? (saveProgress || 'Saving…') : '⚡ Save & Sort (Comparison Desk)'}</span>
             </button>
           </div>
         </div>

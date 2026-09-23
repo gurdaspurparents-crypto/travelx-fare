@@ -87,8 +87,8 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     agentBadge: 'TX B2B',
     tagline: 'Comfort • Trust • Journey.',
     balance: '100000(0)',
-    whatsapp: '919888888888',
-    phone: '+91 98888 88888',
+    whatsapp: '',
+    phone: '',
     email: 'desk@travelx.co.in'
   });
   const [loading, setLoading] = useState(() => {
@@ -100,6 +100,20 @@ export default function AgentPortal({ onSwitchToAdmin }) {
     }
   });
   const [error, setError] = useState(null);
+
+  const agencyWhatsAppDigits = useMemo(
+    () => String(agencyConfig.whatsapp || '').replace(/\D/g, ''),
+    [agencyConfig.whatsapp]
+  );
+  const hasAgencyWhatsApp = agencyWhatsAppDigits.length >= 10;
+
+  const openAgencyWhatsApp = (message) => {
+    if (!hasAgencyWhatsApp) {
+      alert('TravelX WhatsApp desk number is not configured yet. Please call or email the desk.');
+      return;
+    }
+    window.open(`https://wa.me/${agencyWhatsAppDigits}?text=${encodeURIComponent(message)}`, '_blank');
+  };
 
   // Search Bar State (Image 1 & 2)
   const [tripType, setTripType] = useState('ONE_WAY'); // 'ONE_WAY' | 'ROUND_TRIP'
@@ -129,7 +143,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
 
   // Filters State (Image 3 Left Sidebar)
   const [filterRefundable, setFilterRefundable] = useState('ALL'); // 'ALL' | 'REFUNDABLE' | 'NON_REFUNDABLE'
-  const [filterStops, setFilterStops] = useState('0'); // 'ALL' | '0' | '1' | '2+'
+  const [filterStops, setFilterStops] = useState('ALL'); // 'ALL' | '0' | '1' | '2+'
   const [filterTimeSlot, setFilterTimeSlot] = useState('ALL'); // 'ALL' | '00-06' | '06-12' | '12-18' | '18-00'
   const [selectedAirlines, setSelectedAirlines] = useState([]);
   const [showIncentive, setShowIncentive] = useState(false);
@@ -267,6 +281,9 @@ export default function AgentPortal({ onSwitchToAdmin }) {
           setAgencyConfig(prev => ({ 
             ...prev, 
             ...res.agency,
+            whatsapp: res.agency.whatsapp || prev.whatsapp,
+            phone: res.agency.contact || res.agency.phone || prev.phone,
+            email: res.agency.email || prev.email,
             name: 'TravelX',
             agentCode: 'TRAVELX (TX10011)',
             agentBadge: 'TX B2B'
@@ -788,6 +805,12 @@ export default function AgentPortal({ onSwitchToAdmin }) {
       // Stops filter
       if (filterStops === '0' && f.stops !== 'Non Stop') return false;
       if (filterStops === '1' && f.stops !== '1 Stop') return false;
+      if (filterStops === '2+') {
+        const stopsLabel = String(f.stops || '').toLowerCase();
+        if (!stopsLabel.includes('2') && stopsLabel !== '2+ stop' && stopsLabel !== '2+ stops') {
+          return false;
+        }
+      }
 
       // Time slot filter
       if (filterTimeSlot !== 'ALL') {
@@ -1047,7 +1070,6 @@ export default function AgentPortal({ onSwitchToAdmin }) {
 
   // WhatsApp helper from booking celebration screen
   const handleWhatsAppBookingConfirm = (booking, flight) => {
-    const phone = (agencyConfig.whatsapp || '919888888888').replace(/\D/g, '');
     const paxDetails = [];
     if (booking.pax_adults) paxDetails.push(`${booking.pax_adults} Adult${booking.pax_adults > 1 ? 's' : ''}`);
     if (booking.pax_children) paxDetails.push(`${booking.pax_children} Child${booking.pax_children > 1 ? 'ren' : ''}`);
@@ -1066,8 +1088,7 @@ export default function AgentPortal({ onSwitchToAdmin }) {
 • *Quoted Net:* ₹${Number(booking.quoted_rate).toLocaleString('en-IN')}/- (Total: ₹${Number(booking.total_amount).toLocaleString('en-IN')})
 ${booking.remarks ? `• *Remarks:* ${booking.remarks}\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━
 Please confirm availability and share status for Reference *#${booking.request_ref}*.`;
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
+    openAgencyWhatsApp(msg);
   };
 
   // WhatsApp Booking Fallback Generator
@@ -1097,9 +1118,7 @@ Please confirm availability and share status for Reference *#${booking.request_r
 
 Please confirm availability and share status.`;
 
-    const phone = (agencyConfig.whatsapp || '919888888888').replace(/\D/g, '');
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+    openAgencyWhatsApp(message);
   };
 
   // 6. Share Itinerary
@@ -1123,14 +1142,21 @@ Please confirm availability and share status.`;
   };
 
   // 7. Admin PIN verify
-  const handleVerifyAdminPin = (e) => {
+  const handleVerifyAdminPin = async (e) => {
     e.preventDefault();
-    if (adminPinInput === '7860' || adminPinInput === 'admin') {
-      setShowAdminPinModal(false);
-      setAdminPinInput('');
-      setAdminPinError(false);
-      if (onSwitchToAdmin) onSwitchToAdmin();
-    } else {
+    try {
+      const res = await api.adminLogin(adminPinInput.trim());
+      if (res?.success && res.token) {
+        localStorage.setItem('travelx_admin_token', res.token);
+        localStorage.removeItem('travelx_admin_auth');
+        setShowAdminPinModal(false);
+        setAdminPinInput('');
+        setAdminPinError(false);
+        if (onSwitchToAdmin) onSwitchToAdmin();
+      } else {
+        setAdminPinError(true);
+      }
+    } catch (_) {
       setAdminPinError(true);
     }
   };
@@ -1306,15 +1332,14 @@ Please confirm availability and share status.`;
             </button>
 
             {/* Booking Desk Contact */}
-            <a 
-              href={`https://wa.me/${(agencyConfig.whatsapp || '919888888888').replace(/\D/g, '')}?text=${encodeURIComponent('Hello TravelX, I need assistance with fixed departure rates.')}`} 
-              target="_blank" 
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => openAgencyWhatsApp('Hello TravelX, I need assistance with fixed departure rates.')}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 transition shadow-2xs cursor-pointer"
             >
               <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
               <span className="hidden sm:inline">Booking Desk</span>
-            </a>
+            </button>
 
             {/* Menu Dropdown Toggle */}
             <div className="relative">
@@ -1932,7 +1957,7 @@ Please confirm availability and share status.`;
                   type="button"
                   onClick={() => {
                     setFilterRefundable('ALL');
-                    setFilterStops('0');
+                    setFilterStops('ALL');
                     setFilterTimeSlot('ALL');
                     setSelectedAirlines([]);
                   }}
@@ -3448,7 +3473,7 @@ Please confirm availability and share status.`;
                     setAdminPinInput(e.target.value);
                     setAdminPinError(false);
                   }}
-                  placeholder="Enter PIN (Default: 7860)"
+                  placeholder="Enter Admin PIN"
                   className={`w-full px-3 py-2 text-center text-lg font-mono tracking-widest rounded-xl border outline-none focus:ring-2 ${
                     adminPinError
                       ? 'border-rose-500 focus:ring-rose-200 bg-rose-50'
@@ -3458,7 +3483,7 @@ Please confirm availability and share status.`;
                 />
                 {adminPinError && (
                   <p className="text-xs text-rose-600 font-semibold mt-1 text-center">
-                    Incorrect PIN. Try: 7860
+                    Incorrect PIN. Contact TravelX desk if you forgot it.
                   </p>
                 )}
               </div>
@@ -4064,15 +4089,14 @@ Please confirm availability and share status.`;
 
                   {/* Quick WhatsApp Support for this Booking */}
                   <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                    <a
-                      href={`https://wa.me/${(agencyConfig.whatsapp || '919888888888').replace(/\D/g, '')}?text=${encodeURIComponent(`Hi TravelX, regarding booking #${trackedBooking.request_ref} (${trackedBooking.origin} to ${trackedBooking.destination} on ${trackedBooking.travel_date}): please assist.`)}`}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => openAgencyWhatsApp(`Hi TravelX, regarding booking #${trackedBooking.request_ref} (${trackedBooking.origin} to ${trackedBooking.destination} on ${trackedBooking.travel_date}): please assist.`)}
                       className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer"
                     >
                       <MessageSquare className="w-4 h-4 text-emerald-600" />
                       <span>Chat with Operations Desk regarding #{trackedBooking.request_ref}</span>
-                    </a>
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleFetchTracking(trackedBooking.request_ref)}

@@ -9,7 +9,10 @@
     "build:local": "cd client && npm install && npm run build",
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build",
-    "test": "node tests/backend.test.js"
+    "test": "node tests/backend.test.js",
+    "backup:db": "node scripts/backup-database.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop travelx-backend travelx-frontend"
   },
   "keywords": [
     "travelx",

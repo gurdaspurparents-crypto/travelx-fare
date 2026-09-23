@@ -48,12 +48,18 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
   // WhatsApp Alert & Automation Settings Modal States
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsData, setSettingsData] = useState({
-    admin_whatsapp_phone: '919888888888',
+    admin_whatsapp_phone: '',
+    agency_contact_phone: '',
+    agency_email: 'desk@travelx.co.in',
+    admin_pin: '',
+    admin_pin_set: false,
     callmebot_api_key: '',
     whatsapp_alerts_enabled: false,
     auto_expiry_enabled: true
   });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
   const [testAlertLoading, setTestAlertLoading] = useState(false);
   const [testAlertStatus, setTestAlertStatus] = useState(null);
 
@@ -568,7 +574,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
     try {
       const res = await api.getWhatsAppSettings();
       if (res && res.success && res.settings) {
-        setSettingsData(res.settings);
+        setSettingsData({ ...res.settings, admin_pin: '' });
       }
     } catch (e) {
       console.warn('Error loading settings:', e);
@@ -623,9 +629,14 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
     if (e) e.preventDefault();
     try {
       setSavingSettings(true);
-      const res = await api.saveWhatsAppSettings(settingsData);
+      const payload = { ...settingsData };
+      if (!payload.admin_pin) {
+        delete payload.admin_pin;
+      }
+      delete payload.admin_pin_set;
+      const res = await api.saveWhatsAppSettings(payload);
       if (res && res.success) {
-        alert('WhatsApp alert & automation settings saved successfully!');
+        alert('Portal, security & WhatsApp settings saved successfully!');
         setShowSettingsModal(false);
       } else {
         alert(res?.error || 'Failed to save settings');
@@ -635,6 +646,42 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries }) {
       alert('Error saving settings');
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    try {
+      setBackupLoading(true);
+      const res = await api.downloadDatabaseBackup();
+      if (!res?.success) {
+        alert(res?.error || 'Backup download failed');
+      }
+    } catch (err) {
+      alert(err.message || 'Backup download failed');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!window.confirm('Restore will replace ALL current rates & bookings with this backup file. Continue?')) {
+      return;
+    }
+    try {
+      setRestoreLoading(true);
+      const res = await api.restoreDatabaseBackup(file);
+      if (res?.success) {
+        alert(`${res.message || 'Restore complete.'}\n\nPlease restart TravelX server (CMD/PM2) once.`);
+      } else {
+        alert(res?.error || 'Restore failed');
+      }
+    } catch (err) {
+      alert(err.message || 'Restore failed');
+    } finally {
+      setRestoreLoading(false);
     }
   };
 
@@ -2003,10 +2050,10 @@ Thank you for booking with TravelX!`;
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base text-slate-900 leading-tight">
-                    WhatsApp Business Live Alerts
+                    Portal, Security & WhatsApp
                   </h3>
                   <span className="text-xs text-slate-500 font-medium">
-                    100% Free instant background notifications to your phone
+                    Agent portal contact, admin PIN, alerts & database backup
                   </span>
                 </div>
               </div>
@@ -2020,6 +2067,58 @@ Thank you for booking with TravelX!`;
             </div>
 
             <form onSubmit={handleSaveSettings} className="mt-4 space-y-4">
+              <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+                <p className="text-xs font-bold text-slate-900">Admin & Agent Portal</p>
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">Admin Desk PIN</label>
+                  <input
+                    type="password"
+                    maxLength={12}
+                    placeholder={settingsData.admin_pin_set ? 'PIN set — enter new PIN only to change' : 'Set 4–6 digit PIN'}
+                    value={settingsData.admin_pin}
+                    onChange={(e) => setSettingsData({ ...settingsData, admin_pin: e.target.value.replace(/\s/g, '') })}
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">Public desk phone (display)</label>
+                  <input
+                    type="text"
+                    placeholder="+91 98888 88888"
+                    value={settingsData.agency_contact_phone}
+                    onChange={(e) => setSettingsData({ ...settingsData, agency_contact_phone: e.target.value })}
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 text-slate-900 text-xs outline-none focus:border-blue-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">Public desk email</label>
+                  <input
+                    type="email"
+                    value={settingsData.agency_email}
+                    onChange={(e) => setSettingsData({ ...settingsData, agency_email: e.target.value })}
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 text-slate-900 text-xs outline-none focus:border-blue-900"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2">
+                <p className="text-xs font-bold text-slate-900">Database backup (rates & bookings)</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={backupLoading}
+                    onClick={handleDownloadBackup}
+                    className="flex-1 min-w-[140px] py-2 px-3 bg-white border border-blue-300 text-blue-900 text-xs font-bold rounded-xl hover:bg-blue-50 disabled:opacity-50"
+                  >
+                    {backupLoading ? 'Downloading…' : 'Download .db Backup'}
+                  </button>
+                  <label className="flex-1 min-w-[140px] py-2 px-3 bg-slate-900 text-white text-xs font-bold rounded-xl text-center cursor-pointer hover:bg-slate-800">
+                    {restoreLoading ? 'Restoring…' : 'Restore from .db'}
+                    <input type="file" accept=".db" className="hidden" disabled={restoreLoading} onChange={handleRestoreBackup} />
+                  </label>
+                </div>
+              </div>
+
               {/* Phone Number */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">

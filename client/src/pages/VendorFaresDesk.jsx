@@ -27,6 +27,13 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
   // Status message
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [apiOnline, setApiOnline] = useState(true);
+
+  useEffect(() => {
+    api.getHealth().then((h) => {
+      setApiOnline(h && h.status === 'online');
+    }).catch(() => setApiOnline(false));
+  }, []);
   const [showClearModal, setShowClearModal] = useState(false);
 
   // Vendor's active fares list from DB
@@ -275,7 +282,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
 
     try {
       setLoading(true);
-      setStatus(null);
+      setStatus({ type: 'info', text: `Preparing ${excelRows.length} Excel fares to save…` });
       const formattedFares = excelRows.map(r => {
         let airCode = r.airline_code || 'AI';
         const fltClean = String(r.flight_number || '').trim().replace(/[^0-9]/g, '');
@@ -296,12 +303,19 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
         };
       });
 
-      const res = await api.saveBulkFares(Number(selectedVendorId), formattedFares, true, 'sector');
+      const res = await api.saveBulkFares(
+        Number(selectedVendorId),
+        formattedFares,
+        true,
+        'sector',
+        (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` })
+      );
       if (res.success) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} missing/sold-out dates removed)` : '';
+        const warn = res.warning ? ` Note: ${res.warning}` : '';
         setStatus({
           type: 'success',
-          text: `🎉 Successfully updated ${res.saved_count} fares across ${uploadedFilesList.length || 1} Excel file(s) in ${selectedVendor?.name}'s account!${delMsg}`
+          text: `🎉 Successfully updated ${res.saved_count} fares across ${uploadedFilesList.length || 1} Excel file(s) in ${selectedVendor?.name}'s account!${delMsg}${warn}`
         });
         setExcelParsed(null);
         setExcelRows([]);
@@ -332,7 +346,14 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
   const handleSaveImageFaresToVendor = async (formattedFares, andSort = false, autoDeleteMissing = true) => {
     try {
       setLoading(true);
-      const res = await api.saveBulkFares(Number(selectedVendorId), formattedFares, autoDeleteMissing, 'sector');
+      setStatus({ type: 'info', text: `Saving ${formattedFares.length} scanned fares…` });
+      const res = await api.saveBulkFares(
+        Number(selectedVendorId),
+        formattedFares,
+        autoDeleteMissing,
+        'sector',
+        (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` })
+      );
       if (res.success && res.saved_count > 0) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} missing/sold-out dates removed)` : '';
         const successMsg = `🎉 Successfully saved ${res.saved_count} fares in ${selectedVendor?.name}'s account!${delMsg}`;
@@ -692,6 +713,12 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
           })}
         </div>
       </div>
+
+      {!apiOnline && (
+        <div className="p-4 rounded-xl bg-rose-950 text-rose-100 border border-rose-700 text-xs font-bold">
+          Backend API offline — Save kaam nahi karega. Local: RESTART_TRAVELX.bat chalao. Live site: Render par service Restart + latest deploy.
+        </div>
+      )}
 
       {/* Status Banner */}
       {status && (

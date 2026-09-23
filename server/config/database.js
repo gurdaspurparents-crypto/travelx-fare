@@ -264,12 +264,29 @@ function initSchema() {
   try {
     const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');
     insertSetting.run('admin_whatsapp_phone', '919888888888');
+    insertSetting.run('admin_pin', process.env.ADMIN_PIN || '7788');
+    insertSetting.run('agency_contact_phone', '+91 98888 88888');
+    insertSetting.run('agency_email', 'desk@travelx.co.in');
     insertSetting.run('callmebot_api_key', '');
     insertSetting.run('whatsapp_alerts_enabled', '0');
     insertSetting.run('auto_expiry_enabled', '1');
   } catch (e) {}
 
   seedMasterData();
+  ensureAppSettingsDefaults();
+}
+
+function ensureAppSettingsDefaults() {
+  try {
+    const upsert = db.prepare(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES (?, ?, datetime('now', 'localtime'))
+      ON CONFLICT(key) DO NOTHING
+    `);
+    upsert.run('admin_pin', process.env.ADMIN_PIN || '7788');
+    upsert.run('agency_contact_phone', '+91 98888 88888');
+    upsert.run('agency_email', 'desk@travelx.co.in');
+  } catch (e) {}
 }
 
 function seedMasterData() {
@@ -539,5 +556,24 @@ function seedMasterData() {
 }
 
 initSchema();
+maybeDailyAutoBackup();
+
+function maybeDailyAutoBackup() {
+  try {
+    const backupDir = path.join(dataDir, 'backups');
+    if (!fs.existsSync(dbPath)) return;
+    fs.mkdirSync(backupDir, { recursive: true });
+    const stamp = new Date().toISOString().slice(0, 10);
+    const dest = path.join(backupDir, `travelx-auto-${stamp}.db`);
+    if (!fs.existsSync(dest)) {
+      try {
+        db.pragma('wal_checkpoint(FULL)');
+      } catch (_) {}
+      fs.copyFileSync(dbPath, dest);
+    }
+  } catch (e) {
+    console.warn('Auto backup skipped:', e.message);
+  }
+}
 
 module.exports = db;

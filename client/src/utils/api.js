@@ -1,21 +1,53 @@
-async function safeFetch(url, options = {}, retries = 2) {
+function isPublicApiUrl(url) {
+  return (
+    url === '/api/health' ||
+    url.startsWith('/api/public/') ||
+    url === '/api/auth/admin/login'
+  );
+}
+
+function withAdminAuthHeaders(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (
+    typeof localStorage !== 'undefined' &&
+    url.startsWith('/api/') &&
+    !isPublicApiUrl(url)
+  ) {
+    const token = localStorage.getItem('travelx_admin_token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  return { ...options, headers };
+}
+
+const BULK_CHUNK_SIZE = 25;
+
+async function safeFetch(url, options = {}, retries = 2, timeoutMs = 120000) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
-    const res = await fetch(url, options);
+    const fetchOptions = withAdminAuthHeaders(url, options);
+    if (controller) fetchOptions.signal = controller.signal;
+    const res = await fetch(url, fetchOptions);
     // If Render is waking up from cold sleep (502 / 503 / 504), automatically retry after 2.5s
     if ((res.status === 502 || res.status === 503 || res.status === 504) && retries > 0) {
-      console.warn(`Server waking up (${res.status}). Retrying in 2.5s... (${retries} attempts left)`);
-      await new Promise(r => setTimeout(r, 2500));
-      return safeFetch(url, options, retries - 1);
+      console.warn(`Server waking up (${res.status}). Retrying in 4s... (${retries} attempts left)`);
+      await new Promise(r => setTimeout(r, 4000));
+      return safeFetch(url, options, retries - 1, timeoutMs);
     }
 
     const text = await res.text();
+    if (res.status === 401 && typeof localStorage !== 'undefined') {
+      localStorage.removeItem('travelx_admin_token');
+      localStorage.removeItem('travelx_admin_auth');
+    }
+
     try {
       return JSON.parse(text);
     } catch (_) {
       return {
         success: false,
         error: res.status >= 500
-          ? `Server updating (${res.status}). Kripya 5 second baad dobara try karein.`
+          ? `Server busy (${res.status}). Backend restart / deploy zaroori ho sakta hai. 10 sec wait karke dubara Save dabayein, ya RESTART_TRAVELX.bat (local).`
           : `Unexpected response (${res.status})`
       };
     }
@@ -23,12 +55,20 @@ async function safeFetch(url, options = {}, retries = 2) {
     if (retries > 0) {
       console.warn('Network connection interrupted, retrying in 2.5s...', err.message);
       await new Promise(r => setTimeout(r, 2500));
-      return safeFetch(url, options, retries - 1);
+      return safeFetch(url, options, retries - 1, timeoutMs);
     }
+    const aborted = err && (err.name === 'AbortError' || String(err.message || '').includes('aborted'));
+    const refused = String(err.message || '').includes('Failed to fetch');
     return {
       success: false,
-      error: 'Network connection failed. Kripya page refresh karein (Ctrl + F5).'
+      error: aborted
+        ? 'Request timeout — server busy ya backend slow. 10 sec wait karke dubara try karein.'
+        : refused
+          ? 'Backend server connect nahi ho raha. START_TRAVELX.bat chalao (port 5001) ya CMD window band to nahi ki.'
+          : 'Network connection failed. Kripya page refresh karein (Ctrl + F5).'
     };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -36,6 +76,18 @@ export const api = {
   // Health
   getHealth: async () => {
     return safeFetch('/api/health');
+  },
+
+  adminLogin: async (pin) => {
+    return safeFetch('/api/auth/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+  },
+
+  verifyAdminSession: async () => {
+    return safeFetch('/api/auth/admin/session');
   },
 
   // Dashboard
@@ -106,15 +158,113 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageBase64, provider, apiKey, defaults })
-    });
+    }, 2, 180000);
   },
 
-  saveBulkFares: async (vendor_id, fares, replace_missing_dates = true, replace_mode = 'sector') => {
-    return safeFetch('/api/fares/bulk-save', {
+  syncVendorInventory: async (vendor_id, fares, replace_mode = 'sector') => {
+    return safeFetch('/api/fares/sync-inventory', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vendor_id, fares, replace_missing_dates, replace_mode })
-    });
+      body: JSON.stringify({ vendor_id, fares, replace_mode })
+    }, 3, 180000);
+  },
+
+  saveBulkFares: async (vendor_id, fares, replace_missing_dates = true, replace_mode = 'sector', onProgress) => {
+    if (!fares || fares.length === 0) {
+      return { success: false, error: 'No fare records to save' };
+    }
+
+    const health = await safeFetch('/api/health', {}, 1, 15000);
+    if (!health || health.status !== 'online') {
+      return {
+        success: false,
+        error: 'Backend server offline lag raha hai. START_TRAVELX.bat chalao aur black CMD window minimize karke rakho.'
+      };
+    }
+
+    const postChunk = (chunk, skipSync) =>
+      safeFetch('/api/fares/bulk-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendor_id,
+          fares: chunk,
+          replace_missing_dates: replace_missing_dates && !skipSync,
+          replace_mode,
+          skip_inventory_sync: skipSync,
+          summary_only: true
+        })
+      }, 4, 180000);
+
+    if (fares.length <= BULK_CHUNK_SIZE) {
+      return safeFetch('/api/fares/bulk-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendor_id,
+          fares,
+          replace_missing_dates,
+          replace_mode,
+          skip_inventory_sync: false,
+          summary_only: fares.length > 15
+        })
+      }, 4, 180000);
+    }
+
+    const totalChunks = Math.ceil(fares.length / BULK_CHUNK_SIZE);
+    let savedTotal = 0;
+    let createdTotal = 0;
+    let updatedTotal = 0;
+
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = fares.slice(i * BULK_CHUNK_SIZE, (i + 1) * BULK_CHUNK_SIZE);
+      if (onProgress) {
+        onProgress({ phase: 'save', current: i + 1, total: totalChunks, label: `Saving batch ${i + 1} of ${totalChunks}…` });
+      }
+      const res = await postChunk(chunk, true);
+      if (!res?.success) {
+        return {
+          ...res,
+          partial_saved: savedTotal,
+          error: res?.error || `Batch ${i + 1}/${totalChunks} save failed`
+        };
+      }
+      savedTotal += res.saved_count || 0;
+      createdTotal += res.created_count || 0;
+      updatedTotal += res.updated_count || 0;
+    }
+
+    let deletedCount = 0;
+    if (replace_missing_dates) {
+      if (onProgress) {
+        onProgress({ phase: 'sync', current: totalChunks, total: totalChunks, label: 'Cleaning old sold-out dates…' });
+      }
+      const syncRes = await safeFetch('/api/fares/sync-inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendor_id, fares, replace_mode })
+      }, 3, 180000);
+      if (!syncRes?.success) {
+        return {
+          success: true,
+          saved_count: savedTotal,
+          created_count: createdTotal,
+          updated_count: updatedTotal,
+          warning: syncRes?.error || 'Fares saved but inventory cleanup failed — retry Save once.',
+          deleted_count: 0
+        };
+      }
+      deletedCount = syncRes.deleted_count || 0;
+    }
+
+    return {
+      success: true,
+      saved_count: savedTotal,
+      created_count: createdTotal,
+      updated_count: updatedTotal,
+      deleted_count: deletedCount,
+      message: `Saved ${savedTotal} fares in ${totalChunks} batches`
+    };
   },
 
   batchUpdateMargins: async (updates, mark_published = 1, batch_title = 'Special Fare Release') => {
@@ -421,6 +571,57 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+  },
+
+  publishAllFutureFares: async () => {
+    return safeFetch('/api/export/publish-all-future', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+  },
+
+  downloadDatabaseBackup: async () => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('travelx_admin_token') : '';
+    const res = await fetch('/api/settings/backup/download', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        return { success: false, error: text || `Download failed (${res.status})` };
+      }
+    }
+    const blob = await res.blob();
+    const stamp = new Date().toISOString().slice(0, 10);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `travelx-backup-${stamp}.db`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return { success: true };
+  },
+
+  restoreDatabaseBackup: async (file) => {
+    const form = new FormData();
+    form.append('backup', file);
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('travelx_admin_token') : '';
+    const res = await fetch('/api/settings/backup/restore', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return { success: false, error: text || `Restore failed (${res.status})` };
+    }
   },
   trackBooking: async (ref) => {
     return safeFetch(`/api/public/bookings/track/${encodeURIComponent(ref)}`);

@@ -109,6 +109,27 @@ export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}
     });
   }, [data.recentFares, filterRoute, filterAirline, filterVendor, filterSearch]);
 
+  const handlePublishAllFuture = async () => {
+    const count = stats.unpublished_future_fares || 0;
+    if (!count) return;
+    if (!window.confirm(`Publish ${count} future fare(s) to the live B2B agent portal now?`)) {
+      return;
+    }
+    try {
+      const res = await api.publishAllFutureFares();
+      if (res?.success) {
+        alert(res.message || `Published ${res.updated_count || 0} fare(s) to the agent portal.`);
+        loadDashboard();
+        if (onRatesCleared) onRatesCleared();
+      } else {
+        alert(res?.error || 'Publish failed');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Connection error while publishing fares');
+    }
+  };
+
   const handleClearAllFares = async () => {
     if (!window.confirm('⚠️ Are you sure you want to delete all fare records and history? (Airlines, Vendors, Routes will remain safe)')) {
       return;
@@ -189,6 +210,22 @@ export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}
           </button>
         </div>
       </div>
+
+      {(stats.unpublished_future_fares || 0) > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs sm:text-sm text-amber-950 font-medium">
+            <span className="font-black">{stats.unpublished_future_fares}</span> future fare(s) are saved but{' '}
+            <span className="font-black">not visible</span> on the public agent portal until published.
+          </div>
+          <button
+            type="button"
+            onClick={handlePublishAllFuture}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
+          >
+            Publish All to Agent Portal
+          </button>
+        </div>
+      )}
 
       {/* Recently Updated Fares with Compact Header, Dropdown Filters & Quick Favs */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
