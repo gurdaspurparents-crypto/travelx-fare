@@ -44,7 +44,7 @@ async function safeFetch(url, options = {}, retries = 2, timeoutMs = 120000, ret
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
-    const fetchOptions = withAdminAuthHeaders(url, options);
+    const fetchOptions = withAdminAuthHeaders(url, { cache: 'no-store', ...options });
     if (controller) fetchOptions.signal = controller.signal;
     const res = await fetch(url, fetchOptions);
     // If Render is waking up from cold sleep (502 / 503 / 504), automatically retry after 2.5s
@@ -112,7 +112,7 @@ export const api = {
 
   // Dashboard
   getDashboardStats: async () => {
-    return safeFetch('/api/dashboard/stats');
+    return safeFetch(`/api/dashboard/stats?t=${Date.now()}`);
   },
 
   // Fares

@@ -273,8 +273,26 @@ function initSchema() {
   } catch (e) {}
 
   collapseDuplicateFares();
+  wipeFaresOnce();
   seedMasterData();
   ensureAppSettingsDefaults();
+}
+
+function wipeFaresOnce() {
+  const flag = 'fares_wiped_v1';
+  try {
+    const existing = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(flag);
+    if (existing) return;
+    db.exec('DELETE FROM published_specials; DELETE FROM fare_history; DELETE FROM fares;');
+    db.prepare(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES (?, '1', datetime('now', 'localtime'))
+    `).run(flag);
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+    console.log('Cleared all saved fares for a clean start');
+  } catch (e) {
+    console.warn('Fare wipe note:', e.message);
+  }
 }
 
 function collapseDuplicateFares() {

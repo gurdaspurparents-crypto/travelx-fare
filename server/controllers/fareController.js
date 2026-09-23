@@ -974,6 +974,11 @@ exports.deleteFare = (req, res) => {
       db.prepare(`DELETE FROM fares WHERE id IN (${placeholders})`).run(...ids);
     }
     safeInvalidateFaresCache();
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+    const stillThere = db.prepare('SELECT id FROM fares WHERE id = ?').get(id);
+    if (stillThere) {
+      return res.status(500).json({ success: false, error: 'Fare delete database mein save nahi hua.' });
+    }
     return res.json({ success: true, deleted_count: ids.length, message: 'Fare deleted successfully' });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });

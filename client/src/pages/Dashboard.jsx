@@ -135,11 +135,15 @@ export default function Dashboard({ setActiveTab, onSelectRoute, masterData = {}
     if (!window.confirm(`Delete ${label}? Same duplicate row bhi hat jayegi.`)) return;
     try {
       const res = await api.deleteFare(fare.id);
-      if (res?.success) {
+      if (res?.success && (res.deleted_count || 0) > 0) {
+        setData((prev) => ({
+          ...prev,
+          recentFares: (prev.recentFares || []).filter((row) => row.id !== fare.id)
+        }));
         loadDashboard();
         if (onRatesCleared) onRatesCleared();
       } else {
-        alert(res?.error || 'Delete failed');
+        alert(res?.error || 'Delete save nahi hua. Page refresh karke dubara trash dabayein.');
       }
     } catch (e) {
       console.error(e);
