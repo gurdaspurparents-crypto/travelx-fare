@@ -559,17 +559,29 @@ async function getGeminiCandidateModels(apiKey) {
         const available = data.models
           .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
           .map(m => m.name.replace(/^models\//, ''))
-          .filter(m => !m.includes('embedding') && !m.includes('aqa') && !m.includes('imagen') && !m.includes('bison'));
+          .filter(m => 
+            !m.includes('embedding') && 
+            !m.includes('aqa') && 
+            !m.includes('imagen') && 
+            !m.includes('bison') &&
+            !m.includes('tts') &&
+            !m.includes('audio') &&
+            !m.includes('speech') &&
+            !m.includes('realtime') &&
+            !m.includes('live')
+          );
 
-        // Rank models: flash first, then lite, then others
+        // Rank vision-capable models: standard flash first, then lite, then pro
         const score = (name) => {
-          if (name === 'gemini-2.5-flash') return 120;
-          if (name === 'gemini-2.0-flash') return 110;
-          if (name === 'gemini-1.5-flash') return 100;
-          if (name.includes('flash') && !name.includes('lite') && !name.includes('8b')) return 95;
-          if (name.includes('flash-lite')) return 90;
-          if (name.includes('flash-8b')) return 85;
-          if (name.includes('pro')) return 60;
+          if (name === 'gemini-2.5-flash') return 150;
+          if (name === 'gemini-2.0-flash') return 140;
+          if (name === 'gemini-1.5-flash') return 130;
+          if (name === 'gemini-2.0-flash-lite' || name === 'gemini-2.0-flash-lite-preview-02-05') return 120;
+          if (name === 'gemini-1.5-flash-8b') return 110;
+          if (name.includes('flash') && !name.includes('preview')) return 105;
+          if (name.includes('flash')) return 100;
+          if (name === 'gemini-2.5-pro') return 90;
+          if (name === 'gemini-1.5-pro') return 80;
           return 50;
         };
 
@@ -682,12 +694,8 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
           models.splice(models.indexOf(model) + 1, 0, `${modelId}#plain`);
         }
         console.warn(`❌ Model ${modelId} returned (${response.status}): ${msg}`);
-        const retired = response.status === 404 || /no longer available|not found|is not supported/i.test(msg);
-        if (queuePlain || retired || isGeminiCapacityError(response.status, msg)) {
-          console.log(`🔄 Switching to next Gemini candidate model...`);
-          continue;
-        }
-        break;
+        console.log(`🔄 Switching to next Gemini candidate model...`);
+        continue;
       }
 
       const data = await response.json();
