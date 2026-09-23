@@ -210,7 +210,7 @@ export default function ImageOcrUploader({
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
-        const maxW = 1600;
+        const maxW = 1400;
         const scale = img.width > maxW ? maxW / img.width : 1;
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -268,10 +268,17 @@ export default function ImageOcrUploader({
         }
       } catch (geminiErr) {
         geminiErrorMsg = geminiErr?.message || 'Gemini scan failed';
-        console.warn('Gemini scan error, trying local OCR fallback:', geminiErrorMsg);
       }
 
-      // Fallback: Local OCR if Gemini fails or yields 0 records
+      if (geminiErrorMsg) {
+        return {
+          success: false,
+          records: [],
+          error: geminiErrorMsg
+        };
+      }
+
+      // Fallback: Local OCR only if Gemini returned 0 records without error
       const ocr = await parseImageFares(file, defaults).catch((err) => ({
         success: false,
         records: [],
@@ -284,7 +291,7 @@ export default function ImageOcrUploader({
       return {
         success: false,
         records: [],
-        error: `${geminiErrorMsg || 'Gemini se rates nahi nikle.'}${ocr?.error ? ` (Local OCR: ${ocr.error})` : ''}`
+        error: 'Gemini se is flyer se dates ya rates match nahi hue.'
       };
     } else {
       // Local Browser OCR (Tesseract)

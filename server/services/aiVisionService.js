@@ -330,20 +330,35 @@ function unionVisionRecords(lists) {
 function buildRecordsFromModelText(rawText, defaults = {}) {
   let flyerText = '';
   let rawRecords = [];
+  let detectedBaggage = defaults.baggage || defaults.defaultBaggage || '30kg';
+  let detectedRefundable = defaults.is_refundable || defaults.defaultRefundable || 'NON_REFUNDABLE';
+
   try {
     const parsed = parseModelPayload(rawText);
-    flyerText = parsed.flyerText || '';
-    rawRecords = parsed.records || [];
+    if (Array.isArray(parsed)) {
+      rawRecords = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      flyerText = parsed.flyerText || parsed.flyer_text || '';
+      rawRecords = Array.isArray(parsed.records) ? parsed.records : (Array.isArray(parsed.fares) ? parsed.fares : []);
+      if (parsed.baggage) detectedBaggage = parsed.baggage;
+      if (parsed.is_refundable) detectedRefundable = parsed.is_refundable;
+    }
   } catch (_) {
     flyerText = String(rawText || '');
   }
 
-  const fromJson = standardizeAIRecords(rawRecords, defaults);
+  const effectiveDefaults = {
+    ...defaults,
+    baggage: detectedBaggage,
+    is_refundable: detectedRefundable
+  };
+
+  const fromJson = standardizeAIRecords(rawRecords, effectiveDefaults);
   const textForParser = flyerText || (!fromJson.length ? String(rawText || '') : '');
   let fromText = [];
   if (textForParser && /\d/.test(textForParser) && /[a-z]/i.test(textForParser)) {
     try {
-      fromText = parseWhatsAppFareText(textForParser, defaults).records || [];
+      fromText = parseWhatsAppFareText(textForParser, effectiveDefaults).records || [];
     } catch (_) {}
   }
   return unionVisionRecords([fromJson, fromText]);
@@ -424,34 +439,31 @@ CRITICAL INSTRUCTIONS:
    - Extract clean numeric Net Fare (e.g. 9700 from "Rs 9700.00", 20800 from "₹20,800"). Ignore timing brackets like "(08.25 AM - 02.55 AM)" or seat labels like "AS - 1".
 7. Detect Baggage (e.g., "15kg", "30kg", "30 + 07 KG") and Refundability ("NON_REFUNDABLE" or "REFUNDABLE").
 
-Return ONLY a valid JSON object matching this schema.
-Copy each table line into flyer_text exactly as printed (keep "20 SEP & 21 SEP" and "01 OCT TO 05 OCT" — do not expand them).
-Also put one records[] item per printed row, with date_text copied exactly and net_fare as a number.
+Return ONLY a clean valid JSON object matching this schema:
 {
-  "flyer_text": "AIR INDIA EXPRESS\\nAMRITSAR DUBAI\\n20 SEP & 21 SEP 17000\\n01 OCT TO 05 OCT (ALL DATES) 18000",
+  "baggage": "30kg",
+  "is_refundable": "NON_REFUNDABLE",
   "records": [
     {
       "origin": "ATQ",
       "destination": "DXB",
       "airline_code": "IX",
-      "flight_number": "",
+      "flight_number": "IX 191",
       "date_text": "20 SEP & 21 SEP",
-      "net_fare": 17000,
-      "baggage": "30kg",
-      "is_refundable": "NON_REFUNDABLE"
+      "net_fare": 17000
     },
     {
       "origin": "ATQ",
       "destination": "DXB",
       "airline_code": "IX",
-      "flight_number": "IX 191",
+      "flight_number": "",
       "travel_date": "2026-09-16",
-      "net_fare": 20800,
-      "baggage": "30kg",
-      "is_refundable": "NON_REFUNDABLE"
+      "net_fare": 20800
     }
   ]
 }
+For date ranges or streaks, you can put the printed text in "date_text" (e.g. "01 OCT TO 05 OCT" or "20 SEP & 21 SEP") or individual dates in "travel_date".
+Do NOT output duplicate text or explanation. Return JSON only.
 `;
 
 /**
@@ -638,11 +650,11 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
   const startedAt = Date.now();
 
   for (const model of models) {
-    if (Date.now() - startedAt > 58000) break;
+    if (Date.now() - startedAt > 105000) break;
     const plain = String(model).endsWith('#plain');
     const modelId = plain ? String(model).slice(0, -6) : model;
     const abort = new AbortController();
-    const abortTimer = setTimeout(() => abort.abort(), 18000);
+    const abortTimer = setTimeout(() => abort.abort(), 50000);
     try {
       console.log(`🚀 Scanning flyer with Gemini model: ${modelId}...`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
@@ -726,7 +738,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
     } catch (err) {
       const timedOut = err && (err.name === 'AbortError' || String(err.message || '').includes('aborted'));
       lastError = timedOut
-        ? new Error('Gemini response time se bahar chala gaya. Agle model par switch kar rahe hain...')
+        ? new Error('Gemini response timeout: Is flyer mein cards/dates zyada hain aur response aane mein time laga. Kripya dobara scan button dabayein.')
         : err;
       console.warn(`❌ Exception with model ${model}:`, err.message);
       continue;
