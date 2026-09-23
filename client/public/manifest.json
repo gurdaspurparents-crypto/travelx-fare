@@ -10,7 +10,7 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/?view=agent",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

@@ -21,7 +21,9 @@ function checkAdminRoute() {
   const path = window.location.pathname.toLowerCase();
   const search = window.location.search.toLowerCase();
   const hash = window.location.hash.toLowerCase();
-  return (
+
+  // 1. Explicit URL check
+  if (
     path.startsWith('/admin') ||
     path.startsWith('/staff') ||
     path.startsWith('/ops') ||
@@ -32,7 +34,29 @@ function checkAdminRoute() {
     search.includes('admin=true') ||
     hash.includes('admin') ||
     hash.includes('staff')
-  );
+  ) {
+    return true;
+  }
+
+  // 2. Mobile Home Screen Icon (PWA Standalone) or Saved Session check:
+  // If user saved "TX Admin" or "TX Staff" icon on their mobile home screen,
+  // ensure clicking the icon opens the Admin/Staff Desk directly!
+  try {
+    const isStandalone = 
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || 
+      window.navigator.standalone === true;
+    const token = localStorage.getItem('travelx_admin_token');
+    const role = localStorage.getItem('travelx_user_role');
+    const lastMode = localStorage.getItem('travelx_last_mode');
+
+    if (token && (lastMode === 'admin' || lastMode === 'staff' || role === 'admin' || role === 'staff' || isStandalone)) {
+      if (lastMode !== 'agent' && !search.includes('view=public')) {
+        return true;
+      }
+    }
+  } catch (_) {}
+
+  return false;
 }
 
 function checkIsStaffRoute() {
@@ -40,12 +64,22 @@ function checkIsStaffRoute() {
   const path = window.location.pathname.toLowerCase();
   const search = window.location.search.toLowerCase();
   const hash = window.location.hash.toLowerCase();
-  return (
+  if (
     path.startsWith('/staff') ||
     path.startsWith('/ops') ||
     search.includes('view=staff') ||
     hash.includes('staff')
-  );
+  ) {
+    return true;
+  }
+  try {
+    const role = localStorage.getItem('travelx_user_role');
+    const lastMode = localStorage.getItem('travelx_last_mode');
+    if (role === 'staff' || lastMode === 'staff') {
+      return true;
+    }
+  } catch (_) {}
+  return false;
 }
 
 export default function App() {
@@ -72,6 +106,22 @@ export default function App() {
   // Active Staff Mode is true whenever on /staff route OR authenticated as staff
   const isCurrentStaff = isStaffRoute || userRole === 'staff';
 
+  // Keep PWA Manifest in sync with current route so "Save to screen" captures the right URL
+  useEffect(() => {
+    try {
+      const el = document.getElementById('pwa-manifest');
+      if (el) {
+        if (isStaffRoute || userRole === 'staff') {
+          el.href = '/manifest-staff.json';
+        } else if (isAdminMode) {
+          el.href = '/manifest-admin.json';
+        } else {
+          el.href = '/manifest.json';
+        }
+      }
+    } catch (_) {}
+  }, [isAdminMode, isStaffRoute, userRole]);
+
   useEffect(() => {
     const handlePopState = () => {
       setIsAdminMode(checkAdminRoute());
@@ -85,6 +135,7 @@ export default function App() {
     if (window.history.pushState) {
       window.history.pushState({}, '', '/');
     }
+    localStorage.setItem('travelx_last_mode', 'agent');
     setIsAdminMode(false);
     setIsStaffRoute(false);
   };
@@ -93,6 +144,7 @@ export default function App() {
     if (window.history.pushState) {
       window.history.pushState({}, '', '/admin');
     }
+    localStorage.setItem('travelx_last_mode', 'admin');
     setIsAdminMode(true);
     setIsStaffRoute(false);
   };
@@ -101,6 +153,7 @@ export default function App() {
     if (window.history.pushState) {
       window.history.pushState({}, '', '/staff');
     }
+    localStorage.setItem('travelx_last_mode', 'staff');
     setIsAdminMode(true);
     setIsStaffRoute(true);
     setStaffTab('requests');
@@ -114,6 +167,7 @@ export default function App() {
         const role = res.role || (isStaffRoute ? 'staff' : 'admin');
         localStorage.setItem('travelx_admin_token', res.token);
         localStorage.setItem('travelx_user_role', role);
+        localStorage.setItem('travelx_last_mode', role);
         localStorage.removeItem('travelx_admin_auth');
         setUserRole(role);
         setAdminUnlocked(true);
@@ -134,6 +188,7 @@ export default function App() {
     localStorage.removeItem('travelx_admin_token');
     localStorage.removeItem('travelx_user_role');
     localStorage.removeItem('travelx_admin_auth');
+    localStorage.setItem('travelx_last_mode', 'agent');
     setAdminUnlocked(false);
     setUserRole('admin');
     handleOpenAgentPortal();

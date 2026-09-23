@@ -151,6 +151,83 @@ app.post('/api/export/publish-all-future', exportController.publishAllFutureFare
 app.post('/api/export/whatsapp-message', exportController.generateWhatsAppMessage);
 app.get('/api/export/excel', exportController.exportToExcel);
 
+// Dynamic PWA Manifests for Mobile Home Screen ("Save to Screen")
+app.get(['/manifest.json', '/manifest-admin.json', '/manifest-staff.json'], (req, res) => {
+  const referer = req.headers.referer || '';
+  const path = req.path.toLowerCase();
+  const mode = req.query.mode || '';
+
+  const isStaff = path.includes('staff') || mode === 'staff' || referer.includes('/staff') || referer.includes('staff');
+  const isAdmin = path.includes('admin') || mode === 'admin' || referer.includes('/admin') || referer.includes('admin');
+
+  res.setHeader('Content-Type', 'application/manifest+json');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+  if (isAdmin) {
+    return res.json({
+      short_name: "TX Admin",
+      name: "TravelX Admin Desk",
+      description: "TravelX Admin & Booking Inquiries Desk",
+      icons: [
+        {
+          src: "/travelx-logo.png",
+          type: "image/png",
+          sizes: "192x192 512x512",
+          purpose: "any maskable"
+        }
+      ],
+      start_url: "/admin",
+      scope: "/",
+      display: "standalone",
+      orientation: "any",
+      theme_color: "#0f172a",
+      background_color: "#0f172a"
+    });
+  }
+
+  if (isStaff) {
+    return res.json({
+      short_name: "TX Staff",
+      name: "TravelX Staff Operations",
+      description: "TravelX Staff Operations & Booking Requests Desk",
+      icons: [
+        {
+          src: "/travelx-logo.png",
+          type: "image/png",
+          sizes: "192x192 512x512",
+          purpose: "any maskable"
+        }
+      ],
+      start_url: "/staff",
+      scope: "/",
+      display: "standalone",
+      orientation: "any",
+      theme_color: "#0f172a",
+      background_color: "#0f172a"
+    });
+  }
+
+  return res.json({
+    short_name: "TravelX Rates",
+    name: "TravelX B2B Special Air Fares",
+    description: "Live B2B air ticket rates and instant seat booking portal for TravelX travel partners",
+    icons: [
+      {
+        src: "/travelx-logo.png",
+        type: "image/png",
+        sizes: "192x192 512x512",
+        purpose: "any maskable"
+      }
+    ],
+    start_url: "/",
+    scope: "/",
+    display: "standalone",
+    orientation: "portrait",
+    theme_color: "#0f172a",
+    background_color: "#0f172a"
+  });
+});
+
 // Serve static frontend in production if built
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist, {

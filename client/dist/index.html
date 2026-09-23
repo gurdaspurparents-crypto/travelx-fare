@@ -6,9 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="description" content="TravelX Special Air Fare Manager and B2B Live Portal" />
-    <link rel="manifest" href="/manifest.json" />
+    <link id="pwa-manifest" rel="manifest" href="/manifest.json" />
+    <script>
+      (function() {
+        try {
+          var p = window.location.pathname.toLowerCase();
+          var s = window.location.search.toLowerCase();
+          var lastMode = '';
+          try { lastMode = localStorage.getItem('travelx_last_mode') || ''; } catch(_) {}
+          var el = document.getElementById('pwa-manifest');
+          if (!el) return;
+          if (p.startsWith('/admin') || s.includes('admin') || (lastMode === 'admin' && !p.startsWith('/staff'))) {
+            el.href = '/manifest-admin.json';
+          } else if (p.startsWith('/staff') || s.includes('staff') || lastMode === 'staff') {
+            el.href = '/manifest-staff.json';
+          }
+        } catch (_) {}
+      })();
+    </script>
     <title>TravelX Pro - Special Fare Manager & B2B Rates Portal</title>
-    <script type="module" crossorigin src="/assets/index-C40b82A5.js"></script>
+    <script type="module" crossorigin src="/assets/index-iHer0Omb.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-jcAUWJu-.css">
   </head>
   <body>

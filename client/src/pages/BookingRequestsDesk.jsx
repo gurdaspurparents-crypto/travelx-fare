@@ -308,6 +308,13 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
   const playNotificationChime = () => {
     if (!soundEnabled) return;
 
+    // Trigger mobile vibration if on smartphone
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([300, 150, 300, 150, 450]);
+      }
+    } catch (_) {}
+
     // Trigger HTML5 audio fallback concurrently for maximum reliability
     playHtml5AudioFallback();
 
@@ -356,6 +363,14 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
   // Play attention-grabbing alert chime when an agent declines revised fare
   const playDeclineChime = () => {
     if (!soundEnabled) return;
+
+    // Trigger mobile vibration if on smartphone
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([400, 200, 400]);
+      }
+    } catch (_) {}
+
     try {
       const audioCtx = getPersistentAudioCtx();
       if (!audioCtx) return;
@@ -407,6 +422,13 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
 
     // Play chime immediately so user can hear speaker volume
     playNotificationChime();
+
+    // Trigger test vibration
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    } catch (_) {}
 
     if (typeof window !== 'undefined' && 'Notification' in window) {
       try {
@@ -1157,10 +1179,10 @@ Thank you for booking with TravelX!`;
             </div>
             <div>
               <h3 className="font-extrabold text-sm sm:text-base leading-snug">
-                Notification & Sound Chime Permission Required on this Computer!
+                Notification & Sound Chime Permission Required on this Device (PC / Mobile)!
               </h3>
               <p className="text-xs text-amber-100 font-medium">
-                Click the button below to enable Windows desktop popups and chime sounds on this computer for incoming queries.
+                Click the button below to enable sound chimes, phone vibration, and popup alerts for incoming queries.
               </p>
             </div>
           </div>
@@ -1169,7 +1191,7 @@ Thank you for booking with TravelX!`;
             onClick={handleTestAlerts}
             className="shrink-0 px-4 py-2.5 rounded-xl bg-white text-amber-900 font-black text-xs sm:text-sm hover:bg-amber-50 active:scale-95 transition shadow-md flex items-center space-x-2 cursor-pointer"
           >
-            <span>🔊 Enable & Test Sound / Popups</span>
+            <span>🔊 Enable & Test Sound / Vibration</span>
             <span>➔</span>
           </button>
         </div>
@@ -1181,7 +1203,7 @@ Thank you for booking with TravelX!`;
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
             <span className="font-bold">
-              🔔 Sound Chime & Windows Desktop Alerts are ACTIVE on this computer
+              🔔 Sound Chime, Vibration & Desktop/Mobile Alerts are ACTIVE on this device
             </span>
           </div>
           <button

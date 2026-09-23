@@ -1,7 +1,7 @@
 {
-  "short_name": "TravelX Rates",
-  "name": "TravelX B2B Special Air Fares",
-  "description": "Live B2B air ticket rates and instant seat booking portal for TravelX travel partners",
+  "short_name": "TX Staff",
+  "name": "TravelX Staff Operations",
+  "description": "TravelX Staff Operations & Booking Requests Desk",
   "icons": [
     {
       "src": "/travelx-logo.png",
@@ -10,10 +10,10 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/",
+  "start_url": "/staff",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "theme_color": "#0f172a",
   "background_color": "#0f172a"
 }
