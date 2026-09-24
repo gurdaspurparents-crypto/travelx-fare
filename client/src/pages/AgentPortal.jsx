@@ -4168,30 +4168,20 @@ ${contactFooter}`;
       {/* 6B. LIVE BOOKING TRACKER & E-TICKET MODAL                      */}
       {/* ───────────────────────────────────────────────────────────── */}
       {showTrackerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 max-h-[92vh] flex flex-col">
-            {/* Tracker Header */}
-            <div className="bg-[#0b3b82] text-white p-4 flex items-center justify-between shrink-0">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-2 rounded-xl bg-white/10 text-white">
-                  <Search className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/55 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200/80 shadow-[0_30px_80px_-20px_rgba(15,23,42,0.55)] overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="bg-[#0b2f6b] text-white px-5 py-4 flex items-center justify-between shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm sm:text-base leading-tight">Booking tracker</h3>
+                  {trackedBooking && !['CONFIRMED', 'CANCELLED', 'SOLD_OUT'].includes(trackedBooking.status) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-sky-100">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Live
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h3 className="font-bold text-sm sm:text-base leading-tight">
-                      Live Booking Tracker & E-Ticket
-                    </h3>
-                    {trackedBooking && !['CONFIRMED', 'CANCELLED', 'SOLD_OUT'].includes(trackedBooking.status) && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span>Live Sync 5s</span>
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-sky-200">
-                    Track status, upload passenger passports, and download issued tickets
-                  </p>
-                </div>
+                <p className="text-[11px] text-sky-200/90 mt-0.5">Status, passports, and e-ticket</p>
               </div>
               <button
                 type="button"
@@ -4199,17 +4189,15 @@ ${contactFooter}`;
                   setShowTrackerModal(false);
                   setTrackError(null);
                 }}
-                className="text-white/70 hover:text-white p-1.5 rounded-lg transition cursor-pointer"
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Modal Scrollable Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
-              
-              {/* Reference Search Bar */}
-              <div className="flex items-center space-x-2">
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4">
+              <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
@@ -4217,15 +4205,15 @@ ${contactFooter}`;
                     value={trackInputRef}
                     onChange={(e) => setTrackInputRef(e.target.value.toUpperCase())}
                     onKeyDown={(e) => e.key === 'Enter' && handleFetchTracking(trackInputRef)}
-                    placeholder="Enter Booking Reference (e.g. TX-NT5Y)"
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-slate-900 text-sm outline-none focus:border-blue-900 focus:bg-white"
+                    placeholder="Booking reference, e.g. TX-3DNH"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-semibold text-slate-900 text-sm outline-none focus:border-[#0b2f6b] focus:bg-white"
                   />
                 </div>
                 <button
                   type="button"
                   disabled={trackLoading || !trackInputRef.trim()}
                   onClick={() => handleFetchTracking(trackInputRef)}
-                  className="px-5 py-2.5 bg-blue-900 hover:bg-blue-950 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center space-x-1.5 shrink-0 shadow-xs"
+                  className="px-4 py-2.5 bg-[#0b2f6b] hover:bg-[#082656] disabled:opacity-50 text-white font-semibold text-xs rounded-xl transition cursor-pointer flex items-center space-x-1.5 shrink-0"
                 >
                   {trackLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                   <span>Track</span>
@@ -4244,14 +4232,14 @@ ${contactFooter}`;
               {trackedBooking && (
                 <div className="space-y-4">
                   {/* Top Reference & Status Card */}
-                  <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3.5 border-b border-slate-100">
                       <div>
-                        <span className="text-[10px] uppercase tracking-wider text-sky-200 font-bold block">
-                          Booking Reference
+                        <span className="text-[10px] uppercase tracking-[0.16em] text-slate-400 font-semibold block">
+                          Reference
                         </span>
                         <div className="flex items-center space-x-2 mt-0.5">
-                          <span className="text-xl sm:text-2xl font-black font-mono tracking-normal text-white">
+                          <span className="text-xl font-bold font-mono tracking-tight text-slate-900">
                             #{trackedBooking.request_ref}
                           </span>
                           <button
@@ -4261,7 +4249,7 @@ ${contactFooter}`;
                               setCopiedRef(true);
                               setTimeout(() => setCopiedRef(false), 2000);
                             }}
-                            className="p-1 hover:bg-white/10 rounded text-sky-200 transition cursor-pointer"
+                            className="p-1 hover:bg-slate-100 rounded text-slate-400 transition cursor-pointer"
                             title="Copy Reference"
                           >
                             {copiedRef ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
@@ -4329,26 +4317,26 @@ ${contactFooter}`;
                     </div>
 
                     {/* Sector & Passenger Quick Info */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 text-xs">
-                      <div>
-                        <span className="text-sky-200 text-[10px] block">Sector</span>
-                        <span className="font-black text-white">{trackedBooking.origin} ➔ {trackedBooking.destination}</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 bg-slate-50 text-xs">
+                      <div className="px-4 py-3 border-t border-slate-100 sm:border-t-0">
+                        <span className="text-slate-400 text-[10px] uppercase tracking-wide block">Sector</span>
+                        <span className="font-semibold text-slate-900">{trackedBooking.origin} → {trackedBooking.destination}</span>
                       </div>
-                      <div>
-                        <span className="text-sky-200 text-[10px] block">Travel Date</span>
-                        <span className="font-black text-white">{trackedBooking.travel_date}</span>
+                      <div className="px-4 py-3 border-t border-slate-100 sm:border-t-0 sm:border-l">
+                        <span className="text-slate-400 text-[10px] uppercase tracking-wide block">Date</span>
+                        <span className="font-semibold text-slate-900">{trackedBooking.travel_date}</span>
                       </div>
-                      <div>
-                        <span className="text-sky-200 text-[10px] block">Flight</span>
-                        <span className="font-black text-white">{trackedBooking.airline_name || trackedBooking.airline_code} {trackedBooking.flight_number}</span>
+                      <div className="px-4 py-3 border-t border-slate-100 sm:border-l">
+                        <span className="text-slate-400 text-[10px] uppercase tracking-wide block">Flight</span>
+                        <span className="font-semibold text-slate-900">{trackedBooking.airline_name || trackedBooking.airline_code} {trackedBooking.flight_number}</span>
                       </div>
-                      <div>
-                        <span className="text-sky-200 text-[10px] block">Total Amount</span>
-                        <span className="font-black text-white">
+                      <div className="px-4 py-3 border-t border-slate-100 sm:border-l">
+                        <span className="text-slate-400 text-[10px] uppercase tracking-wide block">Amount</span>
+                        <span className="font-semibold text-[#0b2f6b] tabular-nums">
                           ₹{Number(trackedBooking.total_amount || (trackedBooking.quoted_rate * trackedBooking.pax_count)).toLocaleString('en-IN')}
                         </span>
                         {trackedBooking.pax_infants > 0 && (
-                          <span className="text-[9px] text-amber-200 block font-semibold">
+                          <span className="text-[9px] text-amber-700 block font-semibold">
                             {trackedBooking.infant_fare
                               ? `(Includes Inf: ₹${Number(trackedBooking.infant_fare * trackedBooking.pax_infants).toLocaleString('en-IN')})`
                               : `• Infant rate extra (Contact TravelX)`}
@@ -4464,9 +4452,9 @@ ${contactFooter}`;
                   )}
 
                   {/* 4-Step Interactive Lifecycle Card */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
-                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Booking Progress Timeline
+                  <div className="border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.16em]">
+                      Progress
                     </h4>
 
                     {/* Step 1: Inquiry */}
@@ -4618,13 +4606,13 @@ ${contactFooter}`;
                                     <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-900 flex items-center justify-center mx-auto">
                                       <Upload className="w-5 h-5" />
                                     </div>
-                                    <p className="text-xs font-black text-slate-800">
+                                    <p className="text-xs font-semibold text-slate-800">
                                       {trackedBooking.passports && trackedBooking.passports.length > 0
-                                        ? 'Click to add more Passenger Passport copies (Images or PDF)'
-                                        : 'Click to select Passenger Passport copies (Images or PDF)'}
+                                        ? 'Add more passport copies'
+                                        : 'Upload passenger passports'}
                                     </p>
-                                    <p className="text-[10px] text-blue-700 font-bold">
-                                      ⚡ Auto-uploads instantly upon selection • Select up to 10 pages (max 15MB each)
+                                    <p className="text-[10px] text-slate-500">
+                                      Image or PDF · up to 10 files · 15 MB each · uploads as soon as you select
                                     </p>
                                   </>
                                 )}
@@ -4740,19 +4728,19 @@ ${contactFooter}`;
                   </div>
 
                   {/* Quick WhatsApp Support for this Booking */}
-                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <button
                       type="button"
                       onClick={() => openAgencyWhatsApp(`Hi TravelX, regarding booking #${trackedBooking.request_ref} (${trackedBooking.origin} to ${trackedBooking.destination} on ${trackedBooking.travel_date}): please assist.`)}
-                      className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                      className="flex-1 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition flex items-center justify-center space-x-1.5 cursor-pointer"
                     >
                       <MessageSquare className="w-4 h-4 text-emerald-600" />
-                      <span>Chat with Operations Desk regarding #{trackedBooking.request_ref}</span>
+                      <span>WhatsApp desk · #{trackedBooking.request_ref}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleFetchTracking(trackedBooking.request_ref)}
-                      className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1 cursor-pointer"
+                      className="py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition flex items-center justify-center space-x-1 cursor-pointer"
                       title="Refresh Status"
                     >
                       <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
