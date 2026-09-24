@@ -1592,7 +1592,7 @@ ${contactFooter}`;
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Kandhari Travels"
+                      placeholder="Enter Firm / Agency Name"
                       value={regForm.agencyName}
                       onChange={(e) => setRegForm({ ...regForm, agencyName: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-bold outline-none text-xs placeholder:text-slate-500"
@@ -1605,7 +1605,7 @@ ${contactFooter}`;
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Navkiran"
+                      placeholder="Enter Contact Person Name"
                       value={regForm.agentName}
                       onChange={(e) => setRegForm({ ...regForm, agentName: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-500"
@@ -1640,7 +1640,7 @@ ${contactFooter}`;
                     </label>
                     <input
                       type="email"
-                      placeholder="e.g. agency@gmail.com"
+                      placeholder="Enter email address"
                       value={regForm.email}
                       onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-500"
@@ -1670,7 +1670,7 @@ ${contactFooter}`;
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Amritsar"
+                      placeholder="Enter city"
                       value={regForm.city}
                       onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}
                       className="w-full px-2.5 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-500"
@@ -1693,7 +1693,7 @@ ${contactFooter}`;
                     <input
                       type="text"
                       maxLength={6}
-                      placeholder="e.g. 143001"
+                      placeholder="6-digit pincode"
                       value={regForm.pincode}
                       onChange={(e) => setRegForm({ ...regForm, pincode: e.target.value.replace(/\D/g, '') })}
                       className="w-full px-2.5 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono outline-none text-xs placeholder:text-slate-500"
@@ -1760,7 +1760,7 @@ ${contactFooter}`;
                       type={regForm.showPassword ? 'text' : 'password'}
                       required
                       minLength={4}
-                      placeholder="e.g. 1234 ya Password"
+                      placeholder="Enter 4-digit PIN or password"
                       value={regForm.pin}
                       onChange={(e) => setRegForm({ ...regForm, pin: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs placeholder:text-slate-500"
