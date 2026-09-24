@@ -506,6 +506,35 @@ function getCachedMasterFares() {
 exports.getPublicFares = (req, res) => {
   try {
     const { origin, destination, airline, search } = req.query;
+
+    let isMaintenance = false;
+    try {
+      const mRow = db.prepare("SELECT value FROM app_settings WHERE key = 'maintenance_mode'").get();
+      if (mRow && mRow.value === '1') isMaintenance = true;
+    } catch (_) {}
+
+    if (isMaintenance) {
+      const agencyContact = getPublicAgencyFromSettings();
+      return res.json({
+        success: true,
+        maintenance: true,
+        message: "TravelX Special Fare Engine is currently synchronizing live flight allocations. Live booking and search will automatically resume in a few moments.",
+        agency: {
+          name: 'TravelX',
+          title: 'TravelX Special Fares | B2B Agent Desk',
+          whatsapp: agencyContact.whatsapp,
+          contact: agencyContact.phone,
+          email: agencyContact.email,
+          updated_at: new Date().toISOString()
+        },
+        sectors: [],
+        airlines: [],
+        count: 0,
+        fares: [],
+        dailyFlights: []
+      });
+    }
+
     const master = getCachedMasterFares();
 
     let filteredFares = master.fares;
@@ -576,8 +605,14 @@ exports.getPublicFares = (req, res) => {
  */
 exports.getPublicConfig = (req, res) => {
   const agencyContact = getPublicAgencyFromSettings();
+  let isMaintenance = false;
+  try {
+    const mRow = db.prepare("SELECT value FROM app_settings WHERE key = 'maintenance_mode'").get();
+    if (mRow && mRow.value === '1') isMaintenance = true;
+  } catch (_) {}
   return res.json({
     success: true,
+    maintenance: isMaintenance,
     agency: {
       name: 'TravelX',
       portalTitle: 'TravelX B2B Special Air Fares',

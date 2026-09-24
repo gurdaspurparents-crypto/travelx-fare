@@ -22,39 +22,25 @@ function checkAdminRoute() {
   const search = window.location.search.toLowerCase();
   const hash = window.location.hash.toLowerCase();
 
-  // 1. Explicit URL check
+  // STRICT PRIVACY LOCK:
+  // The root path '/' (and any URL without explicit /admin or /staff) is 1000%
+  // permanently reserved for the public B2B Agent Portal.
+  // Under NO circumstances does localStorage, admin token, or PWA mode hijack '/' into Admin!
   if (
-    path.startsWith('/admin') ||
-    path.startsWith('/staff') ||
+    path === '/admin' ||
+    path.startsWith('/admin/') ||
+    path === '/staff' ||
+    path.startsWith('/staff/') ||
     path.startsWith('/ops') ||
     path.startsWith('/desk') ||
     path.startsWith('/manage') ||
     search.includes('view=admin') ||
     search.includes('view=staff') ||
-    search.includes('admin=true') ||
     hash.includes('admin') ||
     hash.includes('staff')
   ) {
     return true;
   }
-
-  // 2. Mobile Home Screen Icon (PWA Standalone) or Saved Session check:
-  // If user saved "TX Admin" or "TX Staff" icon on their mobile home screen,
-  // ensure clicking the icon opens the Admin/Staff Desk directly!
-  try {
-    const isStandalone = 
-      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || 
-      window.navigator.standalone === true;
-    const token = localStorage.getItem('travelx_admin_token');
-    const role = localStorage.getItem('travelx_user_role');
-    const lastMode = localStorage.getItem('travelx_last_mode');
-
-    if (token && (lastMode === 'admin' || lastMode === 'staff' || role === 'admin' || role === 'staff' || isStandalone)) {
-      if (lastMode !== 'agent' && !search.includes('view=public')) {
-        return true;
-      }
-    }
-  } catch (_) {}
 
   return false;
 }
@@ -64,21 +50,17 @@ function checkIsStaffRoute() {
   const path = window.location.pathname.toLowerCase();
   const search = window.location.search.toLowerCase();
   const hash = window.location.hash.toLowerCase();
+
   if (
-    path.startsWith('/staff') ||
+    path === '/staff' ||
+    path.startsWith('/staff/') ||
     path.startsWith('/ops') ||
     search.includes('view=staff') ||
     hash.includes('staff')
   ) {
     return true;
   }
-  try {
-    const role = localStorage.getItem('travelx_user_role');
-    const lastMode = localStorage.getItem('travelx_last_mode');
-    if (role === 'staff' || lastMode === 'staff') {
-      return true;
-    }
-  } catch (_) {}
+
   return false;
 }
 

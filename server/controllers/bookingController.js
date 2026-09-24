@@ -1114,7 +1114,8 @@ exports.getWhatsAppSettings = (req, res) => {
         admin_pin_set: !!settings.admin_pin,
         callmebot_api_key: settings.callmebot_api_key || '',
         whatsapp_alerts_enabled: settings.whatsapp_alerts_enabled === '1',
-        auto_expiry_enabled: settings.auto_expiry_enabled !== '0'
+        auto_expiry_enabled: settings.auto_expiry_enabled !== '0',
+        maintenance_mode: settings.maintenance_mode === '1'
       }
     });
   } catch (err) {
@@ -1135,7 +1136,8 @@ exports.saveWhatsAppSettings = (req, res) => {
       admin_pin,
       callmebot_api_key,
       whatsapp_alerts_enabled,
-      auto_expiry_enabled
+      auto_expiry_enabled,
+      maintenance_mode
     } = req.body;
 
     const upsert = db.prepare(`
@@ -1166,6 +1168,9 @@ exports.saveWhatsAppSettings = (req, res) => {
     }
     if (auto_expiry_enabled !== undefined) {
       upsert.run('auto_expiry_enabled', auto_expiry_enabled ? '1' : '0');
+    }
+    if (maintenance_mode !== undefined) {
+      upsert.run('maintenance_mode', maintenance_mode ? '1' : '0');
     }
 
     invalidateFaresCache();

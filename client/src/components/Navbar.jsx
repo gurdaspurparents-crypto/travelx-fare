@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plane, LayoutDashboard, Zap, Table, MessageSquare, 
   GitCompare, Send, History, Database, Download, Building2, Layers, Trash2, Plus,
-  FileSpreadsheet, Smartphone, Inbox
+  FileSpreadsheet, Smartphone, Inbox, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import ClearRatesModal from './ClearRatesModal';
 import { api } from '../utils/api';
@@ -10,8 +10,10 @@ import { api } from '../utils/api';
 export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesCleared, onOpenAgentPortal }) {
   const [showClearModal, setShowClearModal] = useState(false);
   const [bookingStats, setBookingStats] = useState({ pending: 0, declined: 0, docs_submitted: 0 });
+  const [maintenanceActive, setMaintenanceActive] = useState(false);
+  const [togglingMaint, setTogglingMaint] = useState(false);
 
-  // Poll booking stats for live badges (Pending, Declined, Passports Ready)
+  // Poll booking stats for live badges (Pending, Declined, Passports Ready) & check maintenance state
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -27,10 +29,36 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
         // silent
       }
     };
+
+    const fetchMaint = async () => {
+      try {
+        const sRes = await api.getWhatsAppSettings();
+        if (sRes?.success && sRes.settings) {
+          setMaintenanceActive(!!sRes.settings.maintenance_mode);
+        }
+      } catch (_) {}
+    };
+
     fetchStats();
+    fetchMaint();
     const timer = setInterval(fetchStats, 3500);
     return () => clearInterval(timer);
   }, []);
+
+  const handleToggleMaintenance = async () => {
+    if (togglingMaint) return;
+    const nextVal = !maintenanceActive;
+    try {
+      setTogglingMaint(true);
+      const res = await api.saveWhatsAppSettings({ maintenance_mode: nextVal });
+      if (res?.success) {
+        setMaintenanceActive(nextVal);
+      }
+    } catch (_) {}
+    finally {
+      setTogglingMaint(false);
+    }
+  };
 
   // Primary Desks (Core daily workflow)
   const primaryNavItems = [
@@ -78,8 +106,33 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
               </div>
             </div>
 
-            {/* Quick Action Buttons (Excel, Clear Rates, Add Fare, B2B Agent View) */}
+            {/* Quick Action Buttons (Excel, Clear Rates, Add Fare, B2B Agent View, Maintenance Mode) */}
             <div className="flex items-center space-x-1.5">
+              {/* Maintenance Mode Toggle Button */}
+              {maintenanceActive ? (
+                <button
+                  type="button"
+                  onClick={handleToggleMaintenance}
+                  disabled={togglingMaint}
+                  className="inline-flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-2 py-0.5 rounded-md transition shadow-xs cursor-pointer animate-pulse border border-amber-300"
+                  title="Maintenance Mode is ACTIVE on B2B Portal. Click to TURN OFF and make B2B portal live."
+                >
+                  <ShieldAlert className="w-3 h-3 text-slate-950" />
+                  <span>⚠️ Maintenance: ON</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleToggleMaintenance}
+                  disabled={togglingMaint}
+                  className="inline-flex items-center space-x-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-2 py-0.5 rounded-md border border-slate-700 transition cursor-pointer shadow-xs"
+                  title="Click to put B2B portal in Maintenance Mode while you update bulk rates"
+                >
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  <span className="hidden md:inline">B2B Portal: LIVE</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onOpenAgentPortal}

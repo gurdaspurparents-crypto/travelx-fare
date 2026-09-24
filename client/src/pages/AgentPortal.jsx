@@ -143,10 +143,11 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
   // Flight Details Modal Drawer
   const [detailFlight, setDetailFlight] = useState(null);
 
-  // Admin PIN Switch Modal
-  const [showAdminPinModal, setShowAdminPinModal] = useState(false);
-  const [adminPinInput, setAdminPinInput] = useState('');
-  const [adminPinError, setAdminPinError] = useState(false);
+  // Live Maintenance & System Update States (100% Privacy Protection)
+  const [isMaintenance, setIsMaintenance] = useState(false);
+  const [maintenanceMsg, setMaintenanceMsg] = useState('');
+  const [isServerSyncing, setIsServerSyncing] = useState(false);
+  const [syncCountdown, setSyncCountdown] = useState(5);
 
   // Copy status
   const [copySuccess, setCopySuccess] = useState(false);
@@ -246,7 +247,28 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
       });
 
       const res = await api.getPublicFares();
+      if (res && res.maintenance) {
+        setIsMaintenance(true);
+        setIsServerSyncing(false);
+        setMaintenanceMsg(res.message || "TravelX Special Fare Engine is currently synchronizing live flight allocations.");
+        if (res.agency) {
+          setAgencyConfig(prev => ({ 
+            ...prev, 
+            ...res.agency,
+            whatsapp: res.agency.whatsapp || prev.whatsapp,
+            phone: res.agency.contact || res.agency.phone || prev.phone,
+            email: res.agency.email || prev.email,
+            name: 'TravelX'
+          }));
+        }
+        setLoading(false);
+        setTimeout(() => loadPortalData(false), 5000);
+        return;
+      }
+      setIsMaintenance(false);
+
       if (res && res.success) {
+        setIsServerSyncing(false);
         setError(null);
         setLoading(false);
         if (Array.isArray(res.fares)) {
@@ -293,11 +315,8 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
         })();
 
         if (!hasExisting) {
-          if (retryAttempt < 3) {
-            setTimeout(() => loadPortalData(true, retryAttempt + 1), 2000);
-            return;
-          }
-          setError('Server is warming up or busy. Please click "Reload Rates" below.');
+          setIsServerSyncing(true);
+          setTimeout(() => loadPortalData(true), 3500);
         } else {
           console.warn('Transient server response; keeping existing live rates.');
         }
@@ -312,11 +331,8 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
       })();
 
       if (!hasExisting) {
-        if (retryAttempt < 3) {
-          setTimeout(() => loadPortalData(true, retryAttempt + 1), 2000);
-          return;
-        }
-        setError('Connection error. Please verify connection and click "Reload Rates" below.');
+        setIsServerSyncing(true);
+        setTimeout(() => loadPortalData(true), 3500);
       } else {
         console.warn('Network issue; keeping existing live rates active.');
       }
@@ -1109,26 +1125,6 @@ Please confirm availability and share status.`;
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  // 7. Admin PIN verify
-  const handleVerifyAdminPin = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await api.adminLogin(adminPinInput.trim());
-      if (res?.success && res.token) {
-        localStorage.setItem('travelx_admin_token', res.token);
-        localStorage.removeItem('travelx_admin_auth');
-        setShowAdminPinModal(false);
-        setAdminPinInput('');
-        setAdminPinError(false);
-        if (onSwitchToAdmin) onSwitchToAdmin();
-      } else {
-        setAdminPinError(true);
-      }
-    } catch (_) {
-      setAdminPinError(true);
-    }
-  };
-
   // Airline Logos & Colors helper using official downloaded PNG logos
   const renderAirlineIcon = (code, name, customClass = "w-11 h-11") => {
     const fallbackColor = 
@@ -1319,9 +1315,82 @@ Please confirm availability and share status.`;
       </header>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 2. EXECUTIVE AVIATION SEARCH ENGINE                          */}
+      {/* 1.5 LIVE MAINTENANCE / ROUTINE INVENTORY SYNCHRONIZATION      */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <section className="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 pt-4 pb-4 px-3 sm:px-6 shadow-xl border-b border-slate-800 text-white">
+      {(isMaintenance || (isServerSyncing && (!dailyFlights || dailyFlights.length === 0))) ? (
+        <main className="flex-1 max-w-[1200px] w-full mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
+          <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-xl p-8 sm:p-12 text-center relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-500" />
+            
+            {/* Animated Radar Pulse */}
+            <div className="relative w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-20" />
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-900 to-indigo-900 text-white flex items-center justify-center shadow-lg border border-blue-700/50 relative z-10">
+                <Plane className="w-8 h-8 text-blue-200 -rotate-45" />
+              </div>
+            </div>
+
+            {/* Badge */}
+            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-900 text-xs font-black uppercase tracking-wider mb-4">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>TravelX Live Fare Engine • Routine Sync</span>
+            </div>
+
+            {/* Heading */}
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mb-3">
+              Live Airline Inventory Synchronization
+            </h2>
+
+            {/* Body Description */}
+            <p className="text-sm text-slate-600 leading-relaxed max-w-lg mx-auto mb-6">
+              {maintenanceMsg || "Our automated pricing desks are currently synchronizing today's guaranteed airline seats and group allocations for Amritsar, Delhi & Chandigarh sectors. Live search and instant seat hold will resume in a few moments."}
+            </p>
+
+            {/* Live Auto-Recovery Status */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 max-w-md mx-auto mb-6 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5 text-left">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <div>
+                  <p className="text-xs font-bold text-slate-900">System Auto-Reconnecting</p>
+                  <p className="text-[11px] text-slate-500">Checking live server status continuously...</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => loadPortalData(true)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center space-x-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Check Now</span>
+              </button>
+            </div>
+
+            {/* Emergency Offline Issuance Contact */}
+            <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-4 text-xs text-slate-500">
+              <span>Urgent ticket issuance:</span>
+              <a 
+                href={`tel:${agencyConfig?.phone || '+919888888888'}`}
+                className="font-bold text-slate-800 hover:text-blue-600 transition flex items-center space-x-1"
+              >
+                <span>📞 {agencyConfig?.phone || '+91 98888 88888'}</span>
+              </a>
+              <span className="hidden sm:inline text-slate-300">•</span>
+              <button
+                type="button"
+                onClick={() => openAgencyWhatsApp('Hello TravelX, I need urgent booking assistance during inventory sync.')}
+                className="font-bold text-emerald-700 hover:text-emerald-800 transition flex items-center space-x-1 cursor-pointer"
+              >
+                <span>💬 WhatsApp Support</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      ) : (
+        <>
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* 2. EXECUTIVE AVIATION SEARCH ENGINE                          */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          <section className="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 pt-4 pb-4 px-3 sm:px-6 shadow-xl border-b border-slate-800 text-white">
         <div className="max-w-[1700px] mx-auto space-y-3">
           
           {/* Top Bar: Trip Mode & Airline Badges */}
@@ -3332,70 +3401,6 @@ Please confirm availability and share status.`;
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 6. ADMIN SECURITY PIN MODAL (Switch back to internal panel)   */}
-      {/* ───────────────────────────────────────────────────────────── */}
-      {showAdminPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center mx-auto shadow-md">
-                <Lock className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-base text-slate-900">Switch to Admin Desk</h3>
-              <p className="text-xs text-slate-500">
-                Enter your Admin Access PIN to enter the internal rate management panel.
-              </p>
-            </div>
-
-            <form onSubmit={handleVerifyAdminPin} className="mt-4 space-y-3">
-              <div>
-                <input
-                  type="password"
-                  value={adminPinInput}
-                  onChange={(e) => {
-                    setAdminPinInput(e.target.value);
-                    setAdminPinError(false);
-                  }}
-                  placeholder="Enter Admin PIN"
-                  className={`w-full px-3 py-2 text-center text-lg font-mono tracking-widest rounded-xl border outline-none focus:ring-2 ${
-                    adminPinError
-                      ? 'border-rose-500 focus:ring-rose-200 bg-rose-50'
-                      : 'border-slate-300 focus:border-slate-900 focus:ring-slate-200'
-                  }`}
-                  autoFocus
-                />
-                {adminPinError && (
-                  <p className="text-xs text-rose-600 font-semibold mt-1 text-center">
-                    Incorrect PIN. Contact TravelX desk if you forgot it.
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAdminPinModal(false);
-                    setAdminPinInput('');
-                    setAdminPinError(false);
-                  }}
-                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs"
-                >
-                  Enter Admin
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ───────────────────────────────────────────────────────────── */}
       {/* 6B. LIVE BOOKING TRACKER & E-TICKET MODAL                      */}
       {/* ───────────────────────────────────────────────────────────── */}
       {showTrackerModal && (
@@ -3996,6 +4001,8 @@ Please confirm availability and share status.`;
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}

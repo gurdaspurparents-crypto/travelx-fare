@@ -271,6 +271,7 @@ function initSchema() {
     insertSetting.run('callmebot_api_key', '');
     insertSetting.run('whatsapp_alerts_enabled', '0');
     insertSetting.run('auto_expiry_enabled', '1');
+    insertSetting.run('maintenance_mode', '0');
   } catch (e) {}
 
   // Retain all existing fares safely across all restarts/updates
