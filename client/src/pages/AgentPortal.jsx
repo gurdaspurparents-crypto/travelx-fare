@@ -1376,28 +1376,31 @@ ${contactFooter}`;
   // Shown when agent is NOT authenticated
   // ─────────────────────────────────────────────────────────────
   if (!agentProfile || !agentProfile.agencyName) {
+    const isRegister = authTab === 'register';
+
     return (
       <div 
         className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative overflow-x-hidden bg-cover bg-center bg-no-repeat bg-fixed"
-        style={{ backgroundImage: `url('/travelx-login-bg.jpg')` }}
+        style={{
+          backgroundImage: `linear-gradient(rgba(3, 7, 18, 0.80), rgba(2, 6, 23, 0.88)), url('/travelx-login-bg.jpg')`
+        }}
       >
-        {/* Scenic Background Overlay with subtle tint for readability while keeping the image vibrant */}
-        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[1.5px] pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-slate-950/75 pointer-events-none" />
+        {/* Subtle radial vignette for deep contrast and zero washed-out glare */}
+        <div className="absolute inset-0 bg-radial from-transparent via-slate-950/40 to-slate-950/90 pointer-events-none" />
         
-        {/* Top Minimal Header */}
-        <header className="relative z-10 border-b border-white/15 bg-slate-950/70 backdrop-blur-md">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        {/* Top Minimal Navigation Bar */}
+        <header className="relative z-10 border-b border-white/10 bg-slate-950/70 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 p-0.5 shadow-md flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800 p-0.5 shadow-lg flex items-center justify-center">
                 <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                  <Plane className="w-4 h-4 text-sky-400 -rotate-45" />
+                  <Plane className="w-5 h-5 text-sky-400 -rotate-45" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-lg font-black text-white tracking-tight">TravelX</span>
-                  <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/30 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  <span className="text-xl font-black text-white tracking-tight">TravelX</span>
+                  <span className="text-[10px] bg-blue-500/20 text-sky-300 border border-blue-400/30 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
                     B2B AIR PORTAL
                   </span>
                 </div>
@@ -1405,403 +1408,496 @@ ${contactFooter}`;
               </div>
             </div>
 
-            <a
-              href="https://wa.me/919888314788?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold transition"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Desk Support</span>
-            </a>
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <a
+                href="tel:+919888888888"
+                className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-bold transition"
+              >
+                <Phone className="w-3.5 h-3.5 text-blue-400" />
+                <span>+91 98888 88888</span>
+              </a>
+              <a
+                href="https://wa.me/919888314788?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-bold transition shadow-sm"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Desk WhatsApp</span>
+              </a>
+            </div>
           </div>
         </header>
 
-        {/* Center Gateway Container */}
-        <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-auto">
-          <div className="w-full max-w-lg bg-slate-900/90 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden my-4 ring-1 ring-white/10">
+        {/* Main Hero & Auth Split Layout */}
+        <main className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12 my-auto">
+          <div className="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
             
-            {/* Hero Header */}
-            <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 p-5 sm:p-6 border-b border-white/10 text-center">
-              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-sky-300 text-[11px] font-bold uppercase tracking-wider mb-2.5">
-                <Lock className="w-3.5 h-3.5 text-sky-400" />
-                <span>Authorized B2B Agents Only</span>
+            {/* Left Column: Brand Showcase & B2B Benefits */}
+            <div className="lg:col-span-6 xl:col-span-7 space-y-6 text-white text-center lg:text-left">
+              
+              {/* Badge */}
+              <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-sky-300 text-xs font-bold uppercase tracking-wider shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Verified B2B Travel Agent Network</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Special Flight Rates Desk
-              </h2>
-              <p className="text-xs text-slate-300 mt-1 max-w-md mx-auto">
-                Login with your agency mobile & security PIN to access fixed departure rates, live seat holds & white-label quotations.
-              </p>
 
-              {/* Tabs Switcher */}
-              <div className="mt-5 grid grid-cols-2 p-1 bg-slate-950/70 border border-white/10 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => { setAuthTab('login'); setAuthError(''); setAuthSuccess(''); }}
-                  className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-                    authTab === 'login'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Agent Login</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAuthTab('register'); setAuthError(''); setAuthSuccess(''); }}
-                  className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-                    authTab === 'register'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  <span>New Agency Register</span>
-                </button>
+              {/* Main Headline */}
+              <div className="space-y-3">
+                <h1 className="text-3xl sm:text-4xl xl:text-5xl font-black text-white tracking-tight leading-[1.15]">
+                  Exclusive Fixed Departure{' '}
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-blue-300 to-indigo-300">
+                    Group Airline Fares
+                  </span>
+                </h1>
+                <p className="text-sm sm:text-base text-slate-300 max-w-xl mx-auto lg:mx-0 font-normal leading-relaxed">
+                  Direct group inventory allocations for <strong className="text-white font-bold">Dubai (ATQ-DXB, ATQ-SHJ)</strong> and <strong className="text-white font-bold">Abu Dhabi (IXC-AUH)</strong>. Guaranteed wholesale rates with instant seat confirmation.
+                </p>
+              </div>
+
+              {/* 3 Value Pillars */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2 max-w-2xl mx-auto lg:mx-0 text-left">
+                <div className="p-3.5 rounded-2xl bg-slate-900/85 border border-white/10 shadow-lg backdrop-blur-md space-y-1.5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-sky-300 flex items-center justify-center font-bold">
+                    <Plane className="w-4 h-4 -rotate-45" />
+                  </div>
+                  <h3 className="font-black text-xs text-white">Direct Inventory</h3>
+                  <p className="text-[11px] text-slate-400 leading-snug">Daily seats on Air India Express, IndiGo & SpiceJet.</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-900/85 border border-white/10 shadow-lg backdrop-blur-md space-y-1.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-black text-xs text-white">White-Label Brand</h3>
+                  <p className="text-[11px] text-slate-400 leading-snug">Display your own firm name & logo on client quotes.</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-900/85 border border-white/10 shadow-lg backdrop-blur-md space-y-1.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-black text-xs text-white">Instant Seat Hold</h3>
+                  <p className="text-[11px] text-slate-400 leading-snug">1-click hold requests with live tracking & WhatsApp dispatch.</p>
+                </div>
+              </div>
+
+              {/* Trust Tag */}
+              <div className="pt-1 flex items-center justify-center lg:justify-start space-x-4 text-xs text-slate-400">
+                <span className="flex items-center space-x-1.5">
+                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>256-Bit Encrypted</span>
+                </span>
+                <span>•</span>
+                <span>Zero Net Fare Exposure</span>
+                <span>•</span>
+                <span>Dedicated Operations Desk</span>
               </div>
             </div>
 
-            {/* Error / Success Feedback */}
-            {authError && (
-              <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>{authError}</span>
-              </div>
-            )}
-            {authSuccess && (
-              <div className="mx-5 mt-4 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>{authSuccess}</span>
-              </div>
-            )}
-
-            {/* Tab 1: Login Form */}
-            {authTab === 'login' && (
-              <form onSubmit={handleAgentLogin} className="p-5 sm:p-6 space-y-4 text-xs">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1.5">
-                    Registered Mobile Number *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold font-mono text-xs">
-                      +91
-                    </span>
-                    <input
-                      type="tel"
-                      required
-                      maxLength={10}
-                      placeholder="10-digit mobile number"
-                      value={loginForm.mobile}
-                      onChange={(e) => setLoginForm({ ...loginForm, mobile: e.target.value.replace(/\D/g, '') })}
-                      className="w-full pl-12 pr-4 py-2.5 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold text-sm outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-slate-300 font-bold">
-                      Security Password / 4-Digit PIN *
-                    </label>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={loginForm.showPassword ? 'text' : 'password'}
-                      required
-                      placeholder="Enter your Password or PIN"
-                      value={loginForm.pin}
-                      onChange={(e) => setLoginForm({ ...loginForm, pin: e.target.value })}
-                      className="w-full pl-3 pr-10 py-2.5 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold text-sm outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setLoginForm({ ...loginForm, showPassword: !loginForm.showPassword })}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white transition cursor-pointer"
-                    >
-                      {loginForm.showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Agar pehle PIN set nahi kiya tha, toh pehli baar koi bhi 4-digit PIN daal kar login karein.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50"
-                >
-                  {authLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Verifying Credentials...</span>
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="w-4 h-4" />
-                      <span>Secure B2B Login</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="pt-2 text-center border-t border-white/5">
-                  <p className="text-slate-400 text-xs">
-                    Pehli baar login kar rahe hain?{' '}
-                    <button
-                      type="button"
-                      onClick={() => { setAuthTab('register'); setAuthError(''); }}
-                      className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
-                    >
-                      New Agency Register karein (1-min)
-                    </button>
-                  </p>
-                </div>
-              </form>
-            )}
-
-            {/* Tab 2: New Agency Registration Form */}
-            {authTab === 'register' && (
-              <form onSubmit={handleAgentRegister} className="p-5 sm:p-6 space-y-3.5 text-xs">
+            {/* Right Column: High-Contrast Auth Card */}
+            <div className={`lg:col-span-6 xl:col-span-5 w-full ${isRegister ? 'max-w-xl' : 'max-w-md'} mx-auto lg:ml-auto transition-all duration-200`}>
+              <div className="bg-[#0b101b]/95 border border-slate-700/80 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] rounded-3xl backdrop-blur-xl overflow-hidden ring-1 ring-white/10">
                 
-                {/* 1. Faram Name & Contact Person */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">
-                      Firm / Agency Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Kandhari Travels"
-                      value={regForm.agencyName}
-                      onChange={(e) => setRegForm({ ...regForm, agencyName: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-bold outline-none text-xs"
-                    />
+                {/* Card Header */}
+                <div className="p-5 sm:p-6 pb-4 border-b border-slate-800 bg-gradient-to-b from-slate-900/90 to-[#0b101b] text-center">
+                  <div className="inline-flex items-center space-x-1.5 px-3 py-0.5 rounded-full bg-blue-500/15 border border-blue-400/25 text-sky-300 text-[10px] font-bold uppercase tracking-wider mb-2">
+                    <Lock className="w-3 h-3 text-sky-400" />
+                    <span>Authorized B2B Portal</span>
                   </div>
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">
-                      Contact Person (Name) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Navkiran"
-                      value={regForm.agentName}
-                      onChange={(e) => setRegForm({ ...regForm, agentName: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
-                    />
-                  </div>
-                </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                    {isRegister ? 'New Agency Registration' : 'B2B Agent Login'}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {isRegister 
+                      ? 'Register your travel agency to unlock live fixed departure rates & branding' 
+                      : 'Enter your 10-digit mobile & security PIN to access live fares'}
+                  </p>
 
-                {/* 2. Mobile Number & Email */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">
-                      Mobile Number (WhatsApp) *
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-2 text-slate-400 font-bold font-mono text-xs">
-                        +91
-                      </span>
-                      <input
-                        type="tel"
-                        required
-                        maxLength={10}
-                        placeholder="10-digit mobile"
-                        value={regForm.mobile}
-                        onChange={(e) => setRegForm({ ...regForm, mobile: e.target.value.replace(/\D/g, '') })}
-                        className="w-full pl-10 pr-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">
-                      Email Address (Optional)
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="e.g. agency@gmail.com"
-                      value={regForm.email}
-                      onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Address, City, State */}
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    Office / Shop Address *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Shop/Office No., Street, Complex or Market"
-                    value={regForm.address}
-                    onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white outline-none text-xs"
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-2.5">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">City *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Amritsar"
-                      value={regForm.city}
-                      onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">State</label>
-                    <select
-                      value={regForm.state}
-                      onChange={(e) => setRegForm({ ...regForm, state: e.target.value })}
-                      className="w-full px-2 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
+                  {/* Tabs Switcher */}
+                  <div className="mt-4 grid grid-cols-2 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('login'); setAuthError(''); setAuthSuccess(''); }}
+                      className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        authTab === 'login'
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
                     >
-                      {INDIAN_STATES.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">Pincode</label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="e.g. 143001"
-                      value={regForm.pincode}
-                      onChange={(e) => setRegForm({ ...regForm, pincode: e.target.value.replace(/\D/g, '') })}
-                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono outline-none text-xs"
-                    />
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Agent Login</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('register'); setAuthError(''); setAuthSuccess(''); }}
+                      className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        authTab === 'register'
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>New Agency Register</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* 4. Logo Upload (Optional) */}
-                <div className="p-3 bg-slate-950/60 border border-dashed border-slate-700 rounded-xl">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-slate-200 flex items-center space-x-1.5">
-                      <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Agency Logo (White-Label Branding)</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400">Optional</span>
+                {/* Error / Success Feedback */}
+                {authError && (
+                  <div className="mx-5 sm:mx-6 mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span className="font-medium">{authError}</span>
                   </div>
-                  
-                  {regForm.logo_data ? (
-                    <div className="flex items-center space-x-3 bg-slate-900 p-2 rounded-lg border border-slate-700">
-                      <img
-                        src={regForm.logo_data}
-                        alt="Logo preview"
-                        className="h-10 w-auto max-w-[120px] object-contain rounded bg-white p-1"
-                      />
-                      <div className="flex-1">
-                        <span className="text-[11px] text-emerald-400 font-bold block">Logo Attached!</span>
-                        <span className="text-[10px] text-slate-400">Will appear on your portal header</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setRegForm({ ...regForm, logo_data: null })}
-                        className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
-                        title="Remove Logo"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
+                )}
+                {authSuccess && (
+                  <div className="mx-5 sm:mx-6 mt-4 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-medium">{authSuccess}</span>
+                  </div>
+                )}
+
+                {/* Tab 1: Login Form */}
+                {authTab === 'login' && (
+                  <form onSubmit={handleAgentLogin} className="p-5 sm:p-6 space-y-4 text-xs">
+                    
+                    {/* Mobile Number Input */}
                     <div>
-                      <label className="flex items-center justify-center space-x-2 py-2 px-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg cursor-pointer transition text-sky-300 text-xs font-bold">
-                        <Camera className="w-4 h-4" />
-                        <span>Upload Logo (PNG / JPG / WebP)</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleRegLogoChange}
-                        />
+                      <label className="block text-slate-200 font-bold mb-1.5">
+                        Registered Mobile Number <span className="text-rose-400">*</span>
                       </label>
-                      <p className="text-[10px] text-slate-400 mt-1 text-center">
-                        Logo upload karne par aapka logo aapke B2B portal header par dikhai dega.
+                      <div className="flex items-center rounded-xl bg-[#050811] border border-slate-700 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition overflow-hidden">
+                        <div className="px-3.5 py-2.5 bg-slate-900 border-r border-slate-800 text-slate-300 font-mono font-bold text-xs select-none">
+                          🇮🇳 +91
+                        </div>
+                        <input
+                          type="tel"
+                          required
+                          maxLength={10}
+                          placeholder="10-digit mobile number"
+                          value={loginForm.mobile}
+                          onChange={(e) => setLoginForm({ ...loginForm, mobile: e.target.value.replace(/\D/g, '') })}
+                          className="w-full px-3.5 py-2.5 bg-transparent text-white font-mono font-bold text-sm outline-none placeholder:text-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Security PIN / Password */}
+                    <div>
+                      <label className="block text-slate-200 font-bold mb-1.5">
+                        Security Password / 4-Digit PIN <span className="text-rose-400">*</span>
+                      </label>
+                      <div className="flex items-center rounded-xl bg-[#050811] border border-slate-700 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition overflow-hidden pr-3">
+                        <input
+                          type={loginForm.showPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Enter your Password or PIN"
+                          value={loginForm.pin}
+                          onChange={(e) => setLoginForm({ ...loginForm, pin: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-transparent text-white font-mono font-bold text-sm outline-none placeholder:text-slate-600"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setLoginForm({ ...loginForm, showPassword: !loginForm.showPassword })}
+                          className="text-slate-400 hover:text-white transition cursor-pointer p-1"
+                          title={loginForm.showPassword ? 'Hide PIN' : 'Show PIN'}
+                        >
+                          {loginForm.showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5">
+                        Agar pehle PIN set nahi kiya tha, toh pehli baar koi bhi 4-digit PIN daal kar login karein.
                       </p>
                     </div>
-                  )}
-                </div>
 
-                {/* 5. Set Security PIN / Password */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">
-                      Set Password / 4-Digit PIN *
-                    </label>
-                    <input
-                      type={regForm.showPassword ? 'text' : 'password'}
-                      required
-                      minLength={4}
-                      placeholder="e.g. 1234 ya Password"
-                      value={regForm.pin}
-                      onChange={(e) => setRegForm({ ...regForm, pin: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">
-                      Confirm Password / PIN *
-                    </label>
-                    <input
-                      type={regForm.showPassword ? 'text' : 'password'}
-                      required
-                      minLength={4}
-                      placeholder="Re-enter same PIN"
-                      value={regForm.confirmPin}
-                      onChange={(e) => setRegForm({ ...regForm, confirmPin: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
-                >
-                  {authLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Registering Agency...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>Register Agency & Unlock Live Rates</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="pt-2 text-center border-t border-white/5">
-                  <p className="text-slate-400 text-xs">
-                    Pehle se account hai?{' '}
+                    {/* Submit Button */}
                     <button
-                      type="button"
-                      onClick={() => { setAuthTab('login'); setAuthError(''); }}
-                      className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
+                      type="submit"
+                      disabled={authLoading}
+                      className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm rounded-xl shadow-lg shadow-blue-900/30 transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
                     >
-                      Login karein
+                      {authLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Verifying Credentials...</span>
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound className="w-4 h-4" />
+                          <span>Secure B2B Login</span>
+                        </>
+                      )}
                     </button>
-                  </p>
-                </div>
-              </form>
-            )}
+
+                    {/* Footer switch */}
+                    <div className="pt-2 text-center border-t border-slate-800">
+                      <p className="text-slate-400 text-xs">
+                        Pehli baar login kar rahe hain?{' '}
+                        <button
+                          type="button"
+                          onClick={() => { setAuthTab('register'); setAuthError(''); }}
+                          className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
+                        >
+                          New Agency Register karein (1-min)
+                        </button>
+                      </p>
+                    </div>
+                  </form>
+                )}
+
+                {/* Tab 2: New Agency Registration Form */}
+                {authTab === 'register' && (
+                  <form onSubmit={handleAgentRegister} className="p-5 sm:p-6 space-y-3.5 text-xs max-h-[72vh] overflow-y-auto">
+                    
+                    {/* 1. Firm Name & Contact Person */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">
+                          Firm / Agency Name <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Kandhari Travels"
+                          value={regForm.agencyName}
+                          onChange={(e) => setRegForm({ ...regForm, agencyName: e.target.value })}
+                          className="w-full px-3 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-bold outline-none text-xs placeholder:text-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">
+                          Contact Person Name <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Navkiran"
+                          value={regForm.agentName}
+                          onChange={(e) => setRegForm({ ...regForm, agentName: e.target.value })}
+                          className="w-full px-3 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. Mobile Number & Email */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">
+                          Mobile Number (WhatsApp) <span className="text-rose-400">*</span>
+                        </label>
+                        <div className="flex items-center rounded-xl bg-[#050811] border border-slate-700 focus-within:border-blue-500 overflow-hidden">
+                          <span className="px-2.5 py-2 bg-slate-900 border-r border-slate-800 text-slate-300 font-mono font-bold text-xs">
+                            +91
+                          </span>
+                          <input
+                            type="tel"
+                            required
+                            maxLength={10}
+                            placeholder="10-digit mobile"
+                            value={regForm.mobile}
+                            onChange={(e) => setRegForm({ ...regForm, mobile: e.target.value.replace(/\D/g, '') })}
+                            className="w-full px-2.5 py-2 bg-transparent text-white font-mono font-bold outline-none text-xs placeholder:text-slate-600"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">
+                          Email Address (Optional)
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="e.g. agency@gmail.com"
+                          value={regForm.email}
+                          onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                          className="w-full px-3 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 3. Address */}
+                    <div>
+                      <label className="block text-slate-200 font-bold mb-1">
+                        Office / Shop Address <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Shop/Office No., Street, Complex or Market"
+                        value={regForm.address}
+                        onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white outline-none text-xs placeholder:text-slate-600"
+                      />
+                    </div>
+
+                    {/* City, State, Pincode */}
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">City <span className="text-rose-400">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Amritsar"
+                          value={regForm.city}
+                          onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}
+                          className="w-full px-2.5 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">State</label>
+                        <select
+                          value={regForm.state}
+                          onChange={(e) => setRegForm({ ...regForm, state: e.target.value })}
+                          className="w-full px-2 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs cursor-pointer"
+                        >
+                          {INDIAN_STATES.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">Pincode</label>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          placeholder="e.g. 143001"
+                          value={regForm.pincode}
+                          onChange={(e) => setRegForm({ ...regForm, pincode: e.target.value.replace(/\D/g, '') })}
+                          className="w-full px-2.5 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono outline-none text-xs placeholder:text-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 4. Logo Upload (Optional) */}
+                    <div className="p-3 bg-slate-950 border border-dashed border-slate-700 rounded-xl">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-slate-200 flex items-center space-x-1.5">
+                          <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Agency Logo (White-Label Interface)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400">Optional</span>
+                      </div>
+                      
+                      {regForm.logo_data ? (
+                        <div className="flex items-center space-x-3 bg-slate-900 p-2 rounded-lg border border-slate-700">
+                          <img
+                            src={regForm.logo_data}
+                            alt="Logo preview"
+                            className="h-10 w-auto max-w-[120px] object-contain rounded bg-white p-1"
+                          />
+                          <div className="flex-1">
+                            <span className="text-[11px] text-emerald-400 font-bold block">Logo Attached!</span>
+                            <span className="text-[10px] text-slate-400">Appears on your portal header & quotations</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setRegForm({ ...regForm, logo_data: null })}
+                            className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
+                            title="Remove Logo"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="flex items-center justify-center space-x-2 py-2 px-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg cursor-pointer transition text-sky-300 text-xs font-bold">
+                            <Camera className="w-4 h-4" />
+                            <span>Upload Logo (PNG / JPG / WebP)</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleRegLogoChange}
+                            />
+                          </label>
+                          <p className="text-[10px] text-slate-400 mt-1 text-center">
+                            Logo upload karne par aapka logo aapke B2B portal header par dikhai dega.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. Set Security PIN / Password */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">
+                          Set 4-Digit PIN / Password <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type={regForm.showPassword ? 'text' : 'password'}
+                          required
+                          minLength={4}
+                          placeholder="e.g. 1234 ya Password"
+                          value={regForm.pin}
+                          onChange={(e) => setRegForm({ ...regForm, pin: e.target.value })}
+                          className="w-full px-3 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs placeholder:text-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-200 font-bold mb-1">
+                          Confirm PIN / Password <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type={regForm.showPassword ? 'text' : 'password'}
+                          required
+                          minLength={4}
+                          placeholder="Re-enter same PIN"
+                          value={regForm.confirmPin}
+                          onChange={(e) => setRegForm({ ...regForm, confirmPin: e.target.value })}
+                          className="w-full px-3 py-2 bg-[#050811] border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs placeholder:text-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={authLoading}
+                      className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
+                    >
+                      {authLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Registering Agency...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Register Agency & Unlock Live Rates</span>
+                        </>
+                      )}
+                    </button>
+
+                    <div className="pt-2 text-center border-t border-slate-800">
+                      <p className="text-slate-400 text-xs">
+                        Pehle se account hai?{' '}
+                        <button
+                          type="button"
+                          onClick={() => { setAuthTab('login'); setAuthError(''); }}
+                          className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
+                        >
+                          Login karein
+                        </button>
+                      </p>
+                    </div>
+                  </form>
+                )}
+
+              </div>
+            </div>
 
           </div>
         </main>
 
         {/* Footer */}
-        <footer className="relative z-10 py-3 text-center border-t border-white/15 text-[11px] text-slate-300 font-medium bg-slate-950/75 backdrop-blur-md">
-          TravelX B2B Aviation • Strict Privacy Isolation • Rates visible to verified travel agents only
+        <footer className="relative z-10 py-3.5 text-center border-t border-white/10 text-xs text-slate-400 bg-slate-950/80 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span className="font-medium">
+              TravelX Global Aviation Desk • Amritsar • Chandigarh • Delhi NCR
+            </span>
+            <span className="text-[11px] text-slate-300">
+              Strict B2B Privacy Isolation • Fixed Group Departures
+            </span>
+          </div>
         </footer>
       </div>
     );
