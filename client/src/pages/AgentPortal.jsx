@@ -3334,8 +3334,8 @@ ${contactFooter}`;
       {/* 5B. BOOKING REQUEST MODAL (Direct to Admin Desk)              */}
       {/* ───────────────────────────────────────────────────────────── */}
       {bookingFlight && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/55 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-[0_30px_80px_-20px_rgba(15,23,42,0.55)] border border-slate-200/80 max-w-md w-full overflow-hidden my-auto">
             {bookingSuccessResult ? (
               /* Success Celebration State */
               <div className="p-6 text-center">
@@ -3552,37 +3552,39 @@ ${contactFooter}`;
               /* Request Form State */
               <div>
                 {/* Modal Header */}
-                <div className="bg-gradient-to-r from-[#0b3b82] via-[#0f4c9c] to-blue-900 text-white p-5 relative overflow-hidden">
-                  <div className="flex items-center justify-between relative z-10">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-sky-200 shadow-inner">
-                        <Plane className="w-5 h-5 -rotate-45" />
-                      </div>
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[10px] uppercase font-black tracking-widest text-sky-300">
-                            Seat Available??? • Instant Enquiry
-                          </span>
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        </div>
-                        <h3 className="text-base sm:text-lg font-black leading-tight text-white">
-                          {bookingFlight.origin_city} ({bookingFlight.origin}) ➔ {bookingFlight.destination_city} ({bookingFlight.destination})
-                        </h3>
-                      </div>
-                    </div>
+                <div className="bg-[#0b2f6b] text-white px-5 pt-4 pb-5 relative">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] uppercase font-bold tracking-[0.18em] text-sky-200">
+                      Instant seat enquiry
+                    </span>
                     <button
                       type="button"
                       onClick={() => setBookingFlight(null)}
-                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
-                      title="Close modal"
+                      className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                      title="Close"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] text-sky-200/90 font-semibold tracking-wide">{bookingFlight.origin}</div>
+                      <div className="text-base font-bold leading-tight">{bookingFlight.origin_city}</div>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="h-px flex-1 bg-white/25" />
+                      <Plane className="w-4 h-4 mx-2 text-sky-200 -rotate-45 shrink-0" />
+                      <div className="h-px flex-1 bg-white/25" />
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-sky-200/90 font-semibold tracking-wide">{bookingFlight.destination}</div>
+                      <div className="text-base font-bold leading-tight">{bookingFlight.destination_city}</div>
+                    </div>
                   </div>
                 </div>
 
                 {/* Flight Summary Strip */}
-                <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center justify-between text-xs">
+                <div className="bg-slate-50 border-b border-slate-100 px-5 py-3.5 flex items-center justify-between text-xs">
                   <div className="flex items-center space-x-3">
                     {renderAirlineIcon(bookingFlight.airline_code, bookingFlight.airline_name, "w-8 h-8")}
                     <div>
@@ -3603,18 +3605,17 @@ ${contactFooter}`;
                 </div>
 
                 {/* Form Container */}
-                <form onSubmit={handleSubmitBooking} className="p-5 space-y-4">
-                  {/* Passenger Breakdown Card: Adults, Children, Infants */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                <form onSubmit={handleSubmitBooking} className="p-5 space-y-3.5">
+                  <div className="border border-slate-200 rounded-2xl p-3.5 space-y-1">
+                    <div className="flex items-center justify-between pb-2.5 mb-1 border-b border-slate-100">
                       <div className="flex items-center space-x-1.5">
-                        <Users className="w-4 h-4 text-[#0b3b82]" />
-                        <label className="text-xs font-black text-slate-900">
-                          Passengers ({bookingAdults + bookingChildren + bookingInfants} Pax)
+                        <Users className="w-4 h-4 text-[#0b2f6b]" />
+                        <label className="text-xs font-bold text-slate-900">
+                          Passengers · {bookingAdults + bookingChildren + bookingInfants}
                         </label>
                       </div>
-                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                        {bookingFlight.seats_left} seats available
+                      <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+                        {bookingFlight.seats_left} seats
                       </span>
                     </div>
 
@@ -3727,18 +3728,18 @@ ${contactFooter}`;
                   </div>
 
                   {/* Total Fare Breakdown Highlight */}
-                  <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 flex items-center justify-between text-xs">
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl px-3.5 py-3 flex items-center justify-between text-xs">
                     <div>
-                      <span className="text-slate-600 font-bold block">
-                        Estimated Net Fare:
+                      <span className="text-slate-500 font-semibold block tracking-wide uppercase text-[10px]">
+                        Estimated net fare
                       </span>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        {bookingAdults + bookingChildren} {bookingAdults + bookingChildren === 1 ? 'Seat' : 'Seats'} × ₹{getDisplayPrice(bookingFlight.final_rate).toLocaleString('en-IN')}
-                        {bookingInfants > 0 && ` (+ ${bookingInfants} Infant)`}
+                      <span className="text-[11px] text-slate-600 font-medium">
+                        {bookingAdults + bookingChildren} {bookingAdults + bookingChildren === 1 ? 'seat' : 'seats'} × ₹{getDisplayPrice(bookingFlight.final_rate).toLocaleString('en-IN')}
+                        {bookingInfants > 0 && ` + ${bookingInfants} infant`}
                       </span>
                     </div>
                     <div className="text-right">
-                      <span className="text-lg font-black text-[#0b3b82] block leading-tight">
+                      <span className="text-xl font-black text-[#0b2f6b] block leading-none tabular-nums">
                         ₹{((bookingAdults + bookingChildren) * getDisplayPrice(bookingFlight.final_rate)).toLocaleString('en-IN')}
                       </span>
                       {bookingInfants > 0 && (
@@ -3868,12 +3869,12 @@ ${contactFooter}`;
 
                   {/* Remarks / Passenger Names (Optional) */}
                   <div className="text-xs">
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Remarks / Pax Names (Optional)
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Passenger names or remarks
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 2 adults, 1 child, passenger names: Mr Rajesh Kumar, urgent"
+                      placeholder="Optional — names, urgency, or special request"
                       value={bookingForm.remarks}
                       onChange={(e) => setBookingForm({ ...bookingForm, remarks: e.target.value })}
                       className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 text-xs text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900"
@@ -3881,11 +3882,11 @@ ${contactFooter}`;
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="pt-2 flex items-center space-x-2">
+                  <div className="pt-1 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setBookingFlight(null)}
-                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                      className="px-4 py-3 bg-white hover:bg-slate-50 text-slate-600 text-xs font-semibold rounded-xl border border-slate-200 transition cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -3893,18 +3894,18 @@ ${contactFooter}`;
                     <button
                       type="submit"
                       disabled={isSubmittingBooking}
-                      className="flex-1 py-2.5 bg-gradient-to-r from-[#0b3b82] to-blue-900 hover:from-blue-900 hover:to-blue-950 disabled:opacity-50 text-white text-xs sm:text-sm font-black rounded-xl shadow-md transition cursor-pointer flex items-center justify-center space-x-1.5 active:scale-98"
+                      className="flex-1 py-3 bg-[#0b2f6b] hover:bg-[#082656] disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-sm transition cursor-pointer flex items-center justify-center space-x-2"
                     >
                       {isSubmittingBooking ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Checking with Desk...</span>
+                          <span>Sending to desk…</span>
                         </>
                       ) : (
                         <>
                           <span>
-                            ⚡ Seat Available??? • ₹{((bookingAdults + bookingChildren) * getDisplayPrice(bookingFlight.final_rate)).toLocaleString('en-IN')}
-                            {bookingInfants > 0 ? ` (+ ${bookingInfants} Inf)` : ''}
+                            Send enquiry · ₹{((bookingAdults + bookingChildren) * getDisplayPrice(bookingFlight.final_rate)).toLocaleString('en-IN')}
+                            {bookingInfants > 0 ? ` + ${bookingInfants} inf` : ''}
                           </span>
                           <ArrowRight className="w-4 h-4" />
                         </>
