@@ -84,6 +84,17 @@ const formatBaggage = (bag) => {
   return clean;
 };
 
+const INTERNAL_DESK_PROFILE = {
+  agencyName: 'TravelX',
+  agentName: 'Operations Desk',
+  mobile: '',
+  city: 'Amritsar',
+  state: 'Punjab',
+  email: 'desk@travelx.co.in',
+  logo_data: null,
+  isInternalPreview: true
+};
+
 export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffEmbedded = false }) {
   const isAllowedB2BSector = (f) => {
     if (!f) return false;
@@ -187,6 +198,7 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
 
   // Agent Identification Session (stored in localStorage or URL query params)
   const [agentProfile, setAgentProfile] = useState(() => {
+    if (isStaffEmbedded) return INTERNAL_DESK_PROFILE;
     try {
       const saved = localStorage.getItem('travelx_b2b_agent');
       if (saved) return JSON.parse(saved);
@@ -571,6 +583,7 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
 
   // Sync latest Agent Profile (with logo, firm name, etc.) from server
   useEffect(() => {
+    if (isStaffEmbedded) return;
     if (agentProfile?.mobile) {
       api.getCurrentAgent(agentProfile.mobile).then(res => {
         if (res && res.success && res.agent) {
@@ -1375,7 +1388,7 @@ ${contactFooter}`;
   // B2B GATEWAY: RESTRICTED ACCESS (LOGIN & REGISTRATION)
   // Shown when agent is NOT authenticated
   // ─────────────────────────────────────────────────────────────
-  if (!agentProfile || !agentProfile.agencyName) {
+  if (!isStaffEmbedded && (!agentProfile || !agentProfile.agencyName)) {
     const isRegister = authTab === 'register';
 
     return (
@@ -1888,7 +1901,8 @@ ${contactFooter}`;
           {/* Right Agent Dashboard Controls */}
           <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
             
-            {/* Agent Profile & Branding Button */}
+            {/* Agent Profile & Branding Button — hidden for staff/admin preview */}
+            {!isStaffEmbedded && (
             <button 
               type="button"
               onClick={handleOpenProfileModal}
@@ -1898,6 +1912,7 @@ ${contactFooter}`;
               <Building2 className="w-3.5 h-3.5 text-blue-800" />
               <span className="font-bold text-xs hidden sm:inline">My Agency Profile</span>
             </button>
+            )}
 
             {/* Updates Tab (Active Booking & Live Status Alerts) */}
             <button
@@ -1981,7 +1996,8 @@ ${contactFooter}`;
               <span className="hidden sm:inline">Booking Desk</span>
             </button>
 
-            {/* Logout Button */}
+            {/* Logout Button — only for real B2B agents */}
+            {!isStaffEmbedded && (
             <button
               type="button"
               onClick={handleLogout}
@@ -1991,6 +2007,7 @@ ${contactFooter}`;
               <LogOut className="w-3.5 h-3.5 text-rose-600" />
               <span className="hidden sm:inline">Logout</span>
             </button>
+            )}
           </div>
         </div>
       </header>

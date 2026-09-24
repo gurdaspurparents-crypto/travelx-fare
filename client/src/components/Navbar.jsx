@@ -69,7 +69,7 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
     { id: 'vendor-heads', label: 'Vendor Rates Desk', icon: Building2 },
     { id: 'compare', label: 'Compare Fares', icon: GitCompare },
     { id: 'publish', label: 'Special Fares & Broadcast', icon: Send },
-    { id: 'agent-portal', label: 'B2B Agent Portal', icon: Smartphone, badgeText: 'LIVE', isAgentLink: true },
+    { id: 'agent-portal', label: 'B2B Agent Portal', icon: Smartphone, badgeText: 'LIVE' },
   ];
 
   // Secondary Tools (Input modes & settings)
@@ -135,9 +135,9 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
 
               <button
                 type="button"
-                onClick={onOpenAgentPortal}
+                onClick={() => setActiveTab('agent-portal')}
                 className="inline-flex items-center space-x-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold px-2 py-0.5 rounded-md transition shadow-xs cursor-pointer border border-emerald-400/50"
-                title="Open Live B2B Agent Portal (Clean rates for 500+ agents)"
+                title="Preview live B2B rates portal (no agent login required)"
               >
                 <Smartphone className="w-3 h-3 text-emerald-200" />
                 <span>📱 B2B Agent View</span>

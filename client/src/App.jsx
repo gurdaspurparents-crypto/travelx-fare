@@ -416,7 +416,7 @@ export default function App() {
       />
 
       {/* Main Workspace Area */}
-      <main className={`flex-1 w-full mx-auto ${['all-rates', 'final-rates', 'enquiries'].includes(activeTab) ? 'max-w-full px-1.5 sm:px-2.5 py-1.5' : 'max-w-7xl px-3 sm:px-4 py-2.5'}`}>
+      <main className={`flex-1 w-full mx-auto ${['all-rates', 'final-rates', 'enquiries', 'agent-portal'].includes(activeTab) ? 'max-w-full px-1.5 sm:px-2.5 py-1.5' : 'max-w-7xl px-3 sm:px-4 py-2.5'}`}>
         {activeTab === 'dashboard' && (
           <Dashboard
             masterData={masterData}
@@ -512,6 +512,10 @@ export default function App() {
           <MasterData
             onMasterDataChanged={loadMasters}
           />
+        )}
+
+        {activeTab === 'agent-portal' && (
+          <AgentPortal isStaffEmbedded={true} />
         )}
       </main>
 
