@@ -1,6 +1,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const multer = require('multer');
 const db = require('../config/database');
 const { invalidateFaresCache } = require('./publicAgentController');
@@ -163,6 +164,42 @@ function sendWhatsAppCustomAlert(text) {
   }
 }
 
+function hashAgentPassword(password) {
+  if (!password) return null;
+  const salt = 'travelx_b2b_agent_salt_2026';
+  return crypto.createHash('sha256').update(String(password).trim() + salt).digest('hex');
+}
+
+function generateAgentToken(agentId, mobile) {
+  const timestamp = Date.now();
+  const random = crypto.randomBytes(12).toString('hex');
+  const signature = crypto.createHash('sha256').update(`${agentId}:${mobile}:${timestamp}:tx_b2b_auth_key`).digest('hex');
+  return `ag_${agentId}_${timestamp}_${random}_${signature.slice(0, 16)}`;
+}
+
+function formatAgentProfile(agent) {
+  if (!agent) return null;
+  return {
+    id: agent.id,
+    mobile: agent.mobile,
+    agencyName: agent.agency_name,
+    agency_name: agent.agency_name,
+    agentName: agent.agent_name || '',
+    agent_name: agent.agent_name || '',
+    email: agent.email || '',
+    address: agent.address || '',
+    city: agent.city || '',
+    state: agent.state || 'Punjab',
+    pincode: agent.pincode || '',
+    logo_data: agent.logo_data || '',
+    status: agent.status || 'ACTIVE',
+    is_verified: agent.is_verified ?? 1,
+    total_bookings: agent.total_bookings || 0,
+    created_at: agent.created_at,
+    has_password: Boolean(agent.password_hash || agent.pin)
+  };
+}
+
 /**
  * Lookup agent by mobile number
  */
@@ -174,9 +211,9 @@ exports.lookupAgent = (req, res) => {
       return res.status(400).json({ success: false, error: 'Valid 10-digit mobile number required' });
     }
 
-    const agent = db.prepare('SELECT id, mobile, agency_name, agent_name, email, address, city, state, pincode, total_bookings, created_at FROM b2b_agents WHERE mobile = ?').get(mobile);
+    const agent = db.prepare('SELECT * FROM b2b_agents WHERE mobile = ?').get(mobile);
     if (agent) {
-      return res.json({ success: true, exists: true, agent });
+      return res.json({ success: true, exists: true, agent: formatAgentProfile(agent) });
     }
     return res.json({ success: true, exists: false });
   } catch (err) {
@@ -186,9 +223,265 @@ exports.lookupAgent = (req, res) => {
 };
 
 /**
- * Self-register or update B2B Agent details
+ * B2B Agent Login (Mobile + Password / PIN)
+ */
+exports.loginB2BAgent = (req, res) => {
+  try {
+    const { mobile: rawMobile, password, pin } = req.body;
+    const mobile = cleanMobile(rawMobile);
+    if (!mobile || mobile.length < 10) {
+      return res.status(400).json({ success: false, error: 'Kripya 10-digit mobile number enter karein.' });
+    }
+
+    const inputPassword = (password || pin || '').trim();
+    if (!inputPassword) {
+      return res.status(400).json({ success: false, error: 'Kripya Password ya PIN enter karein.' });
+    }
+
+    const agent = db.prepare('SELECT * FROM b2b_agents WHERE mobile = ?').get(mobile);
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        not_registered: true,
+        error: 'Yeh mobile number registered nahi mila. Kripya pehle "New Agency Registration" karein.'
+      });
+    }
+
+    if (agent.status === 'BLOCKED' || agent.is_verified === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'Aapka B2B account disabled/blocked hai. Kripya TravelX Desk se contact karein.'
+      });
+    }
+
+    const inputHash = hashAgentPassword(inputPassword);
+    if (agent.password_hash) {
+      if (agent.password_hash !== inputHash && agent.pin !== inputPassword) {
+        return res.status(401).json({
+          success: false,
+          error: 'Galat Password ya PIN! Kripya sahi PIN enter karein.'
+        });
+      }
+    } else {
+      // Legacy agent created without password -> save password now so account is protected
+      db.prepare('UPDATE b2b_agents SET password_hash = ? WHERE id = ?').run(inputHash, agent.id);
+    }
+
+    db.prepare("UPDATE b2b_agents SET last_active_at = datetime('now', 'localtime') WHERE id = ?").run(agent.id);
+    const updatedAgent = db.prepare('SELECT * FROM b2b_agents WHERE id = ?').get(agent.id);
+    const token = generateAgentToken(updatedAgent.id, updatedAgent.mobile);
+
+    return res.json({
+      success: true,
+      message: 'Login successful!',
+      agent: formatAgentProfile(updatedAgent),
+      token
+    });
+  } catch (err) {
+    console.error('Error logging in agent:', err);
+    return res.status(500).json({ success: false, error: 'Login failed: ' + err.message });
+  }
+};
+
+/**
+ * B2B Agent Registration (Name, Firm Name, Address, Mobile, Email, Logo, Password)
+ */
+exports.registerB2BAgent = (req, res) => {
+  try {
+    const {
+      mobile: rawMobile,
+      agency_name,
+      agent_name,
+      email,
+      address,
+      city,
+      state,
+      pincode,
+      password,
+      pin,
+      logo_data
+    } = req.body;
+
+    const mobile = cleanMobile(rawMobile);
+    if (!mobile || mobile.length < 10) {
+      return res.status(400).json({ success: false, error: 'Kripya 10-digit mobile number enter karein.' });
+    }
+    if (!agency_name || !agency_name.trim()) {
+      return res.status(400).json({ success: false, error: 'Faram / Agency Name zaroori hai.' });
+    }
+
+    const rawPassword = (password || pin || '').trim();
+    if (!rawPassword || rawPassword.length < 4) {
+      return res.status(400).json({ success: false, error: 'Password ya Security PIN kam se kam 4 characters/digits ka hona chahiye.' });
+    }
+
+    const cleanAgency = agency_name.trim();
+    const cleanAgentName = agent_name ? agent_name.trim() : '';
+    const cleanEmail = email ? email.trim() : '';
+    const cleanAddress = address ? address.trim() : '';
+    const cleanCity = city ? city.trim() : '';
+    const cleanState = state ? state.trim() : 'Punjab';
+    const cleanPincode = pincode ? pincode.trim() : '';
+    const passwordHash = hashAgentPassword(rawPassword);
+    const cleanLogo = typeof logo_data === 'string' && logo_data.length > 10 ? logo_data.trim() : null;
+
+    const existing = db.prepare('SELECT * FROM b2b_agents WHERE mobile = ?').get(mobile);
+    let agentId;
+
+    if (existing) {
+      // If already registered and has password
+      if (existing.password_hash) {
+        return res.status(409).json({
+          success: false,
+          already_registered: true,
+          error: 'Yeh mobile number pehle se registered hai! Kripya "Agent Login" tab se login karein.'
+        });
+      }
+      // Existing agent without password -> activate/update
+      db.prepare(`
+        UPDATE b2b_agents
+        SET agency_name = ?,
+            agent_name = COALESCE(NULLIF(?, ''), agent_name),
+            email = COALESCE(NULLIF(?, ''), email),
+            address = COALESCE(NULLIF(?, ''), address),
+            city = COALESCE(NULLIF(?, ''), city),
+            state = COALESCE(NULLIF(?, ''), state),
+            pincode = COALESCE(NULLIF(?, ''), pincode),
+            password_hash = ?,
+            logo_data = COALESCE(?, logo_data),
+            status = 'ACTIVE',
+            is_verified = 1,
+            last_active_at = datetime('now', 'localtime')
+        WHERE id = ?
+      `).run(cleanAgency, cleanAgentName, cleanEmail, cleanAddress, cleanCity, cleanState, cleanPincode, passwordHash, cleanLogo, existing.id);
+      agentId = existing.id;
+    } else {
+      const info = db.prepare(`
+        INSERT INTO b2b_agents (
+          mobile, agency_name, agent_name, email, address, city, state, pincode, password_hash, logo_data, status, is_verified, total_bookings, created_at, last_active_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, 0, datetime('now', 'localtime'), datetime('now', 'localtime'))
+      `).run(mobile, cleanAgency, cleanAgentName, cleanEmail, cleanAddress, cleanCity, cleanState, cleanPincode, passwordHash, cleanLogo);
+      agentId = info.lastInsertRowid;
+    }
+
+    const agent = db.prepare('SELECT * FROM b2b_agents WHERE id = ?').get(agentId);
+    const token = generateAgentToken(agent.id, agent.mobile);
+
+    return res.json({
+      success: true,
+      message: 'Registration safal raha! Aapka B2B portal login ho gaya hai.',
+      agent: formatAgentProfile(agent),
+      token
+    });
+  } catch (err) {
+    console.error('Error registering agent:', err);
+    return res.status(500).json({ success: false, error: 'Registration failed: ' + err.message });
+  }
+};
+
+/**
+ * Update Agent Profile (Name, Address, Logo, Password)
+ */
+exports.updateAgentProfile = (req, res) => {
+  try {
+    const {
+      mobile: rawMobile,
+      agency_name,
+      agent_name,
+      email,
+      address,
+      city,
+      state,
+      pincode,
+      password,
+      logo_data
+    } = req.body;
+
+    const mobile = cleanMobile(rawMobile);
+    if (!mobile || mobile.length < 10) {
+      return res.status(400).json({ success: false, error: 'Valid 10-digit mobile number required' });
+    }
+
+    const agent = db.prepare('SELECT * FROM b2b_agents WHERE mobile = ?').get(mobile);
+    if (!agent) {
+      return res.status(404).json({ success: false, error: 'Agent profile not found' });
+    }
+
+    const cleanAgency = agency_name ? agency_name.trim() : agent.agency_name;
+    const cleanAgentName = agent_name !== undefined ? (agent_name ? agent_name.trim() : '') : agent.agent_name;
+    const cleanEmail = email !== undefined ? (email ? email.trim() : '') : agent.email;
+    const cleanAddress = address !== undefined ? (address ? address.trim() : '') : agent.address;
+    const cleanCity = city !== undefined ? (city ? city.trim() : '') : agent.city;
+    const cleanState = state !== undefined ? (state ? state.trim() : '') : agent.state;
+    const cleanPincode = pincode !== undefined ? (pincode ? pincode.trim() : '') : agent.pincode;
+
+    let passwordHash = agent.password_hash;
+    if (password && String(password).trim().length >= 4) {
+      passwordHash = hashAgentPassword(String(password).trim());
+    }
+
+    let logoData = agent.logo_data;
+    if (logo_data !== undefined) {
+      logoData = typeof logo_data === 'string' && logo_data.length > 10 ? logo_data.trim() : null;
+    }
+
+    db.prepare(`
+      UPDATE b2b_agents
+      SET agency_name = ?,
+          agent_name = ?,
+          email = ?,
+          address = ?,
+          city = ?,
+          state = ?,
+          pincode = ?,
+          password_hash = ?,
+          logo_data = ?,
+          last_active_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(cleanAgency, cleanAgentName, cleanEmail, cleanAddress, cleanCity, cleanState, cleanPincode, passwordHash, logoData, agent.id);
+
+    const updated = db.prepare('SELECT * FROM b2b_agents WHERE id = ?').get(agent.id);
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully!',
+      agent: formatAgentProfile(updated)
+    });
+  } catch (err) {
+    console.error('Error updating agent profile:', err);
+    return res.status(500).json({ success: false, error: 'Failed to update profile: ' + err.message });
+  }
+};
+
+/**
+ * Get Current Agent Profile
+ */
+exports.getCurrentAgent = (req, res) => {
+  try {
+    const rawMobile = req.query.mobile || req.headers['x-agent-mobile'];
+    const mobile = cleanMobile(rawMobile);
+    if (!mobile || mobile.length < 10) {
+      return res.status(400).json({ success: false, error: 'Valid mobile required' });
+    }
+    const agent = db.prepare('SELECT * FROM b2b_agents WHERE mobile = ?').get(mobile);
+    if (!agent) {
+      return res.status(404).json({ success: false, error: 'Agent not found' });
+    }
+    return res.json({
+      success: true,
+      agent: formatAgentProfile(agent)
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * Self-register or update B2B Agent details (Legacy compatible)
  */
 exports.registerOrUpdateAgent = (req, res) => {
+  if (req.body.password || req.body.pin) {
+    return exports.registerB2BAgent(req, res);
+  }
   try {
     const { 
       mobile: rawMobile, 
@@ -198,7 +491,8 @@ exports.registerOrUpdateAgent = (req, res) => {
       address, 
       city, 
       state, 
-      pincode 
+      pincode,
+      logo_data
     } = req.body;
     const mobile = cleanMobile(rawMobile);
 
@@ -216,6 +510,7 @@ exports.registerOrUpdateAgent = (req, res) => {
     const cleanCity = city ? city.trim() : null;
     const cleanState = state ? state.trim() : null;
     const cleanPincode = pincode ? pincode.trim() : null;
+    const cleanLogo = typeof logo_data === 'string' && logo_data.length > 10 ? logo_data.trim() : null;
 
     const existing = db.prepare('SELECT id FROM b2b_agents WHERE mobile = ?').get(mobile);
     if (existing) {
@@ -228,18 +523,19 @@ exports.registerOrUpdateAgent = (req, res) => {
             city = COALESCE(?, city), 
             state = COALESCE(?, state),
             pincode = COALESCE(?, pincode),
+            logo_data = COALESCE(?, logo_data),
             last_active_at = datetime('now', 'localtime')
         WHERE id = ?
-      `).run(cleanAgency, cleanAgentName, cleanEmail, cleanAddress, cleanCity, cleanState, cleanPincode, existing.id);
+      `).run(cleanAgency, cleanAgentName, cleanEmail, cleanAddress, cleanCity, cleanState, cleanPincode, cleanLogo, existing.id);
     } else {
       db.prepare(`
-        INSERT INTO b2b_agents (mobile, agency_name, agent_name, email, address, city, state, pincode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(mobile, cleanAgency, cleanAgentName || '', cleanEmail || '', cleanAddress || '', cleanCity || '', cleanState || '', cleanPincode || '');
+        INSERT INTO b2b_agents (mobile, agency_name, agent_name, email, address, city, state, pincode, logo_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(mobile, cleanAgency, cleanAgentName || '', cleanEmail || '', cleanAddress || '', cleanCity || '', cleanState || '', cleanPincode || '', cleanLogo);
     }
 
-    const agent = db.prepare('SELECT id, mobile, agency_name, agent_name, email, address, city, state, pincode, total_bookings FROM b2b_agents WHERE mobile = ?').get(mobile);
-    return res.json({ success: true, agent });
+    const agent = db.prepare('SELECT * FROM b2b_agents WHERE mobile = ?').get(mobile);
+    return res.json({ success: true, agent: formatAgentProfile(agent) });
   } catch (err) {
     console.error('Error registering agent:', err);
     return res.status(500).json({ success: false, error: 'Failed to register agent profile' });
@@ -977,6 +1273,9 @@ exports.getAgentsDirectory = (req, res) => {
         a.city,
         a.state,
         a.pincode,
+        a.logo_data,
+        a.status,
+        (CASE WHEN a.password_hash IS NOT NULL OR a.pin IS NOT NULL THEN 1 ELSE 0 END) as has_password,
         a.total_bookings,
         a.created_at,
         a.last_active_at,

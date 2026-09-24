@@ -220,6 +220,10 @@ function initSchema() {
   ensureColumn('b2b_agents', 'address', 'TEXT');
   ensureColumn('b2b_agents', 'state', 'TEXT');
   ensureColumn('b2b_agents', 'pincode', 'TEXT');
+  ensureColumn('b2b_agents', 'pin', 'TEXT');
+  ensureColumn('b2b_agents', 'password_hash', 'TEXT');
+  ensureColumn('b2b_agents', 'logo_data', 'TEXT');
+  ensureColumn('b2b_agents', 'status', "TEXT DEFAULT 'ACTIVE'");
   ensureColumn('booking_requests', 'agent_email', 'TEXT');
   ensureColumn('booking_requests', 'agent_address', 'TEXT');
   ensureColumn('booking_requests', 'agent_state', 'TEXT');

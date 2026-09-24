@@ -1940,14 +1940,24 @@ Thank you for booking with TravelX!`;
                   {agents.map(a => (
                     <tr key={a.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-3.5 px-4">
-                        <div>
-                          <span className="font-extrabold text-slate-900 text-xs flex items-center space-x-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-blue-900 shrink-0" />
-                            <span>{a.agency_name}</span>
-                          </span>
-                          {a.email && (
-                            <span className="text-[10px] text-slate-400 block ml-5">{a.email}</span>
+                        <div className="flex items-center space-x-2">
+                          {a.logo_data ? (
+                            <img
+                              src={a.logo_data}
+                              alt=""
+                              className="w-7 h-7 object-contain rounded bg-white p-0.5 border border-slate-200 shrink-0"
+                            />
+                          ) : (
+                            <Building2 className="w-4 h-4 text-blue-900 shrink-0" />
                           )}
+                          <div>
+                            <span className="font-extrabold text-slate-900 text-xs block leading-tight">
+                              {a.agency_name}
+                            </span>
+                            {a.email && (
+                              <span className="text-[10px] text-slate-400 block">{a.email}</span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-700">

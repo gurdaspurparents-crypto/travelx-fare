@@ -7,9 +7,42 @@ import {
   Lock, ArrowUpDown, ChevronLeft, ChevronRight, X, User,
   Menu, Share2, Mail, Users, CheckSquare,
   AlertCircle, Briefcase, Coffee, Info, ChevronDown, Loader2, Building2, MapPin,
-  Download, Upload, FileText, Ticket, Bell, XCircle
+  Download, Upload, FileText, Ticket, Bell, XCircle, LogOut, KeyRound,
+  Image as ImageIcon, Camera, Trash2
 } from 'lucide-react';
 import { api } from '../utils/api';
+
+function resizeImageToDataUrl(file, maxWidth = 360, maxHeight = 160) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve(null);
+    if (!file.type || !file.type.startsWith('image/')) {
+      return reject(new Error('Kripya image file (PNG, JPG, WebP) select karein'));
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/png', 0.9));
+      };
+      img.onerror = () => reject(new Error('Image process nahi ho saki'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('File read nahi ho saki'));
+    reader.readAsDataURL(file);
+  });
+}
 
 const INDIAN_STATES = [
   'Punjab', 'Delhi NCR', 'Haryana', 'Chandigarh UT', 'Rajasthan', 
@@ -201,6 +234,29 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
+
+  // B2B Gateway Auth States (Login & Register)
+  const [authTab, setAuthTab] = useState('login'); // 'login' | 'register'
+  const [loginForm, setLoginForm] = useState({ mobile: '', pin: '', showPassword: false });
+  const [regForm, setRegForm] = useState({
+    agentName: '',
+    agencyName: '',
+    mobile: '',
+    email: '',
+    address: '',
+    city: '',
+    state: 'Punjab',
+    pincode: '',
+    pin: '',
+    confirmPin: '',
+    logo_data: null,
+    showPassword: false
+  });
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
+  const [profileLogoData, setProfileLogoData] = useState(null);
+  const [profilePassword, setProfilePassword] = useState('');
 
   // Live Booking Tracker Modal States
   const [showTrackerModal, setShowTrackerModal] = useState(false);
@@ -513,6 +569,20 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
     }
   };
 
+  // Sync latest Agent Profile (with logo, firm name, etc.) from server
+  useEffect(() => {
+    if (agentProfile?.mobile) {
+      api.getCurrentAgent(agentProfile.mobile).then(res => {
+        if (res && res.success && res.agent) {
+          setAgentProfile(prev => ({ ...(prev || {}), ...res.agent }));
+          try {
+            localStorage.setItem('travelx_b2b_agent', JSON.stringify({ ...(agentProfile || {}), ...res.agent }));
+          } catch (_) {}
+        }
+      }).catch(() => {});
+    }
+  }, [agentProfile?.mobile]);
+
   // Live Auto-Refresh Polling for Tracked Booking (every 4.5s)
   useEffect(() => {
     if (!showTrackerModal || !trackedBooking?.request_ref) return;
@@ -818,8 +888,8 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
   const handleOpenProfileModal = () => {
     setBookingForm({
       mobile: agentProfile?.mobile || '',
-      agencyName: agentProfile?.agencyName || '',
-      agentName: agentProfile?.agentName || '',
+      agencyName: agentProfile?.agencyName || agentProfile?.agency_name || '',
+      agentName: agentProfile?.agentName || agentProfile?.agent_name || '',
       email: agentProfile?.email || '',
       address: agentProfile?.address || '',
       city: agentProfile?.city || '',
@@ -827,6 +897,8 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
       pincode: agentProfile?.pincode || '',
       remarks: ''
     });
+    setProfileLogoData(agentProfile?.logo_data || null);
+    setProfilePassword('');
     setShowProfileModal(true);
   };
 
@@ -985,7 +1057,7 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
   const handleSaveProfile = async (e) => {
     if (e) e.preventDefault();
     const cleanMob = String(bookingForm.mobile || (agentProfile?.mobile || '')).replace(/\D/g, '').slice(-10);
-    const agency = (bookingForm.agencyName || (agentProfile?.agencyName || '')).trim();
+    const agency = (bookingForm.agencyName || (agentProfile?.agencyName || agentProfile?.agency_name || '')).trim();
     if (!cleanMob || cleanMob.length < 10) {
       alert('Please enter a valid 10-digit mobile number');
       return;
@@ -995,17 +1067,21 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
       return;
     }
     const profile = {
+      ...(agentProfile || {}),
       mobile: cleanMob,
       agencyName: agency,
-      agentName: (bookingForm.agentName || (agentProfile?.agentName || '')).trim(),
+      agency_name: agency,
+      agentName: (bookingForm.agentName || (agentProfile?.agentName || agentProfile?.agent_name || '')).trim(),
+      agent_name: (bookingForm.agentName || (agentProfile?.agentName || agentProfile?.agent_name || '')).trim(),
       email: (bookingForm.email || (agentProfile?.email || '')).trim(),
       address: (bookingForm.address || (agentProfile?.address || '')).trim(),
       city: (bookingForm.city || (agentProfile?.city || '')).trim(),
       state: (bookingForm.state || (agentProfile?.state || '')).trim(),
-      pincode: (bookingForm.pincode || (agentProfile?.pincode || '')).trim()
+      pincode: (bookingForm.pincode || (agentProfile?.pincode || '')).trim(),
+      logo_data: profileLogoData !== undefined ? profileLogoData : (agentProfile?.logo_data || null)
     };
     try {
-      await api.registerAgent({
+      const res = await api.updateAgentProfile({
         mobile: profile.mobile,
         agency_name: profile.agencyName,
         agent_name: profile.agentName,
@@ -1013,36 +1089,168 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
         address: profile.address,
         city: profile.city,
         state: profile.state,
-        pincode: profile.pincode
+        pincode: profile.pincode,
+        logo_data: profile.logo_data,
+        password: profilePassword && profilePassword.trim().length >= 4 ? profilePassword.trim() : undefined
       });
+      if (res && res.success && res.agent) {
+        setAgentProfile(res.agent);
+        try { localStorage.setItem('travelx_b2b_agent', JSON.stringify(res.agent)); } catch (_) {}
+      } else {
+        setAgentProfile(profile);
+        try { localStorage.setItem('travelx_b2b_agent', JSON.stringify(profile)); } catch (_) {}
+      }
     } catch (err) {
       console.error(err);
+      setAgentProfile(profile);
+      try { localStorage.setItem('travelx_b2b_agent', JSON.stringify(profile)); } catch (_) {}
     }
-    setAgentProfile(profile);
-    try {
-      localStorage.setItem('travelx_b2b_agent', JSON.stringify(profile));
-    } catch (e) {}
     setShowProfileModal(false);
   };
 
-  // Clear Saved Agent Session
-  const handleClearProfile = () => {
-    setAgentProfile(null);
+  // Logout / Switch Agent Account
+  const handleLogout = () => {
+    if (window.confirm('Kya aap B2B Agent Portal se Logout karna chahte hain?')) {
+      setAgentProfile(null);
+      try {
+        localStorage.removeItem('travelx_b2b_agent');
+        localStorage.removeItem('travelx_b2b_agent_token');
+      } catch (e) {}
+      setBookingForm({
+        mobile: '',
+        agencyName: '',
+        agentName: '',
+        email: '',
+        address: '',
+        city: '',
+        state: 'Punjab',
+        pincode: '',
+        remarks: ''
+      });
+      setShowProfileModal(false);
+    }
+  };
+
+  const handleClearProfile = handleLogout;
+
+  // Handle Logo Upload during Registration
+  const handleRegLogoChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
     try {
-      localStorage.removeItem('travelx_b2b_agent');
-    } catch (e) {}
-    setBookingForm({
-      mobile: '',
-      agencyName: '',
-      agentName: '',
-      email: '',
-      address: '',
-      city: '',
-      state: 'Punjab',
-      pincode: '',
-      remarks: ''
-    });
-    setShowProfileModal(false);
+      const dataUrl = await resizeImageToDataUrl(file, 360, 160);
+      setRegForm(prev => ({ ...prev, logo_data: dataUrl }));
+    } catch (err) {
+      alert(err.message || 'Image upload failed');
+    }
+  };
+
+  // Handle Logo Upload in Profile Modal
+  const handleModalLogoChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 360, 160);
+      setProfileLogoData(dataUrl);
+    } catch (err) {
+      alert(err.message || 'Image upload failed');
+    }
+  };
+
+  // Agent Login
+  const handleAgentLogin = async (e) => {
+    if (e) e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+    const cleanMob = String(loginForm.mobile || '').replace(/\D/g, '').slice(-10);
+    if (!cleanMob || cleanMob.length < 10) {
+      setAuthError('Kripya apna 10-digit mobile number enter karein.');
+      return;
+    }
+    if (!loginForm.pin || loginForm.pin.trim().length < 4) {
+      setAuthError('Kripya apna Password ya 4-digit PIN enter karein.');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const res = await api.loginAgent({
+        mobile: cleanMob,
+        pin: loginForm.pin.trim()
+      });
+      if (res && res.success && res.agent) {
+        setAuthSuccess('Login safal! Portal khul raha hai...');
+        setAgentProfile(res.agent);
+        try {
+          localStorage.setItem('travelx_b2b_agent', JSON.stringify(res.agent));
+          if (res.token) localStorage.setItem('travelx_b2b_agent_token', res.token);
+        } catch (_) {}
+      } else if (res && res.not_registered) {
+        setAuthError(res.error || 'Yeh mobile registered nahi mila. Niche "New Agency Register" par click karein.');
+      } else {
+        setAuthError(res?.error || 'Login nahi ho saka. Kripya PIN dobara check karein.');
+      }
+    } catch (err) {
+      setAuthError(err?.message || 'Server error. Kripya check karein.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Agent Registration
+  const handleAgentRegister = async (e) => {
+    if (e) e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+    const cleanMob = String(regForm.mobile || '').replace(/\D/g, '').slice(-10);
+    if (!cleanMob || cleanMob.length < 10) {
+      setAuthError('Kripya 10-digit mobile number enter karein.');
+      return;
+    }
+    if (!regForm.agencyName || !regForm.agencyName.trim()) {
+      setAuthError('Faram / Agency Name enter karna zaroori hai.');
+      return;
+    }
+    if (!regForm.agentName || !regForm.agentName.trim()) {
+      setAuthError('Contact Person Name enter karna zaroori hai.');
+      return;
+    }
+    if (!regForm.pin || regForm.pin.trim().length < 4) {
+      setAuthError('Security PIN / Password kam se kam 4 characters/digits ka hona chahiye.');
+      return;
+    }
+    if (regForm.confirmPin && regForm.confirmPin.trim() !== regForm.pin.trim()) {
+      setAuthError('Password aur Confirm Password match nahi kar rahe.');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const res = await api.registerAgent({
+        mobile: cleanMob,
+        agency_name: regForm.agencyName.trim(),
+        agent_name: regForm.agentName.trim(),
+        email: regForm.email ? regForm.email.trim() : '',
+        address: regForm.address ? regForm.address.trim() : '',
+        city: regForm.city ? regForm.city.trim() : '',
+        state: regForm.state || 'Punjab',
+        pincode: regForm.pincode ? regForm.pincode.trim() : '',
+        pin: regForm.pin.trim(),
+        logo_data: regForm.logo_data || null
+      });
+      if (res && res.success && res.agent) {
+        setAuthSuccess('Registration safal raha! B2B Portal khul raha hai...');
+        setAgentProfile(res.agent);
+        try {
+          localStorage.setItem('travelx_b2b_agent', JSON.stringify(res.agent));
+          if (res.token) localStorage.setItem('travelx_b2b_agent_token', res.token);
+        } catch (_) {}
+      } else {
+        setAuthError(res?.error || 'Registration nahi ho saka. Kripya check karein.');
+      }
+    } catch (err) {
+      setAuthError(err?.message || 'Server connection error.');
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   // Copy Reference ID
@@ -1105,10 +1313,17 @@ Please confirm availability and share status.`;
     openAgencyWhatsApp(message);
   };
 
-  // 6. Share Itinerary
+  // 6. Share Itinerary (White-Label Quotation)
   const handleShareQuote = (flight) => {
     const rate = getDisplayPrice(flight.final_rate);
-    const text = `✈️ *TRAVELX SPECIAL FIXED DEPARTURE AIR FARE*
+    const agencyHeader = agentProfile?.agencyName 
+      ? `🏢 *${agentProfile.agencyName}* - SPECIAL FARE QUOTATION`
+      : `✈️ *SPECIAL FIXED DEPARTURE AIR FARE*`;
+    const contactFooter = agentProfile?.agencyName
+      ? `━━━━━━━━━━━━━━━━━━━━━━━━━━\nIssued by: *${agentProfile.agencyName}*\n📞 Contact: ${agentProfile.mobile}${agentProfile.city ? ` • ${agentProfile.city}` : ''}\nReply to this message for instant booking!`
+      : `━━━━━━━━━━━━━━━━━━━━━━━━━━\n📲 Contact desk for instant seat issuance!`;
+
+    const text = `${agencyHeader}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 • *Route:* ${flight.origin_city} ➔ ${flight.destination_city}
 • *Airline:* ${flight.airline_name} ${flight.flight_number}
@@ -1117,8 +1332,7 @@ Please confirm availability and share status.`;
 • *Rate:* *₹${rate.toLocaleString('en-IN')}/-* All-Inclusive
 • *Baggage:* ${formatBaggage(flight.baggage)}
 • *Terms:* Non-Refundable & Non-Changeable
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-📲 Contact TravelX desk for instant seat issuance!`;
+${contactFooter}`;
 
     navigator.clipboard.writeText(text);
     setCopySuccess(true);
@@ -1157,41 +1371,484 @@ Please confirm availability and share status.`;
     );
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // B2B GATEWAY: RESTRICTED ACCESS (LOGIN & REGISTRATION)
+  // Shown when agent is NOT authenticated
+  // ─────────────────────────────────────────────────────────────
+  if (!agentProfile || !agentProfile.agencyName) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative overflow-x-hidden">
+        {/* Ambient Glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-blue-600/15 via-indigo-600/5 to-transparent blur-3xl pointer-events-none" />
+        
+        {/* Top Minimal Header */}
+        <header className="relative z-10 border-b border-white/10 bg-slate-900/80 backdrop-blur-md">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 p-0.5 shadow-md flex items-center justify-center">
+                <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+                  <Plane className="w-4 h-4 text-sky-400 -rotate-45" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-lg font-black text-white tracking-tight">TravelX</span>
+                  <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/30 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    B2B AIR PORTAL
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">Special Fixed Fare Group Desk</p>
+              </div>
+            </div>
+
+            <a
+              href="https://wa.me/919888314788?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold transition"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Desk Support</span>
+            </a>
+          </div>
+        </header>
+
+        {/* Center Gateway Container */}
+        <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-auto">
+          <div className="w-full max-w-lg bg-slate-900/90 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden my-4">
+            
+            {/* Hero Header */}
+            <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 p-5 sm:p-6 border-b border-white/10 text-center">
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-sky-300 text-[11px] font-bold uppercase tracking-wider mb-2.5">
+                <Lock className="w-3.5 h-3.5 text-sky-400" />
+                <span>Authorized B2B Agents Only</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Special Flight Rates Desk
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-md mx-auto">
+                Login with your agency mobile & security PIN to access fixed departure rates, live seat holds & white-label quotations.
+              </p>
+
+              {/* Tabs Switcher */}
+              <div className="mt-5 grid grid-cols-2 p-1 bg-slate-950/70 border border-white/10 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => { setAuthTab('login'); setAuthError(''); setAuthSuccess(''); }}
+                  className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                    authTab === 'login'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Agent Login</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthTab('register'); setAuthError(''); setAuthSuccess(''); }}
+                  className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                    authTab === 'register'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>New Agency Register</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Error / Success Feedback */}
+            {authError && (
+              <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{authError}</span>
+              </div>
+            )}
+            {authSuccess && (
+              <div className="mx-5 mt-4 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{authSuccess}</span>
+              </div>
+            )}
+
+            {/* Tab 1: Login Form */}
+            {authTab === 'login' && (
+              <form onSubmit={handleAgentLogin} className="p-5 sm:p-6 space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1.5">
+                    Registered Mobile Number *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold font-mono text-xs">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="10-digit mobile number"
+                      value={loginForm.mobile}
+                      onChange={(e) => setLoginForm({ ...loginForm, mobile: e.target.value.replace(/\D/g, '') })}
+                      className="w-full pl-12 pr-4 py-2.5 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold text-sm outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-slate-300 font-bold">
+                      Security Password / 4-Digit PIN *
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={loginForm.showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Enter your Password or PIN"
+                      value={loginForm.pin}
+                      onChange={(e) => setLoginForm({ ...loginForm, pin: e.target.value })}
+                      className="w-full pl-3 pr-10 py-2.5 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold text-sm outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setLoginForm({ ...loginForm, showPassword: !loginForm.showPassword })}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white transition cursor-pointer"
+                    >
+                      {loginForm.showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Agar pehle PIN set nahi kiya tha, toh pehli baar koi bhi 4-digit PIN daal kar login karein.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50"
+                >
+                  {authLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verifying Credentials...</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4" />
+                      <span>Secure B2B Login</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="pt-2 text-center border-t border-white/5">
+                  <p className="text-slate-400 text-xs">
+                    Pehli baar login kar rahe hain?{' '}
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('register'); setAuthError(''); }}
+                      className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
+                    >
+                      New Agency Register karein (1-min)
+                    </button>
+                  </p>
+                </div>
+              </form>
+            )}
+
+            {/* Tab 2: New Agency Registration Form */}
+            {authTab === 'register' && (
+              <form onSubmit={handleAgentRegister} className="p-5 sm:p-6 space-y-3.5 text-xs">
+                
+                {/* 1. Faram Name & Contact Person */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      Firm / Agency Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Kandhari Travels"
+                      value={regForm.agencyName}
+                      onChange={(e) => setRegForm({ ...regForm, agencyName: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-bold outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      Contact Person (Name) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Navkiran"
+                      value={regForm.agentName}
+                      onChange={(e) => setRegForm({ ...regForm, agentName: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Mobile Number & Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      Mobile Number (WhatsApp) *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-2 text-slate-400 font-bold font-mono text-xs">
+                        +91
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="10-digit mobile"
+                        value={regForm.mobile}
+                        onChange={(e) => setRegForm({ ...regForm, mobile: e.target.value.replace(/\D/g, '') })}
+                        className="w-full pl-10 pr-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      Email Address (Optional)
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="e.g. agency@gmail.com"
+                      value={regForm.email}
+                      onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Address, City, State */}
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    Office / Shop Address *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Shop/Office No., Street, Complex or Market"
+                    value={regForm.address}
+                    onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white outline-none text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">City *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Amritsar"
+                      value={regForm.city}
+                      onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">State</label>
+                    <select
+                      value={regForm.state}
+                      onChange={(e) => setRegForm({ ...regForm, state: e.target.value })}
+                      className="w-full px-2 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs"
+                    >
+                      {INDIAN_STATES.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Pincode</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="e.g. 143001"
+                      value={regForm.pincode}
+                      onChange={(e) => setRegForm({ ...regForm, pincode: e.target.value.replace(/\D/g, '') })}
+                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono outline-none text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Logo Upload (Optional) */}
+                <div className="p-3 bg-slate-950/60 border border-dashed border-slate-700 rounded-xl">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-slate-200 flex items-center space-x-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Agency Logo (White-Label Branding)</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">Optional</span>
+                  </div>
+                  
+                  {regForm.logo_data ? (
+                    <div className="flex items-center space-x-3 bg-slate-900 p-2 rounded-lg border border-slate-700">
+                      <img
+                        src={regForm.logo_data}
+                        alt="Logo preview"
+                        className="h-10 w-auto max-w-[120px] object-contain rounded bg-white p-1"
+                      />
+                      <div className="flex-1">
+                        <span className="text-[11px] text-emerald-400 font-bold block">Logo Attached!</span>
+                        <span className="text-[10px] text-slate-400">Will appear on your portal header</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRegForm({ ...regForm, logo_data: null })}
+                        className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
+                        title="Remove Logo"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="flex items-center justify-center space-x-2 py-2 px-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg cursor-pointer transition text-sky-300 text-xs font-bold">
+                        <Camera className="w-4 h-4" />
+                        <span>Upload Logo (PNG / JPG / WebP)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleRegLogoChange}
+                        />
+                      </label>
+                      <p className="text-[10px] text-slate-400 mt-1 text-center">
+                        Logo upload karne par aapka logo aapke B2B portal header par dikhai dega.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Set Security PIN / Password */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      Set Password / 4-Digit PIN *
+                    </label>
+                    <input
+                      type={regForm.showPassword ? 'text' : 'password'}
+                      required
+                      minLength={4}
+                      placeholder="e.g. 1234 ya Password"
+                      value={regForm.pin}
+                      onChange={(e) => setRegForm({ ...regForm, pin: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">
+                      Confirm Password / PIN *
+                    </label>
+                    <input
+                      type={regForm.showPassword ? 'text' : 'password'}
+                      required
+                      minLength={4}
+                      placeholder="Re-enter same PIN"
+                      value={regForm.confirmPin}
+                      onChange={(e) => setRegForm({ ...regForm, confirmPin: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950/80 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
+                >
+                  {authLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Registering Agency...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Register Agency & Unlock Live Rates</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="pt-2 text-center border-t border-white/5">
+                  <p className="text-slate-400 text-xs">
+                    Pehle se account hai?{' '}
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('login'); setAuthError(''); }}
+                      className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
+                    >
+                      Login karein
+                    </button>
+                  </p>
+                </div>
+              </form>
+            )}
+
+          </div>
+        </main>
+
+        {/* Footer */}
+        <footer className="relative z-10 py-3 text-center border-t border-white/10 text-[11px] text-slate-500 bg-slate-950/60">
+          TravelX B2B Aviation • Strict Privacy Isolation • Rates visible to verified travel agents only
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
       
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 1. TOP BRAND HEADER: TRAVELX (Executive Aviation Grade)        */}
+      {/* 1. TOP BRAND HEADER: AGENT WHITE-LABEL DESK                   */}
       {/* ───────────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-slate-200/90 shadow-2xs sticky top-0 z-40 backdrop-blur-md bg-white/95">
         <div className="max-w-[1700px] mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between">
           
-          {/* Left Brand Identity: TravelX */}
+          {/* Left Brand Identity: Agent White-Label Brand */}
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setHasSearched(true)}>
-            {/* Logo Graphic */}
-            <div className="flex items-center justify-center">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 via-indigo-600 to-blue-900 p-0.5 shadow-md flex items-center justify-center">
-                <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
-                  <Plane className="w-5 h-5 text-blue-900 -rotate-45" />
+            {agentProfile?.logo_data ? (
+              <div className="flex items-center justify-center bg-white rounded-xl p-1 border border-slate-200/90 shadow-2xs max-h-12 overflow-hidden">
+                <img 
+                  src={agentProfile.logo_data} 
+                  alt={agentProfile.agencyName} 
+                  className="h-9 sm:h-11 w-auto max-w-[120px] sm:max-w-[160px] object-contain rounded" 
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 via-indigo-600 to-blue-900 p-0.5 shadow-md flex items-center justify-center">
+                  <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
+                    <Building2 className="w-5 h-5 text-blue-900" />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Brand Title & Tagline */}
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight font-sans">
-                  TravelX
+                  {agentProfile.agencyName}
                 </span>
-                <span className="inline-flex items-center space-x-1 text-[10px] bg-gradient-to-r from-blue-700 to-indigo-700 text-white font-black px-2 py-0.5 rounded-full shadow-2xs uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>B2B AIR PORTAL</span>
+                <span className="inline-flex items-center space-x-1 text-[10px] bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-black px-2 py-0.5 rounded-full shadow-2xs uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  <span>B2B PARTNER</span>
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium tracking-wide flex items-center space-x-1.5">
-                <span>Comfort • Trust • Journey.</span>
+                <span>{agentProfile.agentName ? `Desk: ${agentProfile.agentName}` : 'Special Fixed Fare Desk'}</span>
                 <span className="text-slate-300">•</span>
-                <span className="text-blue-900 font-semibold">Special Fixed Fare Desk</span>
+                <span className="text-blue-900 font-semibold">{[agentProfile.city, agentProfile.state].filter(Boolean).join(', ') || 'Authorized Agent'}</span>
+                <span className="text-slate-300">•</span>
+                <span className="font-mono text-slate-700">{agentProfile.mobile}</span>
               </p>
             </div>
           </div>
@@ -1199,35 +1856,16 @@ Please confirm availability and share status.`;
           {/* Right Agent Dashboard Controls */}
           <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
             
-            {/* Agent Profile Chip or Quick Login */}
-            {agentProfile && agentProfile.agencyName ? (
-              <div 
-                onClick={handleOpenProfileModal}
-                className="flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-950 cursor-pointer transition shadow-2xs group"
-                title="Click to view or edit agency profile"
-              >
-                <div className="w-5 h-5 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-[10px]">
-                  <User className="w-3 h-3" />
-                </div>
-                <div className="flex flex-col text-left">
-                  <span className="font-extrabold text-xs text-blue-950 leading-none">
-                    {agentProfile.agencyName}
-                  </span>
-                  <span className="text-[10px] text-blue-600 font-medium">
-                    {agentProfile.city ? `${agentProfile.city} • ` : ''}{agentProfile.mobile}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleOpenProfileModal}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer text-xs"
-              >
-                <User className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">Agent Login</span>
-              </button>
-            )}
+            {/* Agent Profile & Branding Button */}
+            <button 
+              type="button"
+              onClick={handleOpenProfileModal}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-950 cursor-pointer transition shadow-2xs group"
+              title="Click to view or edit agency profile & branding"
+            >
+              <Building2 className="w-3.5 h-3.5 text-blue-800" />
+              <span className="font-bold text-xs hidden sm:inline">My Agency Profile</span>
+            </button>
 
             {/* Updates Tab (Active Booking & Live Status Alerts) */}
             <button
@@ -1309,6 +1947,17 @@ Please confirm availability and share status.`;
             >
               <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
               <span className="hidden sm:inline">Booking Desk</span>
+            </button>
+
+            {/* Logout Button */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold transition shadow-2xs cursor-pointer text-xs"
+              title="Logout from B2B Portal"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-600" />
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>
@@ -3375,6 +4024,70 @@ Please confirm availability and share status.`;
                 </div>
               </div>
 
+              {/* Section 3: Agency Logo & Branding */}
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <div className="flex items-center space-x-1.5 text-[11px] font-black text-slate-900 uppercase tracking-wider">
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-800" />
+                  <span>3. Agency Logo (White-Label Interface)</span>
+                </div>
+                
+                {profileLogoData ? (
+                  <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <img
+                      src={profileLogoData}
+                      alt="Agency Logo"
+                      className="h-10 w-auto max-w-[120px] object-contain rounded bg-white p-1 border border-slate-300"
+                    />
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-800 text-[11px]">Logo Active</p>
+                      <p className="text-[10px] text-slate-500">Appears on header & quotations</p>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <label className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer font-bold text-[10px] transition" title="Change Logo">
+                        Change
+                        <input type="file" accept="image/*" className="hidden" onChange={handleModalLogoChange} />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setProfileLogoData(null)}
+                        className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                        title="Remove Logo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="flex items-center justify-center space-x-2 py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-xl cursor-pointer transition text-blue-900 text-xs font-bold">
+                      <Camera className="w-4 h-4 text-blue-700" />
+                      <span>Upload Agency Logo (PNG, JPG, WebP)</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleModalLogoChange}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 4: Security PIN / Password */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                <div className="flex items-center space-x-1.5 text-[11px] font-black text-slate-900 uppercase tracking-wider">
+                  <KeyRound className="w-3.5 h-3.5 text-blue-800" />
+                  <span>4. Change Security PIN / Password (Optional)</span>
+                </div>
+                <input
+                  type="password"
+                  placeholder="Leave empty to keep current PIN, or enter 4+ digit new PIN"
+                  value={profilePassword}
+                  onChange={(e) => setProfilePassword(e.target.value)}
+                  className="w-full px-3 py-2 bg-white rounded-lg border border-slate-300 font-mono text-slate-900 outline-none focus:border-blue-900 focus:ring-1 focus:ring-blue-900 text-xs"
+                />
+              </div>
+
               {/* Action Buttons */}
               <div className="pt-3 space-y-2 border-t border-slate-100">
                 <button
@@ -3382,16 +4095,17 @@ Please confirm availability and share status.`;
                   className="w-full py-2.5 bg-gradient-to-r from-[#0b3b82] to-blue-900 hover:from-blue-900 hover:to-blue-950 text-white font-black text-xs sm:text-sm rounded-xl transition cursor-pointer shadow-md flex items-center justify-center space-x-1.5 active:scale-98"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Save Agency Profile</span>
+                  <span>Save Agency Profile & Branding</span>
                 </button>
 
                 {agentProfile && (
                   <button
                     type="button"
-                    onClick={handleClearProfile}
-                    className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition cursor-pointer border border-rose-200"
+                    onClick={handleLogout}
+                    className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition cursor-pointer border border-rose-200 flex items-center justify-center space-x-1.5"
                   >
-                    Clear Saved Agency / Switch Account
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Logout / Switch Agency Account</span>
                   </button>
                 )}
               </div>

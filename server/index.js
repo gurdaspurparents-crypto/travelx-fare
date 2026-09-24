@@ -51,7 +51,10 @@ app.get('/api/health', (req, res) => {
 app.get('/api/public/fares', publicAgentController.getPublicFares);
 app.get('/api/public/config', publicAgentController.getPublicConfig);
 app.get('/api/public/agent/lookup', bookingController.lookupAgent);
-app.post('/api/public/agent/register', bookingController.registerOrUpdateAgent);
+app.post('/api/public/agent/login', bookingController.loginB2BAgent);
+app.post('/api/public/agent/register', bookingController.registerB2BAgent);
+app.post('/api/public/agent/profile-update', bookingController.updateAgentProfile);
+app.get('/api/public/agent/me', bookingController.getCurrentAgent);
 app.post('/api/public/bookings/create', bookingController.createBookingRequest);
 app.get('/api/public/bookings/track/:ref', bookingController.trackBooking);
 app.post('/api/public/bookings/:ref/passports', bookingController.uploadPassportsMiddleware, bookingController.uploadPassports);

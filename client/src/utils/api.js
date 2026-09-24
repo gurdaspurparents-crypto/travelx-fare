@@ -516,12 +516,29 @@ export const api = {
   lookupAgent: async (mobile) => {
     return safeFetch(`/api/public/agent/lookup?mobile=${encodeURIComponent(mobile)}`);
   },
+  loginAgent: async (data) => {
+    return safeFetch('/api/public/agent/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
   registerAgent: async (data) => {
     return safeFetch('/api/public/agent/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+  },
+  updateAgentProfile: async (data) => {
+    return safeFetch('/api/public/agent/profile-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+  getCurrentAgent: async (mobile) => {
+    return safeFetch(`/api/public/agent/me?mobile=${encodeURIComponent(mobile)}`);
   },
   createBookingRequest: async (data) => {
     return safeFetch('/api/public/bookings/create', {
