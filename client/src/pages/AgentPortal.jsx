@@ -1377,12 +1377,16 @@ ${contactFooter}`;
   // ─────────────────────────────────────────────────────────────
   if (!agentProfile || !agentProfile.agencyName) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative overflow-x-hidden">
-        {/* Ambient Glows */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-blue-600/15 via-indigo-600/5 to-transparent blur-3xl pointer-events-none" />
+      <div 
+        className="min-h-screen bg-slate-950 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative overflow-x-hidden bg-cover bg-center bg-no-repeat bg-fixed"
+        style={{ backgroundImage: `url('/travelx-login-bg.jpg')` }}
+      >
+        {/* Scenic Background Overlay with subtle tint for readability while keeping the image vibrant */}
+        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[1.5px] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-slate-950/75 pointer-events-none" />
         
         {/* Top Minimal Header */}
-        <header className="relative z-10 border-b border-white/10 bg-slate-900/80 backdrop-blur-md">
+        <header className="relative z-10 border-b border-white/15 bg-slate-950/70 backdrop-blur-md">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 p-0.5 shadow-md flex items-center justify-center">
@@ -1397,7 +1401,7 @@ ${contactFooter}`;
                     B2B AIR PORTAL
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium">Special Fixed Fare Group Desk</p>
+                <p className="text-[10px] text-slate-300 font-medium">Special Fixed Fare Group Desk</p>
               </div>
             </div>
 
@@ -1415,7 +1419,7 @@ ${contactFooter}`;
 
         {/* Center Gateway Container */}
         <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-auto">
-          <div className="w-full max-w-lg bg-slate-900/90 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden my-4">
+          <div className="w-full max-w-lg bg-slate-900/90 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden my-4 ring-1 ring-white/10">
             
             {/* Hero Header */}
             <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 p-5 sm:p-6 border-b border-white/10 text-center">
@@ -1796,7 +1800,7 @@ ${contactFooter}`;
         </main>
 
         {/* Footer */}
-        <footer className="relative z-10 py-3 text-center border-t border-white/10 text-[11px] text-slate-500 bg-slate-950/60">
+        <footer className="relative z-10 py-3 text-center border-t border-white/15 text-[11px] text-slate-300 font-medium bg-slate-950/75 backdrop-blur-md">
           TravelX B2B Aviation • Strict Privacy Isolation • Rates visible to verified travel agents only
         </footer>
       </div>
