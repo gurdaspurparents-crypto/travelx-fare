@@ -1380,29 +1380,29 @@ ${contactFooter}`;
 
     return (
       <div 
-        className="min-h-screen flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white relative bg-cover bg-center bg-no-repeat"
+        className="min-h-screen flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white relative bg-cover bg-center bg-no-repeat bg-fixed"
         style={{
-          backgroundImage: `linear-gradient(rgba(8, 14, 28, 0.22), rgba(8, 14, 28, 0.30)), url('/travelx-login-bg.jpg')`
+          backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.28)), url('/travelx-login-bg.jpg')`
         }}
       >
-        {/* Top Minimal Navigation Bar */}
-        <header className="relative z-10 border-b border-white/20 bg-slate-950/70 backdrop-blur-md shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+        {/* Top Minimal Corporate Navigation Bar */}
+        <header className="relative z-20 border-b border-slate-200/80 bg-white/92 backdrop-blur-md shadow-xs">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between">
             {/* Left Brand Identity */}
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800 p-0.5 shadow-md flex items-center justify-center">
-                <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+                <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
                   <Plane className="w-5 h-5 text-sky-400 -rotate-45" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xl font-black text-white tracking-tight drop-shadow-sm">TravelX</span>
-                  <span className="text-[10px] bg-blue-500/20 text-sky-300 border border-blue-400/40 font-black px-2 py-0.5 rounded-full uppercase tracking-wider backdrop-blur-xs">
+                  <span className="text-xl font-black text-slate-900 tracking-tight">TravelX</span>
+                  <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                     B2B AIR PORTAL
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-300 font-medium">Special Fixed Fare Group Desk</p>
+                <p className="text-[10px] text-slate-500 font-semibold">Special Fixed Fare Group Desk</p>
               </div>
             </div>
 
@@ -1410,9 +1410,9 @@ ${contactFooter}`;
             <div className="flex items-center space-x-2 sm:space-x-3">
               <a
                 href="tel:+918146526257"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/20 text-white text-xs font-bold transition shadow-xs backdrop-blur-sm"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-bold transition shadow-2xs"
               >
-                <Phone className="w-3.5 h-3.5 text-sky-400" />
+                <Phone className="w-3.5 h-3.5 text-blue-600" />
                 <span className="hidden sm:inline">+91 81465 26257</span>
                 <span className="sm:hidden">Call</span>
               </a>
@@ -1420,7 +1420,7 @@ ${contactFooter}`;
                 href="https://wa.me/918146526257?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-md backdrop-blur-sm"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>Desk WhatsApp</span>
@@ -1429,34 +1429,34 @@ ${contactFooter}`;
           </div>
         </header>
 
-        {/* Center Floating Luxury Login / Registration Card */}
+        {/* Center Floating Luxury Light Card */}
         <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8 sm:py-12 my-auto">
-          <div className={`w-full ${isRegister ? 'max-w-xl' : 'max-w-[450px]'} mx-auto bg-slate-950/88 border border-white/25 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] backdrop-blur-xl overflow-hidden transition-all duration-300 ring-1 ring-white/10`}>
+          <div className={`w-full ${isRegister ? 'max-w-xl' : 'max-w-[450px]'} mx-auto bg-white/96 border border-white/80 rounded-3xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.30)] backdrop-blur-2xl overflow-hidden transition-all duration-300 ring-1 ring-slate-900/5`}>
             
             {/* Card Header */}
-            <div className="p-6 pb-4 border-b border-white/10 bg-gradient-to-b from-blue-950/80 to-[#0a1020]/90 text-center">
-              <div className="inline-flex items-center space-x-1.5 px-3 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-sky-300 text-[10px] font-bold uppercase tracking-wider mb-2">
-                <Lock className="w-3 h-3 text-sky-400" />
+            <div className="p-6 pb-4 border-b border-slate-100 bg-gradient-to-b from-blue-50/60 via-slate-50/40 to-white text-center">
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-100/70 border border-blue-200 text-blue-800 text-[10px] font-black uppercase tracking-wider mb-2">
+                <Lock className="w-3 h-3 text-blue-600" />
                 <span>Authorized B2B Portal</span>
               </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
                 {isRegister ? 'New Agency Registration' : 'Special Flight Rates Desk'}
               </h2>
-              <p className="text-xs text-slate-300 mt-1 max-w-xs mx-auto">
+              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto font-medium">
                 {isRegister 
                   ? 'Register your agency to unlock live wholesale fixed rates & branding' 
                   : 'Direct group allocations for Dubai & Abu Dhabi'}
               </p>
 
               {/* Tabs Switcher */}
-              <div className="mt-4 grid grid-cols-2 p-1 bg-slate-950/80 border border-slate-700/80 rounded-xl text-xs font-bold">
+              <div className="mt-4 grid grid-cols-2 p-1 bg-slate-100 border border-slate-200/90 rounded-xl text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => { setAuthTab('login'); setAuthError(''); setAuthSuccess(''); }}
                   className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
                     authTab === 'login'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                      : 'text-slate-300 hover:text-white'
+                      ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <KeyRound className="w-3.5 h-3.5" />
@@ -1467,8 +1467,8 @@ ${contactFooter}`;
                   onClick={() => { setAuthTab('register'); setAuthError(''); setAuthSuccess(''); }}
                   className={`py-2 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
                     authTab === 'register'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                      : 'text-slate-300 hover:text-white'
+                      ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <Building2 className="w-3.5 h-3.5" />
@@ -1479,15 +1479,15 @@ ${contactFooter}`;
 
             {/* Error / Success Feedback */}
             {authError && (
-              <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span className="font-medium">{authError}</span>
+              <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span className="font-semibold">{authError}</span>
               </div>
             )}
             {authSuccess && (
-              <div className="mx-6 mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="font-medium">{authSuccess}</span>
+              <div className="mx-6 mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold">{authSuccess}</span>
               </div>
             )}
 
@@ -1497,11 +1497,11 @@ ${contactFooter}`;
                 
                 {/* Mobile Number Input */}
                 <div>
-                  <label className="block text-slate-200 font-bold mb-1.5">
-                    Registered Mobile Number <span className="text-rose-400">*</span>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    Registered Mobile Number <span className="text-rose-500">*</span>
                   </label>
-                  <div className="flex items-center rounded-xl bg-slate-950/90 border border-slate-700/90 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/25 transition overflow-hidden">
-                    <div className="px-3.5 py-2.5 bg-slate-900 border-r border-slate-800 text-slate-300 font-mono font-bold text-xs select-none">
+                  <div className="flex items-center rounded-xl bg-slate-50 border border-slate-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 transition overflow-hidden shadow-2xs">
+                    <div className="px-3.5 py-2.5 bg-slate-100 border-r border-slate-200 text-slate-700 font-mono font-bold text-xs select-none">
                       🇮🇳 +91
                     </div>
                     <input
@@ -1511,35 +1511,35 @@ ${contactFooter}`;
                       placeholder="10-digit mobile number"
                       value={loginForm.mobile}
                       onChange={(e) => setLoginForm({ ...loginForm, mobile: e.target.value.replace(/\D/g, '') })}
-                      className="w-full px-3.5 py-2.5 bg-transparent text-white font-mono font-bold text-sm outline-none placeholder:text-slate-500"
+                      className="w-full px-3.5 py-2.5 bg-transparent text-slate-900 font-mono font-bold text-sm outline-none placeholder:text-slate-400"
                     />
                   </div>
                 </div>
 
                 {/* Security PIN / Password */}
                 <div>
-                  <label className="block text-slate-200 font-bold mb-1.5">
-                    Security Password / 4-Digit PIN <span className="text-rose-400">*</span>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    Security Password / 4-Digit PIN <span className="text-rose-500">*</span>
                   </label>
-                  <div className="flex items-center rounded-xl bg-slate-950/90 border border-slate-700/90 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/25 transition overflow-hidden pr-3">
+                  <div className="flex items-center rounded-xl bg-slate-50 border border-slate-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 transition overflow-hidden pr-3 shadow-2xs">
                     <input
                       type={loginForm.showPassword ? 'text' : 'password'}
                       required
                       placeholder="Enter your Password or PIN"
                       value={loginForm.pin}
                       onChange={(e) => setLoginForm({ ...loginForm, pin: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-transparent text-white font-mono font-bold text-sm outline-none placeholder:text-slate-500"
+                      className="w-full px-3.5 py-2.5 bg-transparent text-slate-900 font-mono font-bold text-sm outline-none placeholder:text-slate-400"
                     />
                     <button
                       type="button"
                       onClick={() => setLoginForm({ ...loginForm, showPassword: !loginForm.showPassword })}
-                      className="text-slate-400 hover:text-white transition cursor-pointer p-1"
+                      className="text-slate-400 hover:text-slate-700 transition cursor-pointer p-1"
                       title={loginForm.showPassword ? 'Hide PIN' : 'Show PIN'}
                     >
                       {loginForm.showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1.5">
+                  <p className="text-[11px] text-slate-500 mt-1.5">
                     Pehli baar login kar rahe hain? Koi bhi 4-digit PIN enter karke login karein.
                   </p>
                 </div>
@@ -1548,7 +1548,7 @@ ${contactFooter}`;
                 <button
                   type="submit"
                   disabled={authLoading}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm rounded-xl shadow-lg shadow-blue-900/40 transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-sm rounded-xl shadow-lg shadow-blue-500/25 transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
                 >
                   {authLoading ? (
                     <>
@@ -1564,13 +1564,13 @@ ${contactFooter}`;
                 </button>
 
                 {/* Switch to Register */}
-                <div className="pt-2 text-center border-t border-slate-800/80">
-                  <p className="text-slate-300 text-xs">
+                <div className="pt-2 text-center border-t border-slate-100">
+                  <p className="text-slate-600 text-xs">
                     Naya account banana hai?{' '}
                     <button
                       type="button"
                       onClick={() => { setAuthTab('register'); setAuthError(''); }}
-                      className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
+                      className="text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer ml-1"
                     >
                       New Agency Register karein (1-min)
                     </button>
@@ -1586,8 +1586,8 @@ ${contactFooter}`;
                 {/* 1. Firm Name & Contact Person */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">
-                      Firm / Agency Name <span className="text-rose-400">*</span>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Firm / Agency Name <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1595,12 +1595,12 @@ ${contactFooter}`;
                       placeholder="Enter Firm / Agency Name"
                       value={regForm.agencyName}
                       onChange={(e) => setRegForm({ ...regForm, agencyName: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-bold outline-none text-xs placeholder:text-slate-500"
+                      className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-bold outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">
-                      Contact Person Name <span className="text-rose-400">*</span>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Contact Person Name <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1608,7 +1608,7 @@ ${contactFooter}`;
                       placeholder="Enter Contact Person Name"
                       value={regForm.agentName}
                       onChange={(e) => setRegForm({ ...regForm, agentName: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-500"
+                      className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-medium outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                     />
                   </div>
                 </div>
@@ -1616,11 +1616,11 @@ ${contactFooter}`;
                 {/* 2. Mobile Number & Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">
-                      Mobile Number (WhatsApp) <span className="text-rose-400">*</span>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Mobile Number (WhatsApp) <span className="text-rose-500">*</span>
                     </label>
-                    <div className="flex items-center rounded-xl bg-slate-950/90 border border-slate-700 focus-within:border-blue-500 overflow-hidden">
-                      <span className="px-2.5 py-2 bg-slate-900 border-r border-slate-800 text-slate-300 font-mono font-bold text-xs">
+                    <div className="flex items-center rounded-xl bg-slate-50 border border-slate-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 overflow-hidden shadow-2xs">
+                      <span className="px-2.5 py-2 bg-slate-100 border-r border-slate-200 text-slate-700 font-mono font-bold text-xs">
                         +91
                       </span>
                       <input
@@ -1630,12 +1630,12 @@ ${contactFooter}`;
                         placeholder="10-digit mobile"
                         value={regForm.mobile}
                         onChange={(e) => setRegForm({ ...regForm, mobile: e.target.value.replace(/\D/g, '') })}
-                        className="w-full px-2.5 py-2 bg-transparent text-white font-mono font-bold outline-none text-xs placeholder:text-slate-500"
+                        className="w-full px-2.5 py-2 bg-transparent text-slate-900 font-mono font-bold outline-none text-xs placeholder:text-slate-400"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">
+                    <label className="block text-slate-700 font-bold mb-1">
                       Email Address (Optional)
                     </label>
                     <input
@@ -1643,15 +1643,15 @@ ${contactFooter}`;
                       placeholder="Enter email address"
                       value={regForm.email}
                       onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-500"
+                      className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-medium outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                     />
                   </div>
                 </div>
 
                 {/* 3. Address */}
                 <div>
-                  <label className="block text-slate-200 font-bold mb-1">
-                    Office / Shop Address <span className="text-rose-400">*</span>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    Office / Shop Address <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1659,29 +1659,29 @@ ${contactFooter}`;
                     placeholder="Shop/Office No., Street, Complex or Market"
                     value={regForm.address}
                     onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white outline-none text-xs placeholder:text-slate-500"
+                    className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                   />
                 </div>
 
                 {/* City, State, Pincode */}
                 <div className="grid grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">City <span className="text-rose-400">*</span></label>
+                    <label className="block text-slate-700 font-bold mb-1">City <span className="text-rose-500">*</span></label>
                     <input
                       type="text"
                       required
                       placeholder="Enter city"
                       value={regForm.city}
                       onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}
-                      className="w-full px-2.5 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs placeholder:text-slate-500"
+                      className="w-full px-2.5 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-medium outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">State</label>
+                    <label className="block text-slate-700 font-bold mb-1">State</label>
                     <select
                       value={regForm.state}
                       onChange={(e) => setRegForm({ ...regForm, state: e.target.value })}
-                      className="w-full px-2 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-medium outline-none text-xs cursor-pointer"
+                      className="w-full px-2 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-medium outline-none text-xs cursor-pointer"
                     >
                       {INDIAN_STATES.map(s => (
                         <option key={s} value={s}>{s}</option>
@@ -1689,43 +1689,43 @@ ${contactFooter}`;
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">Pincode</label>
+                    <label className="block text-slate-700 font-bold mb-1">Pincode</label>
                     <input
                       type="text"
                       maxLength={6}
                       placeholder="6-digit pincode"
                       value={regForm.pincode}
                       onChange={(e) => setRegForm({ ...regForm, pincode: e.target.value.replace(/\D/g, '') })}
-                      className="w-full px-2.5 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono outline-none text-xs placeholder:text-slate-500"
+                      className="w-full px-2.5 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-mono outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                     />
                   </div>
                 </div>
 
                 {/* 4. Logo Upload (Optional) */}
-                <div className="p-3 bg-slate-950/80 border border-dashed border-slate-700 rounded-xl">
+                <div className="p-3 bg-slate-50/80 border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl transition">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-slate-200 flex items-center space-x-1.5">
-                      <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
+                    <span className="font-bold text-slate-800 flex items-center space-x-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
                       <span>Agency Logo (White-Label Interface)</span>
                     </span>
-                    <span className="text-[10px] text-slate-400">Optional</span>
+                    <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">Optional</span>
                   </div>
                   
                   {regForm.logo_data ? (
-                    <div className="flex items-center space-x-3 bg-slate-900 p-2 rounded-lg border border-slate-700">
+                    <div className="flex items-center space-x-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                       <img
                         src={regForm.logo_data}
                         alt="Logo preview"
-                        className="h-10 w-auto max-w-[120px] object-contain rounded bg-white p-1"
+                        className="h-10 w-auto max-w-[120px] object-contain rounded bg-slate-50 p-1 border border-slate-200"
                       />
                       <div className="flex-1">
-                        <span className="text-[11px] text-emerald-400 font-bold block">Logo Attached!</span>
-                        <span className="text-[10px] text-slate-400">Appears on your portal header & quotations</span>
+                        <span className="text-[11px] text-emerald-600 font-bold block">Logo Attached!</span>
+                        <span className="text-[10px] text-slate-500">Appears on your portal header & quotations</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setRegForm({ ...regForm, logo_data: null })}
-                        className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
+                        className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
                         title="Remove Logo"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1733,8 +1733,8 @@ ${contactFooter}`;
                     </div>
                   ) : (
                     <div>
-                      <label className="flex items-center justify-center space-x-2 py-2 px-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg cursor-pointer transition text-sky-300 text-xs font-bold">
-                        <Camera className="w-4 h-4" />
+                      <label className="flex items-center justify-center space-x-2 py-2.5 px-4 bg-white hover:bg-blue-50 border border-slate-300 hover:border-blue-400 rounded-xl cursor-pointer transition text-slate-700 hover:text-blue-700 text-xs font-bold shadow-2xs">
+                        <Camera className="w-4 h-4 text-blue-600" />
                         <span>Upload Logo (PNG / JPG / WebP)</span>
                         <input
                           type="file"
@@ -1743,8 +1743,8 @@ ${contactFooter}`;
                           onChange={handleRegLogoChange}
                         />
                       </label>
-                      <p className="text-[10px] text-slate-400 mt-1 text-center">
-                        Logo upload karne par aapka logo aapke B2B portal header par dikhai dega.
+                      <p className="text-[10px] text-slate-500 mt-1.5 text-center">
+                        Logo upload karne par aapka logo aapke B2B portal header aur quotation par dikhai dega.
                       </p>
                     </div>
                   )}
@@ -1753,8 +1753,8 @@ ${contactFooter}`;
                 {/* 5. Set Security PIN / Password */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">
-                      Set 4-Digit PIN / Password <span className="text-rose-400">*</span>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Set 4-Digit PIN / Password <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type={regForm.showPassword ? 'text' : 'password'}
@@ -1763,12 +1763,12 @@ ${contactFooter}`;
                       placeholder="Enter 4-digit PIN or password"
                       value={regForm.pin}
                       onChange={(e) => setRegForm({ ...regForm, pin: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs placeholder:text-slate-500"
+                      className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-mono font-bold outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-200 font-bold mb-1">
-                      Confirm PIN / Password <span className="text-rose-400">*</span>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Confirm PIN / Password <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type={regForm.showPassword ? 'text' : 'password'}
@@ -1777,7 +1777,7 @@ ${contactFooter}`;
                       placeholder="Re-enter same PIN"
                       value={regForm.confirmPin}
                       onChange={(e) => setRegForm({ ...regForm, confirmPin: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950/90 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-white font-mono font-bold outline-none text-xs placeholder:text-slate-500"
+                      className="w-full px-3 py-2 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl text-slate-900 font-mono font-bold outline-none text-xs placeholder:text-slate-400 transition shadow-2xs"
                     />
                   </div>
                 </div>
@@ -1786,7 +1786,7 @@ ${contactFooter}`;
                 <button
                   type="submit"
                   disabled={authLoading}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-sm rounded-xl shadow-lg shadow-emerald-500/25 transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 mt-2"
                 >
                   {authLoading ? (
                     <>
@@ -1801,13 +1801,13 @@ ${contactFooter}`;
                   )}
                 </button>
 
-                <div className="pt-2 text-center border-t border-slate-800/80">
-                  <p className="text-slate-300 text-xs">
+                <div className="pt-2 text-center border-t border-slate-100">
+                  <p className="text-slate-600 text-xs">
                     Pehle se account hai?{' '}
                     <button
                       type="button"
                       onClick={() => { setAuthTab('login'); setAuthError(''); }}
-                      className="text-sky-400 hover:text-sky-300 font-bold underline cursor-pointer ml-1"
+                      className="text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer ml-1"
                     >
                       Login karein
                     </button>
@@ -1820,12 +1820,12 @@ ${contactFooter}`;
         </main>
 
         {/* Footer */}
-        <footer className="relative z-10 py-3.5 text-center border-t border-white/15 text-xs text-slate-200 bg-slate-950/70 backdrop-blur-md">
+        <footer className="relative z-10 py-3 text-center border-t border-slate-200/80 text-xs text-slate-600 bg-white/92 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span className="font-semibold text-slate-200">
+            <span className="font-semibold text-slate-700">
               TravelX Global Aviation Desk • Amritsar • Chandigarh • Delhi NCR
             </span>
-            <span className="text-[11px] text-slate-300 font-medium">
+            <span className="text-[11px] text-slate-500 font-medium">
               Strict B2B Privacy Isolation • Fixed Group Departures
             </span>
           </div>
