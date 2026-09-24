@@ -1379,17 +1379,14 @@ ${contactFooter}`;
     const isRegister = authTab === 'register';
 
     return (
-      <div className="min-h-screen flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white relative bg-[#070b16] text-slate-100 overflow-x-hidden">
-        {/* Ambient Wallpaper Glow Behind Entire Screen */}
-        <div 
-          className="fixed inset-0 pointer-events-none opacity-25 bg-cover bg-center filter blur-3xl scale-110"
-          style={{ backgroundImage: `url('/travelx-login-bg.jpg')` }}
-        />
-        {/* Subtle dark gradient overlay */}
-        <div className="fixed inset-0 pointer-events-none bg-gradient-to-b from-[#070b16]/75 via-[#070b16]/85 to-[#070b16]/95" />
-
+      <div 
+        className="min-h-screen flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white relative bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: `linear-gradient(rgba(8, 14, 28, 0.22), rgba(8, 14, 28, 0.30)), url('/travelx-login-bg.jpg')`
+        }}
+      >
         {/* Top Minimal Navigation Bar */}
-        <header className="relative z-20 border-b border-white/10 bg-slate-950/80 backdrop-blur-md shadow-xs">
+        <header className="relative z-10 border-b border-white/20 bg-slate-950/70 backdrop-blur-md shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
             {/* Left Brand Identity */}
             <div className="flex items-center space-x-3">
@@ -1400,12 +1397,12 @@ ${contactFooter}`;
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xl font-black text-white tracking-tight">TravelX</span>
-                  <span className="text-[10px] bg-blue-500/20 text-sky-300 border border-blue-400/30 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  <span className="text-xl font-black text-white tracking-tight drop-shadow-sm">TravelX</span>
+                  <span className="text-[10px] bg-blue-500/20 text-sky-300 border border-blue-400/40 font-black px-2 py-0.5 rounded-full uppercase tracking-wider backdrop-blur-xs">
                     B2B AIR PORTAL
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium">Special Fixed Fare Group Desk</p>
+                <p className="text-[10px] text-slate-300 font-medium">Special Fixed Fare Group Desk</p>
               </div>
             </div>
 
@@ -1413,7 +1410,7 @@ ${contactFooter}`;
             <div className="flex items-center space-x-2 sm:space-x-3">
               <a
                 href="tel:+918146526257"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-white/15 text-white text-xs font-bold transition shadow-xs"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/20 text-white text-xs font-bold transition shadow-xs backdrop-blur-sm"
               >
                 <Phone className="w-3.5 h-3.5 text-sky-400" />
                 <span className="hidden sm:inline">+91 81465 26257</span>
@@ -1423,7 +1420,7 @@ ${contactFooter}`;
                 href="https://wa.me/918146526257?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-md"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-md backdrop-blur-sm"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>Desk WhatsApp</span>
@@ -1432,60 +1429,9 @@ ${contactFooter}`;
           </div>
         </header>
 
-        {/* Master Showcase Layout: Wallpaper on Left, Auth Desk on Right */}
-        <main className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12 my-auto">
-          <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            
-            {/* Left Column: The TravelX Creative Artwork Showcase (Visible on all screens) */}
-            <div className={`flex flex-col justify-center space-y-4 ${isRegister ? 'lg:col-span-5' : 'lg:col-span-7'}`}>
-              
-              {/* Wallpaper Card Frame with high-definition rendering */}
-              <div className="relative rounded-3xl overflow-hidden border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.6)] bg-slate-900/60 backdrop-blur-md group transition-all duration-300 hover:border-blue-500/40">
-                <img 
-                  src="/travelx-login-bg.jpg" 
-                  alt="TravelX B2B Aviation Desk" 
-                  className="w-full h-auto object-cover rounded-3xl shadow-inner transition-transform duration-700 group-hover:scale-[1.01]" 
-                />
-              </div>
-
-              {/* High-End Feature Highlights Ribbon */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/10 backdrop-blur-sm">
-                  <div className="flex items-center space-x-2 text-sky-400 font-bold text-xs mb-1">
-                    <Plane className="w-3.5 h-3.5" />
-                    <span>Fixed Departures</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-snug">
-                    Direct group inventory on top airlines for Dubai, Abu Dhabi & Gulf.
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/10 backdrop-blur-sm">
-                  <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs mb-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Instant PNR</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-snug">
-                    Real-time seat count with locked wholesale fares. No rate fluctuations.
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/10 backdrop-blur-sm">
-                  <div className="flex items-center space-x-2 text-indigo-400 font-bold text-xs mb-1">
-                    <Building2 className="w-3.5 h-3.5" />
-                    <span>White-Label Desk</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-snug">
-                    Generate branded customer quotes with your own agency name & logo.
-                  </p>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Right Column: Luxury Floating Auth Card */}
-            <div className={`w-full ${isRegister ? 'lg:col-span-7 max-w-xl' : 'lg:col-span-5 max-w-md'} mx-auto`}>
-              <div className="bg-slate-950/90 border border-white/20 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] backdrop-blur-xl overflow-hidden transition-all duration-300 ring-1 ring-white/10">
+        {/* Center Floating Luxury Login / Registration Card */}
+        <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8 sm:py-12 my-auto">
+          <div className={`w-full ${isRegister ? 'max-w-xl' : 'max-w-[450px]'} mx-auto bg-slate-950/88 border border-white/25 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] backdrop-blur-xl overflow-hidden transition-all duration-300 ring-1 ring-white/10`}>
             
             {/* Card Header */}
             <div className="p-6 pb-4 border-b border-white/10 bg-gradient-to-b from-blue-950/80 to-[#0a1020]/90 text-center">
@@ -1870,8 +1816,6 @@ ${contactFooter}`;
               </form>
             )}
 
-              </div>
-            </div>
           </div>
         </main>
 
