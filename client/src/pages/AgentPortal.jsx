@@ -1382,7 +1382,7 @@ ${contactFooter}`;
       <div 
         className="min-h-screen flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white relative bg-cover bg-center bg-no-repeat bg-fixed"
         style={{
-          backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.28)), url('/travelx-login-bg.jpg')`
+          backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.12)), url('/travelx-login-bg.jpg')`
         }}
       >
         {/* Top Minimal Corporate Navigation Bar */}
