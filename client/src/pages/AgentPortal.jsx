@@ -117,8 +117,8 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
     agentBadge: 'TX B2B',
     tagline: 'Comfort • Trust • Journey.',
     balance: '100000(0)',
-    whatsapp: '',
-    phone: '',
+    whatsapp: '918146526257',
+    phone: '+91 81465 26257',
     email: 'desk@travelx.co.in'
   });
   const [loading, setLoading] = useState(() => {
@@ -1410,14 +1410,14 @@ ${contactFooter}`;
 
             <div className="flex items-center space-x-2 sm:space-x-3">
               <a
-                href="tel:+919888888888"
+                href="tel:+918146526257"
                 className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-bold transition"
               >
                 <Phone className="w-3.5 h-3.5 text-blue-400" />
-                <span>+91 98888 88888</span>
+                <span>+91 81465 26257</span>
               </a>
               <a
-                href="https://wa.me/919888314788?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
+                href="https://wa.me/918146526257?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-bold transition shadow-sm"
@@ -2118,10 +2118,10 @@ ${contactFooter}`;
             <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-4 text-xs text-slate-500">
               <span>Urgent ticket issuance:</span>
               <a 
-                href={`tel:${agencyConfig?.phone || '+919888888888'}`}
+                href={`tel:${agencyConfig?.phone || '+918146526257'}`}
                 className="font-bold text-slate-800 hover:text-blue-600 transition flex items-center space-x-1"
               >
-                <span>📞 {agencyConfig?.phone || '+91 98888 88888'}</span>
+                <span>📞 {agencyConfig?.phone || '+91 81465 26257'}</span>
               </a>
               <span className="hidden sm:inline text-slate-300">•</span>
               <button

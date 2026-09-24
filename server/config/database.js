@@ -267,15 +267,27 @@ function initSchema() {
   // Default app settings
   try {
     const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');
-    insertSetting.run('admin_whatsapp_phone', '919888888888');
+    insertSetting.run('admin_whatsapp_phone', '918146526257');
     insertSetting.run('admin_pin', process.env.ADMIN_PIN || '7788');
     insertSetting.run('staff_pin', process.env.STAFF_PIN || '2233');
-    insertSetting.run('agency_contact_phone', '+91 98888 88888');
+    insertSetting.run('agency_contact_phone', '+91 81465 26257');
     insertSetting.run('agency_email', 'desk@travelx.co.in');
     insertSetting.run('callmebot_api_key', '');
     insertSetting.run('whatsapp_alerts_enabled', '0');
     insertSetting.run('auto_expiry_enabled', '1');
     insertSetting.run('maintenance_mode', '0');
+
+    // Update any dummy/placeholder phone numbers in app_settings to Navkiran's official number
+    db.prepare(`
+      UPDATE app_settings 
+      SET value = '918146526257' 
+      WHERE key = 'admin_whatsapp_phone' AND (value LIKE '%98888%' OR value LIKE '%98883%' OR value = '')
+    `).run();
+    db.prepare(`
+      UPDATE app_settings 
+      SET value = '+91 81465 26257' 
+      WHERE key = 'agency_contact_phone' AND (value LIKE '%98888%' OR value LIKE '%98883%' OR value = '')
+    `).run();
   } catch (e) {}
 
   // Retain all existing fares safely across all restarts/updates
@@ -304,7 +316,8 @@ function ensureAppSettingsDefaults() {
       ON CONFLICT(key) DO NOTHING
     `);
     upsert.run('admin_pin', process.env.ADMIN_PIN || '7788');
-    upsert.run('agency_contact_phone', '+91 98888 88888');
+    upsert.run('agency_contact_phone', '+91 81465 26257');
+    upsert.run('admin_whatsapp_phone', '918146526257');
     upsert.run('agency_email', 'desk@travelx.co.in');
   } catch (e) {}
 }

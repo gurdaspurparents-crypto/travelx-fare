@@ -2352,7 +2352,7 @@ Thank you for booking with TravelX!`;
                   <label className="block text-xs font-bold text-slate-800 mb-1">Public desk phone (display)</label>
                   <input
                     type="text"
-                    placeholder="+91 98888 88888"
+                    placeholder="+91 81465 26257"
                     value={settingsData.agency_contact_phone}
                     onChange={(e) => setSettingsData({ ...settingsData, agency_contact_phone: e.target.value })}
                     className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 text-slate-900 text-xs outline-none focus:border-blue-900"
