@@ -273,67 +273,21 @@ function initSchema() {
     insertSetting.run('auto_expiry_enabled', '1');
   } catch (e) {}
 
-  wipeFaresOnce();
-  removeSeededDummyFares();
+  // Retain all existing fares safely across all restarts/updates
   collapseDuplicateFares();
   seedMasterData();
   ensureAppSettingsDefaults();
-}
-
-function removeSeededDummyFares() {
-  try {
-    const del = db.prepare(`
-      DELETE FROM fares 
-      WHERE remarks IN (
-        'Series Direct Flight',
-        'SpiceJet Direct Saver',
-        'Direct Sharjah Express',
-        'IndiGo Non-Stop',
-        'Direct Abu Dhabi Special'
-      )
-    `).run();
-    if (del.changes > 0) {
-      console.log(`[Database] Removed ${del.changes} legacy dummy seed fares from Air IQ/default vendor.`);
-    }
-  } catch (e) {
-    console.warn('Dummy fares cleanup note:', e.message);
-  }
-}
-
-function wipeFaresOnce() {
-  const flag = 'fares_wiped_v1';
-  try {
-    const existing = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(flag);
-    if (existing) return;
-    db.exec(`
-      DELETE FROM published_specials;
-      DELETE FROM fare_history;
-      DELETE FROM fares;
-      INSERT OR REPLACE INTO app_settings (key, value, updated_at)
-      VALUES ('${flag}', '1', datetime('now', 'localtime'));
-    `);
-    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
-    console.log('Cleared all saved fares for a clean start');
-  } catch (e) {
-    console.warn('Fare wipe note:', e.message);
-  }
 }
 
 function collapseDuplicateFares() {
   try {
     db.exec(`
       UPDATE fares SET cabin = 'ECONOMY' WHERE cabin IS NULL OR TRIM(cabin) = '';
-      UPDATE fares SET is_published = 1 WHERE travel_date >= date('now', 'localtime') AND (is_published IS NULL OR is_published = 0);
-      DELETE FROM fares
-      WHERE id NOT IN (
-        SELECT MAX(id) FROM fares
-        GROUP BY vendor_id, airline_code, origin, destination, travel_date, cabin
-      );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_fares_identity
       ON fares (vendor_id, airline_code, origin, destination, travel_date, cabin);
     `);
   } catch (e) {
-    console.warn('Duplicate fare cleanup note:', e.message);
+    console.warn('Duplicate fare index note:', e.message);
   }
 }
 
