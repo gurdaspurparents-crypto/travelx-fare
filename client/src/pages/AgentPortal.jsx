@@ -1390,10 +1390,8 @@ ${contactFooter}`;
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between">
             {/* Left Brand Identity */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800 p-0.5 shadow-md flex items-center justify-center">
-                <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                  <Plane className="w-5 h-5 text-sky-400 -rotate-45" />
-                </div>
+              <div className="h-11 w-11 rounded-xl bg-white border border-white/80 shadow-md overflow-hidden flex items-center justify-center p-1">
+                <img src="/travelx-logo.png" alt="TravelX" className="h-full w-full object-contain" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
@@ -1435,11 +1433,14 @@ ${contactFooter}`;
             
             {/* Card Header */}
             <div className="p-6 pb-4 border-b border-slate-100 bg-gradient-to-b from-blue-50/60 via-slate-50/40 to-white text-center">
+              <div className="flex flex-col items-center mb-3">
+                <img src="/travelx-logo.png" alt="TravelX" className="h-[76px] w-auto object-contain" />
+              </div>
               <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-100/70 border border-blue-200 text-blue-800 text-[10px] font-black uppercase tracking-wider mb-2">
                 <Lock className="w-3 h-3 text-blue-600" />
                 <span>Authorized B2B Portal</span>
               </div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">
                 {isRegister ? 'New Agency Registration' : 'Special Flight Rates Desk'}
               </h2>
               <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto font-medium">
