@@ -1382,27 +1382,27 @@ ${contactFooter}`;
       <div 
         className="min-h-screen flex flex-col justify-between font-sans selection:bg-blue-600 selection:text-white relative bg-cover bg-center bg-no-repeat bg-fixed"
         style={{
-          backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.12)), url('/travelx-login-bg.jpg')`
+          backgroundImage: `linear-gradient(rgba(10, 15, 30, 0.20), rgba(10, 15, 30, 0.35)), url('/travelx-login-bg.jpg')`
         }}
       >
         {/* Top Minimal Corporate Navigation Bar */}
-        <header className="relative z-20 border-b border-slate-200/80 bg-white/92 backdrop-blur-md shadow-xs">
+        <header className="relative z-20 border-b border-white/10 bg-slate-950/75 backdrop-blur-md shadow-xs">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between">
             {/* Left Brand Identity */}
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800 p-0.5 shadow-md flex items-center justify-center">
-                <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
+                <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
                   <Plane className="w-5 h-5 text-sky-400 -rotate-45" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xl font-black text-slate-900 tracking-tight">TravelX</span>
-                  <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  <span className="text-xl font-black text-white tracking-tight">TravelX</span>
+                  <span className="text-[10px] bg-blue-500/20 text-sky-300 border border-blue-400/30 font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                     B2B AIR PORTAL
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-500 font-semibold">Special Fixed Fare Group Desk</p>
+                <p className="text-[10px] text-slate-300 font-medium">Special Fixed Fare Group Desk</p>
               </div>
             </div>
 
@@ -1410,9 +1410,9 @@ ${contactFooter}`;
             <div className="flex items-center space-x-2 sm:space-x-3">
               <a
                 href="tel:+918146526257"
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-bold transition shadow-2xs"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/15 text-white text-xs font-bold transition shadow-2xs"
               >
-                <Phone className="w-3.5 h-3.5 text-blue-600" />
+                <Phone className="w-3.5 h-3.5 text-sky-400" />
                 <span className="hidden sm:inline">+91 81465 26257</span>
                 <span className="sm:hidden">Call</span>
               </a>
@@ -1420,7 +1420,7 @@ ${contactFooter}`;
                 href="https://wa.me/918146526257?text=Hello%20TravelX%20Desk%2C%20I%20need%20help%20with%20Agent%20Portal%20access."
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>Desk WhatsApp</span>
@@ -1431,7 +1431,7 @@ ${contactFooter}`;
 
         {/* Center Floating Luxury Light Card */}
         <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8 sm:py-12 my-auto">
-          <div className={`w-full ${isRegister ? 'max-w-xl' : 'max-w-[450px]'} mx-auto bg-white/96 border border-white/80 rounded-3xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.30)] backdrop-blur-2xl overflow-hidden transition-all duration-300 ring-1 ring-slate-900/5`}>
+          <div className={`w-full ${isRegister ? 'max-w-xl' : 'max-w-[450px]'} mx-auto bg-white/96 border border-white/80 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] backdrop-blur-2xl overflow-hidden transition-all duration-300 ring-1 ring-white/20`}>
             
             {/* Card Header */}
             <div className="p-6 pb-4 border-b border-slate-100 bg-gradient-to-b from-blue-50/60 via-slate-50/40 to-white text-center">
@@ -1820,12 +1820,12 @@ ${contactFooter}`;
         </main>
 
         {/* Footer */}
-        <footer className="relative z-10 py-3 text-center border-t border-slate-200/80 text-xs text-slate-600 bg-white/92 backdrop-blur-md">
+        <footer className="relative z-10 py-3 text-center border-t border-white/10 text-xs text-slate-300 bg-slate-950/75 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span className="font-semibold text-slate-700">
+            <span className="font-semibold text-slate-200">
               TravelX Global Aviation Desk • Amritsar • Chandigarh • Delhi NCR
             </span>
-            <span className="text-[11px] text-slate-500 font-medium">
+            <span className="text-[11px] text-slate-400 font-medium">
               Strict B2B Privacy Isolation • Fixed Group Departures
             </span>
           </div>
