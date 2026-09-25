@@ -1231,3 +1231,80 @@ exports.batchUpdateMargins = (req, res) => {
   }
 };
 
+/**
+ * Controller: 1-Click Sync from Supplier Portals (e.g. Shree Balaji, Air IQ, Akbar)
+ */
+exports.portalSyncFares = (req, res) => {
+  try {
+    const { vendor_name = 'Shree Balaji', vendor_id, fares = [], pin, sync_key } = req.body;
+
+    // Security check: either valid PIN (7788) or sync key
+    if (pin !== '7788' && sync_key !== 'travelx_sync_2026') {
+      return res.status(401).json({ success: false, error: 'Unauthorized sync request. Please supply correct PIN.' });
+    }
+
+    if (!fares || fares.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fares provided to sync.' });
+    }
+
+    // Resolve or create vendor
+    let resolvedVendorId = vendor_id;
+    if (!resolvedVendorId) {
+      const v = db.prepare('SELECT id FROM vendors WHERE name = ? COLLATE NOCASE').get(vendor_name);
+      if (v) {
+        resolvedVendorId = v.id;
+      } else {
+        const info = db.prepare('INSERT INTO vendors (name, is_active) VALUES (?, 1)').run(vendor_name);
+        resolvedVendorId = info.lastInsertRowid;
+      }
+    }
+
+    preprocessBulkFares(fares);
+
+    let savedCount = 0;
+    const errors = [];
+
+    const saveRow = db.transaction((f) => saveOrUpdateFareRecord({
+      vendor_id: resolvedVendorId,
+      airline_code: f.airline_code,
+      origin: f.origin,
+      destination: f.destination,
+      travel_date: f.travel_date,
+      flight_number: f.flight_number || '',
+      departure_time: f.departure_time || '',
+      arrival_time: f.arrival_time || '',
+      net_fare: f.net_fare,
+      currency: f.currency || 'INR',
+      cabin: f.cabin || 'ECONOMY',
+      baggage: f.baggage || '30kg',
+      is_refundable: f.is_refundable || 'NON_REFUNDABLE',
+      remarks: f.remarks || `Synced from ${vendor_name} portal`,
+      custom_margin: f.custom_margin || null
+    }));
+
+    for (const f of fares) {
+      try {
+        const r = saveRow(f);
+        if (r && r.id) savedCount++;
+      } catch (err) {
+        errors.push({ fare: f, error: err.message });
+      }
+    }
+
+    safeInvalidateFaresCache();
+
+    return res.json({
+      success: true,
+      vendor_id: resolvedVendorId,
+      vendor_name,
+      saved_count: savedCount,
+      error_count: errors.length,
+      message: `🎉 Successfully synced ${savedCount} rates from ${vendor_name} into TravelX!`
+    });
+  } catch (err) {
+    console.error('Portal sync error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+

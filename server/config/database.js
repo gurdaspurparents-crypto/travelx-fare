@@ -414,7 +414,8 @@ function seedMasterData() {
     'MTC',
     'Speed',
     'Bipasha',
-    'Mayank'
+    'Mayank',
+    'Shree Balaji'
   ];
   const findVendorCaseInsensitive = db.prepare('SELECT id FROM vendors WHERE name = ? COLLATE NOCASE');
   const insertVendor = db.prepare('INSERT INTO vendors (name, phone, email, notes, is_active) VALUES (?, ?, ?, ?, 1)');

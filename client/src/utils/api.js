@@ -678,5 +678,12 @@ export const api = {
       method: 'POST',
       body: formData
     });
+  },
+  portalSyncFares: async (vendor_name, fares, pin = '7788') => {
+    return safeFetch('/api/fares/portal-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_name, fares, pin })
+    });
   }
 };
