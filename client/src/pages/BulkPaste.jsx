@@ -190,7 +190,7 @@ export default function BulkPaste({ masterData, onFaresSaved, setActiveTab }) {
     try {
       setSaving(true);
       setStatus(null);
-      const res = await api.saveBulkFares(vendorId, parsedData.records, true, 'sector');
+      const res = await api.saveBulkFares(vendorId, parsedData.records, false, 'sector');
       if (res.success) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} sold-out / absent dates deleted)` : '';
         setStatus({

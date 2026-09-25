@@ -63,6 +63,48 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
     return () => { cancelled = true; };
   }, []);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+
+  const handleDownloadBackup = async () => {
+    try {
+      setBackupLoading(true);
+      const res = await api.downloadDatabaseBackup();
+      if (!res?.success && res?.error) {
+        setStatus({ type: 'error', text: res.error || 'Backup download failed.' });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message || 'Backup download failed.' });
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!window.confirm('⚠️ Restore karne se saare current rates is backup file se replace ho jayenge. Continue karein?')) {
+      e.target.value = '';
+      return;
+    }
+    try {
+      setRestoreLoading(true);
+      setStatus({ type: 'info', text: 'Database restore ho raha hai…' });
+      const res = await api.restoreDatabaseBackup(file);
+      if (res.success) {
+        setStatus({ type: 'success', text: '🎉 Database successfully restore ho gaya hai! Kripya page refresh karein.' });
+        if (onFaresSaved) onFaresSaved();
+        if (selectedVendorId) loadActiveVendorFares(selectedVendorId);
+      } else {
+        setStatus({ type: 'error', text: res.error || 'Restore failed.' });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message || 'Restore failed.' });
+    } finally {
+      setRestoreLoading(false);
+      e.target.value = '';
+    }
+  };
 
   // Vendor's active fares list from DB
   const [vendorFares, setVendorFares] = useState([]);
@@ -353,7 +395,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
       const res = await api.saveBulkFares(
         Number(selectedVendorId),
         formattedFares,
-        true,
+        false,
         'sector',
         (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` })
       );
@@ -391,7 +433,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
   }, [excelRows, selectedExcelFilter]);
 
   // ====================== IMAGE OCR HANDLERS ======================
-  const handleSaveImageFaresToVendor = async (formattedFares, andSort = false, autoDeleteMissing = true) => {
+  const handleSaveImageFaresToVendor = async (formattedFares, andSort = false, autoDeleteMissing = false) => {
     try {
       setLoading(true);
       setStatus({ type: 'info', text: `Saving ${formattedFares.length} scanned fares…` });
@@ -642,6 +684,26 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
           </div>
 
           <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              disabled={backupLoading}
+              onClick={handleDownloadBackup}
+              className="text-xs font-bold text-sky-700 hover:text-sky-800 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg border border-sky-300 transition flex items-center space-x-1 cursor-pointer"
+              title="Download full backup of all rates & vendors (.db file)"
+            >
+              <Download className="w-3.5 h-3.5 text-sky-500" />
+              <span>{backupLoading ? 'Saving…' : 'Backup Rates'}</span>
+            </button>
+
+            <label
+              className="text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-300 transition flex items-center space-x-1 cursor-pointer"
+              title="Restore all rates from a saved .db backup file"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-indigo-500" />
+              <span>{restoreLoading ? 'Restoring…' : 'Restore'}</span>
+              <input type="file" accept=".db" className="hidden" disabled={restoreLoading} onChange={handleRestoreBackup} />
+            </label>
+
             <button
               type="button"
               onClick={() => setShowClearModal(true)}

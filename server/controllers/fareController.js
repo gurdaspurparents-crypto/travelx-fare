@@ -624,7 +624,7 @@ exports.saveBulkParsedFares = (req, res) => {
   const {
     vendor_id,
     fares = [],
-    replace_missing_dates = true,
+    replace_missing_dates = false,
     replace_mode = 'sector',
     skip_inventory_sync = false,
     summary_only = false
