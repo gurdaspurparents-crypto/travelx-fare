@@ -3,14 +3,13 @@ import {
   Building2, FileSpreadsheet, Plus, Check, AlertCircle, X,
   Plane, ArrowRight, Save, Zap, Trash2, Calendar, Download, 
   MessageSquare, Sparkles, Filter, RefreshCw, UploadCloud, ChevronRight, Layers,
-  Image as ImageIcon, Globe
+  Image as ImageIcon
 } from 'lucide-react';
 import { api } from '../utils/api';
 import { parseExcelFile, parseMultipleExcelFiles, buildGroupsFromRows, downloadExcelTemplate, downloadKandhariTemplate, downloadBittuTemplate, downloadMongaTemplate } from '../utils/excelParser';
 import { getAirlineName } from '../utils/airlineHelper';
 import ImageOcrUploader from '../components/ImageOcrUploader';
 import ClearRatesModal from '../components/ClearRatesModal';
-import PortalSyncTab from '../components/PortalSyncTab';
 
 export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActiveTab }) {
   const { vendors = [], airlines = [], routes = [] } = masterData;
@@ -31,20 +30,9 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
     try {
       localStorage.setItem('travelx_active_vendor_id', idStr);
     } catch (_) {}
-    const v = vendors.find(x => String(x.id) === idStr);
-    if (v && /balaji|shree/i.test(v.name)) {
-      setActiveVendorTab('portal_sync');
-    }
   };
 
-  const [activeVendorTab, setActiveVendorTab] = useState(() => {
-    try {
-      const saved = localStorage.getItem('travelx_active_vendor_id');
-      const v = vendors.find(x => String(x.id) === String(saved));
-      if (v && /balaji|shree/i.test(v.name)) return 'portal_sync';
-    } catch (_) {}
-    return 'image';
-  });
+  const [activeVendorTab, setActiveVendorTab] = useState('image'); // 'image' (Tareeqa 1), 'excel', 'grid', 'range', 'whatsapp', 'saved'
 
   // New Vendor creation modal / form
   const [isAddingVendor, setIsAddingVendor] = useState(false);
@@ -818,11 +806,6 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
                 <div>
                   <div className="flex items-center space-x-1.5">
                     <span className="text-xs font-black tracking-tight">{v.name}</span>
-                    {/balaji|shree/i.test(v.name) && (
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                        SYNC
-                      </span>
-                    )}
                     {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400" />}
                   </div>
                   <div className={`text-[10px] font-mono ${isSelected ? 'text-emerald-300 font-bold' : 'text-slate-400'}`}>
@@ -913,24 +896,6 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
           <div className="px-6 pt-3 bg-slate-100 border-b border-slate-200 flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => setActiveVendorTab('portal_sync')}
-              className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition flex items-center space-x-1.5 ${
-                activeVendorTab === 'portal_sync'
-                  ? 'bg-white text-blue-700 border-t-2 border-blue-600 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <Globe className="w-4 h-4 text-blue-600" />
-              <span>🌐 1-Click Portal Sync (Live)</span>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                activeVendorTab === 'portal_sync' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'
-              }`}>
-                AUTO SYNC
-              </span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setActiveVendorTab('image')}
               className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition flex items-center space-x-1.5 ${
                 activeVendorTab === 'image'
@@ -1013,21 +978,6 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
           {/* Workspace Body */}
           <div className="p-6">
             
-            {/* ============================================================ */}
-            {/* TAB 0: 1-CLICK PORTAL RATE SYNC (SHREE BALAJI / B2B PORTALS) */}
-            {/* ============================================================ */}
-            {activeVendorTab === 'portal_sync' && (
-              <PortalSyncTab
-                vendor={selectedVendor}
-                vendorFares={vendorFares}
-                onFaresUpdated={() => {
-                  loadActiveVendorFares(selectedVendorId);
-                  if (onFaresSaved) onFaresSaved();
-                }}
-                setActiveTab={setActiveTab}
-              />
-            )}
-
             {/* ============================================================ */}
             {/* TAB 1: UPLOAD EXCEL FOR THIS VENDOR */}
             {/* ============================================================ */}
