@@ -1231,3 +1231,79 @@ exports.batchUpdateMargins = (req, res) => {
   }
 };
 
+/**
+ * Controller: 1-Click Chrome Extension Sync for B2B Portals (Ghai, World Travels, Shree Balaji, etc.)
+ */
+exports.extensionSyncFares = (req, res) => {
+  try {
+    const { vendor_name = 'Ghai', vendor_id, fares = [], pin, custom_margin } = req.body;
+
+    // Security check: require PIN 7788
+    if (pin !== '7788') {
+      return res.status(401).json({ success: false, error: 'Unauthorized. PIN required.' });
+    }
+
+    if (!fares || !Array.isArray(fares) || fares.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fares provided to sync.' });
+    }
+
+    // Resolve vendor
+    let resolvedVendorId = vendor_id;
+    if (!resolvedVendorId) {
+      const v = db.prepare('SELECT id, name FROM vendors WHERE name = ? COLLATE NOCASE').get(vendor_name.trim());
+      if (v) {
+        resolvedVendorId = v.id;
+      } else {
+        const info = db.prepare('INSERT INTO vendors (name, is_active) VALUES (?, 1)').run(vendor_name.trim());
+        resolvedVendorId = info.lastInsertRowid;
+      }
+    }
+
+    preprocessBulkFares(fares);
+
+    let savedCount = 0;
+    const errors = [];
+
+    const saveRow = db.transaction((f) => saveOrUpdateFareRecord({
+      vendor_id: resolvedVendorId,
+      airline_code: f.airline_code,
+      origin: f.origin,
+      destination: f.destination,
+      travel_date: f.travel_date,
+      flight_number: f.flight_number || '',
+      departure_time: f.departure_time || '',
+      arrival_time: f.arrival_time || '',
+      net_fare: f.net_fare,
+      currency: f.currency || 'INR',
+      cabin: f.cabin || 'ECONOMY',
+      baggage: f.baggage || '30kg',
+      is_refundable: f.is_refundable || 'NON_REFUNDABLE',
+      remarks: f.remarks || `Synced from ${vendor_name} portal`,
+      custom_margin: custom_margin !== undefined ? custom_margin : (f.custom_margin || null)
+    }, { bulkMode: true }));
+
+    for (const f of fares) {
+      try {
+        const r = saveRow(f);
+        if (r && r.id) savedCount++;
+      } catch (err) {
+        errors.push({ fare: f, error: err.message });
+      }
+    }
+
+    safeInvalidateFaresCache();
+
+    return res.json({
+      success: true,
+      vendor_id: resolvedVendorId,
+      vendor_name,
+      saved_count: savedCount,
+      error_count: errors.length,
+      message: `🎉 Successfully synced ${savedCount} rates from ${vendor_name} into TravelX!`
+    });
+  } catch (err) {
+    console.error('Extension sync error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
