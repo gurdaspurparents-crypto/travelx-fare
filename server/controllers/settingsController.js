@@ -4,10 +4,10 @@ const multer = require('multer');
 const db = require('../config/database');
 const { invalidateFaresCache } = require('./publicAgentController');
 
-const dataDir = process.env.DATA_DIR
+const dataDir = db.dataDir || (process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
-  : path.join(__dirname, '..', 'data');
-const dbPath = path.join(dataDir, 'travelx_fares.db');
+  : path.join(__dirname, '..', 'data'));
+const dbPath = db.dbPath || path.join(dataDir, 'travelx_fares.db');
 
 const upload = multer({
   storage: multer.memoryStorage(),

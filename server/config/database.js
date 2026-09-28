@@ -62,6 +62,8 @@ if (dataDir !== path.join(__dirname, '..', 'data') && !fs.existsSync(dbPath) && 
 
 console.log('SQLite database:', dbPath);
 const db = new Database(dbPath, { timeout: 10000 });
+db.dbPath = dbPath;
+db.dataDir = dataDir;
 
 // Enable WAL mode & busy timeout for high concurrency and zero locks
 db.pragma('journal_mode = WAL');
@@ -662,7 +664,69 @@ function seedMasterData() {
 }
 
 initSchema();
+seedFaresIfEmpty();
 maybeDailyAutoBackup();
+
+function seedFaresIfEmpty() {
+  try {
+    const count = db.prepare('SELECT COUNT(*) as c FROM fares').get()?.c || 0;
+    if (count > 0) return;
+
+    const seedFile = path.join(__dirname, 'seed_fares.json');
+    if (!fs.existsSync(seedFile)) return;
+
+    const raw = fs.readFileSync(seedFile, 'utf8');
+    const fares = JSON.parse(raw);
+    if (!Array.isArray(fares) || fares.length === 0) return;
+
+    console.log(`[Database] Auto-seeding ${fares.length} master special fares...`);
+    const insert = db.prepare(`
+      INSERT OR REPLACE INTO fares (
+        id, vendor_id, airline_code, origin, destination, travel_date,
+        flight_number, departure_time, arrival_time, net_fare, currency,
+        cabin, baggage, is_refundable, remarks, margin_amount, publish_fare, is_published,
+        created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?
+      )
+    `);
+
+    const tx = db.transaction(() => {
+      for (const f of fares) {
+        insert.run(
+          f.id,
+          f.vendor_id || 1,
+          f.airline_code,
+          f.origin,
+          f.destination,
+          f.travel_date,
+          f.flight_number || '',
+          f.departure_time || '',
+          f.arrival_time || '',
+          f.net_fare,
+          f.currency || 'INR',
+          f.cabin || 'ECONOMY',
+          f.baggage || '30kg',
+          f.is_refundable || 'NON_REFUNDABLE',
+          f.remarks || '',
+          f.margin_amount !== undefined ? f.margin_amount : 0,
+          f.publish_fare || f.net_fare,
+          f.is_published !== undefined ? f.is_published : 1,
+          f.created_at || new Date().toISOString(),
+          f.updated_at || new Date().toISOString()
+        );
+      }
+    });
+
+    tx();
+    console.log(`[Database] Successfully seeded ${fares.length} special fares into database!`);
+  } catch (err) {
+    console.warn('[Database] Seed fares failed:', err.message);
+  }
+}
 
 function maybeDailyAutoBackup() {
   try {
