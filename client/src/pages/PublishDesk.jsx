@@ -35,11 +35,13 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
       if (res.success && res.fares && res.fares.length > 0) {
         const loaded = res.fares.map(f => {
           const net = Number(f.net_fare) || 0;
+          const margin = Number(f.margin_amount) || 0;
+          const pub = Number(f.publish_fare) || (net + margin);
           return {
             ...f,
             net_fare: net,
-            margin_amount: 0,
-            publish_fare: net
+            margin_amount: margin,
+            publish_fare: pub
           };
         });
         setFares(loaded);
@@ -50,11 +52,13 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
         if (bestRes.success && bestRes.bestFares && bestRes.bestFares.length > 0) {
           const loaded = bestRes.bestFares.map(f => {
             const net = Number(f.net_fare) || 0;
+            const margin = Number(f.margin_amount) || 0;
+            const pub = Number(f.publish_fare) || (net + margin);
             return {
               ...f,
               net_fare: net,
-              margin_amount: 0,
-              publish_fare: net
+              margin_amount: margin,
+              publish_fare: pub
             };
           });
           setFares(loaded);
@@ -83,11 +87,13 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
         } else {
           const loaded = res.bestFares.map(f => {
             const net = Number(f.net_fare) || 0;
+            const margin = Number(f.margin_amount) || 0;
+            const pub = Number(f.publish_fare) || (net + margin);
             return {
               ...f,
               net_fare: net,
-              margin_amount: 0,
-              publish_fare: net
+              margin_amount: margin,
+              publish_fare: pub
             };
           });
           setFares(loaded);
@@ -297,12 +303,17 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
       setSaving(true);
       setStatus(null);
 
-      const updates = fares.map(f => ({
-        id: f.id,
-        net_fare: Number(f.net_fare),
-        margin_amount: 0,
-        publish_fare: Number(f.net_fare)
-      }));
+      const updates = fares.map(f => {
+        const net = Number(f.net_fare) || 0;
+        const margin = Number(f.margin_amount) || 0;
+        const pub = Number(f.publish_fare) || (net + margin);
+        return {
+          id: f.id,
+          net_fare: net,
+          margin_amount: margin,
+          publish_fare: pub
+        };
+      });
 
       const res = await api.batchUpdateMargins(updates, 1, 'Final Special Fare Broadcast');
       if (res.success) {
@@ -836,6 +847,8 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                     /* Consolidated Grouped Date Ranges View with 3 Pastel Sector Colors */
                     consolidatedList.map((streakItem, idx) => {
                       const net = Number(streakItem.net_fare) || 0;
+                      const margin = Number(streakItem.margin_amount) || 0;
+                      const publish = Number(streakItem.publish_fare) || (net + margin);
                       const rowBg = consolidatedColorMap.get(streakItem.id) || 'bg-[#E0F2FE]';
                       return (
                         <tr key={streakItem.id || idx} className={`${rowBg} text-slate-900 font-bold hover:brightness-95 transition border-b border-slate-300/50`}>
@@ -854,7 +867,12 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                           </td>
 
                           <td className="px-4 py-2.5 text-right font-black text-slate-950 font-mono text-xs whitespace-nowrap border-r border-slate-300/60">
-                            ₹{net.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <div>₹{publish.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            {margin > 0 && (
+                              <div className="text-[10px] font-semibold text-emerald-800 tracking-tight">
+                                (Net ₹{net.toLocaleString('en-IN')} + ₹{margin})
+                              </div>
+                            )}
                           </td>
 
                           {/* Date Range Column */}
@@ -892,6 +910,8 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                     /* Detailed Day-by-Day View */
                     displayedFares.map((f, idx) => {
                       const net = Number(f.net_fare) || 0;
+                      const margin = Number(f.margin_amount) || 0;
+                      const publish = Number(f.publish_fare) || (net + margin);
                       const rowBg = detailedColorMap.get(f.id) || 'bg-[#E0F2FE]';
 
                       return (
@@ -911,7 +931,12 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                           </td>
 
                           <td className="px-4 py-2.5 text-right font-black text-slate-950 font-mono text-xs whitespace-nowrap border-r border-slate-300/60">
-                            ₹{net.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <div>₹{publish.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            {margin > 0 && (
+                              <div className="text-[10px] font-semibold text-emerald-800 tracking-tight">
+                                (Net ₹{net.toLocaleString('en-IN')} + ₹{margin})
+                              </div>
+                            )}
                           </td>
 
                           <td className="px-3.5 py-2.5 font-bold text-slate-900 whitespace-nowrap border-r border-slate-300/60">
