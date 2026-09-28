@@ -395,6 +395,14 @@ export const api = {
     });
   },
 
+  applyMarginRulesToExisting: async (payload = {}) => {
+    return safeFetch('/api/margins/apply-existing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  },
+
   // Master Data
   getAirlines: async () => {
     return safeFetch('/api/masters/airlines');

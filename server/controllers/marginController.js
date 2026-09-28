@@ -1,8 +1,9 @@
 const db = require('../config/database');
-const { calculateMargin } = require('../services/marginCalculator');
+const { calculateMargin, invalidateMarginRulesCache } = require('../services/marginCalculator');
 
 function safeInvalidateFaresCache() {
   try {
+    invalidateMarginRulesCache();
     const publicCtrl = require('./publicAgentController');
     if (publicCtrl && typeof publicCtrl.invalidateFaresCache === 'function') {
       publicCtrl.invalidateFaresCache();
@@ -157,6 +158,62 @@ exports.previewMargin = (req, res) => {
     const calc = calculateMargin(net_fare, airline_code, origin, destination, custom_margin);
     return res.json({ success: true, ...calc });
   } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * Controller: Apply active margin rules across existing database fares
+ */
+exports.applyMarginRulesToExistingFares = (req, res) => {
+  try {
+    const { origin = null, destination = null } = req.body || {};
+
+    invalidateMarginRulesCache();
+
+    let query = 'SELECT * FROM fares WHERE 1=1';
+    const params = [];
+    if (origin) {
+      query += ' AND origin = ?';
+      params.push(origin.toUpperCase());
+    }
+    if (destination) {
+      query += ' AND destination = ?';
+      params.push(destination.toUpperCase());
+    }
+
+    const fares = db.prepare(query).all(...params);
+
+    const updateFare = db.prepare(`
+      UPDATE fares 
+      SET margin_amount = ?,
+          publish_fare = ?,
+          updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `);
+
+    let updatedCount = 0;
+    const tx = db.transaction(() => {
+      for (const f of fares) {
+        const calc = calculateMargin(f.net_fare, f.airline_code, f.origin, f.destination);
+        if (calc.marginAmount !== f.margin_amount || calc.publishFare !== f.publish_fare) {
+          updateFare.run(calc.marginAmount, calc.publishFare, f.id);
+          updatedCount++;
+        }
+      }
+    });
+
+    tx();
+    safeInvalidateFaresCache();
+
+    return res.json({
+      success: true,
+      total_checked: fares.length,
+      updated_count: updatedCount,
+      message: `Successfully recalculated margins for ${updatedCount} fares out of ${fares.length} checked.`
+    });
+  } catch (err) {
+    console.error('Error applying margin rules to existing fares:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 };

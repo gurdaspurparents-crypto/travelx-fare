@@ -462,6 +462,9 @@ function seedMasterData() {
       ['ATQ', 'BOM', 'Amritsar', 'Mumbai', 0],
       ['ATQ', 'DEL', 'Amritsar', 'Delhi', 0],
       ['DEL', 'DXB', 'Delhi', 'Dubai', 1],
+      ['DEL', 'SHJ', 'Delhi', 'Sharjah', 1],
+      ['DEL', 'AUH', 'Delhi', 'Abu Dhabi', 1],
+      ['IXC', 'AUH', 'Chandigarh', 'Abu Dhabi', 1],
       ['DEL', 'LHR', 'Delhi', 'London Heathrow', 1],
       ['DEL', 'BKK', 'Delhi', 'Bangkok', 1],
       ['BOM', 'DXB', 'Mumbai', 'Dubai', 1],
@@ -472,46 +475,89 @@ function seedMasterData() {
     }
   }
 
-  // Seed initial margin slab rules if empty
-  const marginCount = db.prepare('SELECT COUNT(*) as count FROM margin_rules').get().count;
-  if (marginCount === 0) {
-    const insertMargin = db.prepare(`
-      INSERT INTO margin_rules (rule_name, rule_type, min_fare, max_fare, margin_amount, priority)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const initialSlabs = [
-      ['Slab 1: ₹0 - ₹10,000', 'SLAB', 0, 10000, 300, 10],
-      ['Slab 2: ₹10,001 - ₹20,000', 'SLAB', 10001, 20000, 500, 9],
-      ['Slab 3: ₹20,001 - ₹30,000', 'SLAB', 20001, 30000, 700, 8],
-      ['Slab 4: ₹30,001+', 'SLAB', 30001, 99999999, 1000, 7]
-    ];
-    for (const s of initialSlabs) {
-      insertMargin.run(s[0], s[1], s[2], s[3], s[4], s[5]);
-    }
-  }
-
-  // Seed standard airline & sector margin rules if not already added
-  const presetRules = [
-    ['IndiGo (6E) Default Margin', 'FIXED', 0, 99999999, 300, '6E', null, null, 20],
-    ['SpiceJet (SG) Default Margin', 'FIXED', 0, 99999999, 400, 'SG', null, null, 20],
-    ['Air India (AI) Default Margin', 'FIXED', 0, 99999999, 500, 'AI', null, null, 20],
-    ['Air India Express (IX) Default Margin', 'FIXED', 0, 99999999, 500, 'IX', null, null, 20],
-    ['Air Arabia (G9) Default Margin', 'FIXED', 0, 99999999, 500, 'G9', null, null, 20],
-    ['ATQ → DXB Sector Margin', 'FIXED', 0, 99999999, 600, null, 'ATQ', 'DXB', 25],
-    ['ATQ → SHJ Sector Margin', 'FIXED', 0, 99999999, 500, null, 'ATQ', 'SHJ', 25]
+  // Seed standard Gulf Sector Margin Slab Rules (All Vendors, All Airlines)
+  // Slabs: 0-15000: ₹200 | 15001-20000: ₹300 | 20001-30000+: ₹500
+  const gulfMarginSectors = [
+    { origin: 'ATQ', destination: 'DXB' },
+    { origin: 'ATQ', destination: 'SHJ' },
+    { origin: 'IXC', destination: 'AUH' },
+    { origin: 'DEL', destination: 'DXB' },
+    { origin: 'DEL', destination: 'SHJ' },
+    { origin: 'DEL', destination: 'AUH' }
   ];
-  const checkRule = db.prepare('SELECT id FROM margin_rules WHERE rule_name = ?');
-  const insertPreset = db.prepare(`
-    INSERT INTO margin_rules (rule_name, rule_type, min_fare, max_fare, margin_amount, airline_code, origin, destination, priority, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+
+  const gulfSlabs = [
+    { min: 0, max: 15000, margin: 200, label: '₹0 - ₹15,000' },
+    { min: 15001, max: 20000, margin: 300, label: '₹15,001 - ₹20,000' },
+    { min: 20001, max: 99999999, margin: 500, label: '₹20,001 - ₹30,000+' }
+  ];
+
+  // Clean up any legacy preset margin rules that should not exist
+  try {
+    const legacyRuleNames = [
+      'IndiGo (6E) Default Margin',
+      'SpiceJet (SG) Default Margin',
+      'Air India (AI) Default Margin',
+      'Air India Express (IX) Default Margin',
+      'Air Arabia (G9) Default Margin',
+      'ATQ → DXB Sector Margin',
+      'ATQ → SHJ Sector Margin',
+      'Slab 1: ₹0 - ₹10,000',
+      'Slab 2: ₹10,001 - ₹20,000',
+      'Slab 3: ₹20,001 - ₹30,000',
+      'Slab 4: ₹30,001+'
+    ];
+    const deleteLegacy = db.prepare('DELETE FROM margin_rules WHERE rule_name = ?');
+    for (const name of legacyRuleNames) {
+      deleteLegacy.run(name);
+    }
+  } catch (_) {}
+
+  // Clean up obsolete Gulf markup rules from vendor_pricing_rules so they don't double-charge
+  try {
+    db.prepare(`
+      DELETE FROM vendor_pricing_rules 
+      WHERE origin IN ('ATQ', 'IXC', 'DEL') 
+        AND destination IN ('DXB', 'SHJ', 'AUH')
+        AND adjustment_type = 'ADD'
+    `).run();
+  } catch (_) {}
+
+  const checkMarginRule = db.prepare('SELECT id FROM margin_rules WHERE origin = ? AND destination = ? AND min_fare = ?');
+  const insertMarginRule = db.prepare(`
+    INSERT INTO margin_rules (
+      rule_name, rule_type, min_fare, max_fare, margin_amount, 
+      margin_percent, airline_code, origin, destination, priority, is_active
+    ) VALUES (?, 'SLAB', ?, ?, ?, 0, NULL, ?, ?, 10, 1)
   `);
-  for (const p of presetRules) {
-    if (!checkRule.get(p[0])) {
-      insertPreset.run(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
+
+  for (const sec of gulfMarginSectors) {
+    for (const slab of gulfSlabs) {
+      const exists = checkMarginRule.get(sec.origin, sec.destination, slab.min);
+      if (!exists) {
+        insertMarginRule.run(
+          `${sec.origin} → ${sec.destination} (${slab.label})`,
+          slab.min,
+          slab.max,
+          slab.margin,
+          sec.origin,
+          sec.destination
+        );
+      }
     }
   }
 
-  // Seed vendor pricing rules if table is empty
+  // Clean up obsolete Gulf markup rules from vendor_pricing_rules so they don't double-charge
+  try {
+    db.prepare(`
+      DELETE FROM vendor_pricing_rules 
+      WHERE origin IN ('ATQ', 'IXC', 'DEL') 
+        AND destination IN ('DXB', 'SHJ', 'AUH')
+        AND adjustment_type = 'ADD'
+    `).run();
+  } catch (_) {}
+
+  // Seed vendor pricing rules if table is empty (Bipasha Europe discounts only)
   const vRuleCount = db.prepare('SELECT COUNT(*) as count FROM vendor_pricing_rules').get().count;
   if (vRuleCount === 0) {
     const insertVRule = db.prepare(`
@@ -549,90 +595,6 @@ function seedMasterData() {
 
     for (const br of bipashaRules) {
       insertVRule.run(bipashaId, 'Bipasha', br[0], br[1], br[2], 0, 99999999, 'LESS', br[3], 30, br[4]);
-    }
-
-    // 2. Gulf Sector Slabs for Monga, Ghai, Kandhari, MMT, Air IQ, Bittu (ADD Karna Hai)
-    const gulfVendorNames = ['Monga', 'Ghai', 'Kandhari', 'MMT', 'Air IQ', 'Bittu'];
-    const gulfSectors = [
-      ['ATQ', 'DXB'],
-      ['ATQ', 'SHJ'],
-      ['IXC', 'AUH']
-    ];
-    const slabs = [
-      { min: 0, max: 10000, add: 100, label: '0-10000: Add 100' },
-      { min: 10001, max: 15000, add: 200, label: '10001-15000: Add 200' },
-      { min: 15001, max: 22000, add: 300, label: '15001-22000: Add 300' },
-      { min: 22001, max: 99999999, add: 500, label: '22001+: Add 500' }
-    ];
-
-    const findVendorByName = db.prepare("SELECT id FROM vendors WHERE name = ? COLLATE NOCASE");
-    for (const vName of gulfVendorNames) {
-      const vRec = findVendorByName.get(vName);
-      const vId = vRec ? vRec.id : null;
-      for (const sec of gulfSectors) {
-        for (const slab of slabs) {
-          insertVRule.run(
-            vId,
-            vName,
-            null, // all airlines on this sector
-            sec[0],
-            sec[1],
-            slab.min,
-            slab.max,
-            'ADD',
-            slab.add,
-            20,
-            `${vName} ${sec[0]}➔${sec[1]} (${slab.label})`
-          );
-        }
-      }
-    }
-  } else {
-    // Ensure any Gulf vendor missing rules gets seeded even if table is not empty
-    const gulfVendorNames = ['Monga', 'Ghai', 'Kandhari', 'MMT', 'Air IQ', 'Bittu'];
-    const gulfSectors = [
-      ['ATQ', 'DXB'],
-      ['ATQ', 'SHJ'],
-      ['IXC', 'AUH']
-    ];
-    const slabs = [
-      { min: 0, max: 10000, add: 100, label: '0-10000: Add 100' },
-      { min: 10001, max: 15000, add: 200, label: '10001-15000: Add 200' },
-      { min: 15001, max: 22000, add: 300, label: '15001-22000: Add 300' },
-      { min: 22001, max: 99999999, add: 500, label: '22001+: Add 500' }
-    ];
-    const insertVRuleFallback = db.prepare(`
-      INSERT INTO vendor_pricing_rules (
-        vendor_id, vendor_name, airline_code, origin, destination, 
-        min_fare, max_fare, adjustment_type, adjustment_amount, priority, is_active, description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    `);
-    const countVendorRules = db.prepare("SELECT COUNT(*) as count FROM vendor_pricing_rules WHERE vendor_name = ? COLLATE NOCASE");
-    const findVendorByName = db.prepare("SELECT id FROM vendors WHERE name = ? COLLATE NOCASE");
-
-    for (const vName of gulfVendorNames) {
-      const existing = countVendorRules.get(vName);
-      if (existing.count === 0) {
-        const vRec = findVendorByName.get(vName);
-        const vId = vRec ? vRec.id : null;
-        for (const sec of gulfSectors) {
-          for (const slab of slabs) {
-            insertVRuleFallback.run(
-              vId,
-              vName,
-              null,
-              sec[0],
-              sec[1],
-              slab.min,
-              slab.max,
-              'ADD',
-              slab.add,
-              20,
-              `${vName} ${sec[0]}➔${sec[1]} (${slab.label})`
-            );
-          }
-        }
-      }
     }
   }
 }

@@ -16,14 +16,20 @@ function loadActiveMarginRules() {
   return cachedMarginRules;
 }
 
+function invalidateMarginRulesCache() {
+  cachedMarginRules = null;
+  cachedMarginRulesAt = 0;
+}
+
 /**
- * Normalizes airport code aliases so MXP/MIL and FCO/ROM match rules seamlessly
+ * Normalizes airport code aliases so MXP/MIL, FCO/ROM, and IXC/CHD match rules seamlessly
  */
 function getAirportAliases(code) {
   if (!code) return [];
   const upper = String(code).trim().toUpperCase();
   if (upper === 'MXP' || upper === 'MIL') return ['MXP', 'MIL'];
   if (upper === 'FCO' || upper === 'ROM') return ['FCO', 'ROM'];
+  if (upper === 'IXC' || upper === 'CHD' || upper === 'CHANDIGARH') return ['IXC', 'CHD', 'CHANDIGARH'];
   return [upper];
 }
 
@@ -57,7 +63,15 @@ function calculateMargin(netFare, airlineCode = null, origin = null, destination
     const destList = getAirportAliases(destination);
     const airlineUpper = airlineCode ? String(airlineCode).trim().toUpperCase() : null;
 
-    const candidateRules = loadActiveMarginRules().filter((r) => r.min_fare <= fare && r.max_fare >= fare);
+    const allActiveRules = loadActiveMarginRules();
+    
+    // First attempt: exact slab match where min_fare <= fare && max_fare >= fare
+    let candidateRules = allActiveRules.filter((r) => r.min_fare <= fare && r.max_fare >= fare);
+
+    // Fallback: if fare exceeds maximum slab (e.g. fare > 30000), check if there is an upper slab for this sector
+    if (candidateRules.length === 0 && fare > 30000) {
+      candidateRules = allActiveRules.filter((r) => r.min_fare >= 20000);
+    }
 
     for (const r of candidateRules) {
       // Check airline filter
@@ -106,5 +120,6 @@ function calculateMargin(netFare, airlineCode = null, origin = null, destination
 }
 
 module.exports = {
-  calculateMargin
+  calculateMargin,
+  invalidateMarginRulesCache
 };

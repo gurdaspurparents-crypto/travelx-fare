@@ -127,6 +127,7 @@ app.post('/api/margins/rules', marginController.createRule);
 app.put('/api/margins/rules/:id', marginController.updateRule);
 app.delete('/api/margins/rules/:id', marginController.deleteRule);
 app.post('/api/margins/preview', marginController.previewMargin);
+app.post('/api/margins/apply-existing', marginController.applyMarginRulesToExistingFares);
 
 // Vendor Pricing & Discount Rules APIs
 app.get('/api/vendor-rules', vendorRuleController.getAllVendorRules);

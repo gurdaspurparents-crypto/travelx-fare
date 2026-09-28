@@ -41,13 +41,12 @@ export default function MarginRules({ masterData = {} }) {
 
   // Standard Airline & Sector margin presets
   const standardPresets = [
-    { name: 'IndiGo (6E) Default Margin', airline_code: '6E', origin: '', destination: '', margin_amount: 300, priority: 20 },
-    { name: 'SpiceJet (SG) Default Margin', airline_code: 'SG', origin: '', destination: '', margin_amount: 400, priority: 20 },
-    { name: 'Air India (AI) Default Margin', airline_code: 'AI', origin: '', destination: '', margin_amount: 500, priority: 20 },
-    { name: 'Air India Express (IX) Default Margin', airline_code: 'IX', origin: '', destination: '', margin_amount: 500, priority: 20 },
-    { name: 'Air Arabia (G9) Default Margin', airline_code: 'G9', origin: '', destination: '', margin_amount: 500, priority: 20 },
-    { name: 'ATQ → DXB Sector Margin', airline_code: '', origin: 'ATQ', destination: 'DXB', margin_amount: 600, priority: 25 },
-    { name: 'ATQ → SHJ Sector Margin', airline_code: '', origin: 'ATQ', destination: 'SHJ', margin_amount: 500, priority: 25 }
+    { name: 'ATQ → DXB Gulf Slabs', airline_code: '', origin: 'ATQ', destination: 'DXB', margin_amount: 300, priority: 10 },
+    { name: 'ATQ → SHJ Gulf Slabs', airline_code: '', origin: 'ATQ', destination: 'SHJ', margin_amount: 300, priority: 10 },
+    { name: 'IXC → AUH Gulf Slabs', airline_code: '', origin: 'IXC', destination: 'AUH', margin_amount: 300, priority: 10 },
+    { name: 'DEL → DXB Gulf Slabs', airline_code: '', origin: 'DEL', destination: 'DXB', margin_amount: 300, priority: 10 },
+    { name: 'DEL → SHJ Gulf Slabs', airline_code: '', origin: 'DEL', destination: 'SHJ', margin_amount: 300, priority: 10 },
+    { name: 'DEL → AUH Gulf Slabs', airline_code: '', origin: 'DEL', destination: 'AUH', margin_amount: 300, priority: 10 }
   ];
 
   // Simulator state
@@ -404,27 +403,27 @@ export default function MarginRules({ masterData = {} }) {
                     <TrendingUp className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-900">Gulf Sector Slab Rules</h3>
-                    <p className="text-[11px] font-bold text-emerald-700">ATQ➔DXB, ATQ➔SHJ, IXC➔AUH (ADD Karna Hai)</p>
+                    <h3 className="text-sm font-black text-slate-900">Gulf Sector Margin Rules</h3>
+                    <p className="text-[11px] font-bold text-emerald-700">ATQ➔DXB/SHJ | IXC➔AUH | DEL➔DXB/SHJ/AUH</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-1">
                   <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 text-[10px] font-black rounded">
-                    6 Vendors Linked
+                    All Vendors & Airlines
                   </span>
                 </div>
               </div>
 
               <div className="p-5 space-y-4 flex-1">
-                {/* Linked Vendors */}
+                {/* Active Sectors */}
                 <div>
                   <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                    Vendors Included:
+                    Active Sectors:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {['Monga', 'Ghai', 'Kandhari', 'MMT', 'Air IQ', 'Bittu'].map(v => (
-                      <span key={v} className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-800 text-xs font-black rounded-lg">
-                        {v}
+                    {['ATQ ➔ DXB', 'ATQ ➔ SHJ', 'IXC ➔ AUH', 'DEL ➔ DXB', 'DEL ➔ SHJ', 'DEL ➔ AUH'].map(s => (
+                      <span key={s} className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-black rounded-lg">
+                        {s}
                       </span>
                     ))}
                   </div>
@@ -436,33 +435,31 @@ export default function MarginRules({ masterData = {} }) {
                     <thead className="bg-emerald-100/70 text-emerald-950 font-bold border-b border-emerald-200 text-[11px]">
                       <tr>
                         <th className="py-2 px-3">Jo Rate Ho Us Se (Fare Range)</th>
-                        <th className="py-2 px-3 text-right">ADD Karna Hai</th>
+                        <th className="py-2 px-3 text-right">Margin (ADD Hota Hai)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-emerald-100">
                       <tr className="hover:bg-emerald-50/50">
-                        <td className="py-2 px-3 font-mono font-bold text-slate-800">₹0 — ₹10,000</td>
-                        <td className="py-2 px-3 text-right font-mono font-black text-emerald-700">+ ₹100</td>
-                      </tr>
-                      <tr className="hover:bg-emerald-50/50">
-                        <td className="py-2 px-3 font-mono font-bold text-slate-800">₹10,001 — ₹15,000</td>
+                        <td className="py-2 px-3 font-mono font-bold text-slate-800">₹0 — ₹15,000</td>
                         <td className="py-2 px-3 text-right font-mono font-black text-emerald-700">+ ₹200</td>
                       </tr>
                       <tr className="hover:bg-emerald-50/50">
-                        <td className="py-2 px-3 font-mono font-bold text-slate-800">₹15,001 — ₹22,000</td>
+                        <td className="py-2 px-3 font-mono font-bold text-slate-800">₹15,001 — ₹20,000</td>
                         <td className="py-2 px-3 text-right font-mono font-black text-emerald-700">+ ₹300</td>
                       </tr>
                       <tr className="hover:bg-emerald-50/50">
-                        <td className="py-2 px-3 font-mono font-bold text-slate-800">₹22,001 — ₹30,000+</td>
+                        <td className="py-2 px-3 font-mono font-bold text-slate-800">₹20,001 — ₹30,000+</td>
                         <td className="py-2 px-3 text-right font-mono font-black text-emerald-700">+ ₹500</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
 
-                <p className="text-[11px] text-slate-500 italic">
-                  💡 Yeh slabs Amritsar to Dubai, Amritsar to Sharjah aur Chandigarh to Abu Dhabi par automatically lagte hain.
-                </p>
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-[11px] text-slate-500 italic">
+                    💡 Sabhi vendors aur sabhi airlines ke liye automatically calculate hota hai.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
