@@ -412,7 +412,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
             <span>Special Fares & WhatsApp Broadcast</span>
           </h1>
           <p className="text-xs text-slate-500">
-            Review winning net fares, select sectors, and broadcast directly to WhatsApp or export to Excel (No margin added).
+            Review winning special fares with automatic margin applied, select sectors, and broadcast directly to WhatsApp or export to Excel.
           </p>
         </div>
 
@@ -420,10 +420,10 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
           <button
             onClick={handleLoadBestFares}
             className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 text-xs font-bold rounded-lg border border-amber-300 shadow-xs transition flex items-center space-x-1.5 cursor-pointer"
-            title="Load all winning lowest net fares from Comparison Desk"
+            title="Load and sync all winning fares with margin from Comparison Desk"
           >
             <Zap className="w-3.5 h-3.5 text-amber-600" />
-            <span>Load Lowest Net Quotes</span>
+            <span>Sync Best Fares</span>
           </button>
 
           <button
