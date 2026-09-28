@@ -175,8 +175,11 @@ const CITY_NAMES = {
   'YYC': 'Calgary'
 };
 
-// Exclusively allowed sectors for B2B Agent portal (Strictly ATQ-DXB, ATQ-SHJ, IXC-AUH)
-const B2B_EXCLUSIVE_SECTORS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH'];
+// Exclusively allowed sectors for B2B Agent portal
+const B2B_EXCLUSIVE_SECTORS = [
+  'ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH',
+  'DEL-DXB', 'DEL-SHJ', 'DEL-AUH'
+];
 const PRIORITY_PUBLIC_SECTORS = B2B_EXCLUSIVE_SECTORS;
 
 // In-Memory Cache for Public Fares (Prevents 502 Bad Gateway timeouts on Render free tier)
@@ -213,7 +216,10 @@ function computeMasterPublicFares() {
       AND (
         (f.origin = 'ATQ' AND f.destination = 'DXB') OR
         (f.origin = 'ATQ' AND f.destination = 'SHJ') OR
-        (f.origin = 'IXC' AND f.destination = 'AUH')
+        (f.origin = 'IXC' AND f.destination = 'AUH') OR
+        (f.origin = 'DEL' AND f.destination = 'DXB') OR
+        (f.origin = 'DEL' AND f.destination = 'SHJ') OR
+        (f.origin = 'DEL' AND f.destination = 'AUH')
       )
       AND (
         f.is_published = 1 
