@@ -235,7 +235,11 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
     lastSectorKey = sectorKey;
     const currentFill = sectorColors[sectorColorIdx];
 
-    const netFare = Number(item.net_fare || item.publish_fare) || 0;
+    const net = Number(item.net_fare) || 0;
+    const margin = Number(item.margin_amount) || 0;
+    const publishFare = (Number(item.publish_fare) && Number(item.publish_fare) > 0)
+      ? Number(item.publish_fare)
+      : (net + margin);
     const airline = item.airline_name || item.airline_code || '';
     const route = item.route || formatRouteName(item.origin, item.destination, 'TO');
     const dates = item.date_label || '';
@@ -257,7 +261,7 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
 
     // Col D: Fare (Right aligned, accounting currency formatting)
     const c4 = row.getCell(4);
-    c4.value = netFare;
+    c4.value = publishFare;
     c4.numFmt = '#,##0.00';
     c4.alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
 
@@ -350,7 +354,11 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
     lastDetSector = sectorKey;
     const currentFill = sectorColors[detSectorColorIdx];
 
-    const netFare = Number(f.net_fare || f.publish_fare) || 0;
+    const net = Number(f.net_fare) || 0;
+    const margin = Number(f.margin_amount) || 0;
+    const publishFare = (Number(f.publish_fare) && Number(f.publish_fare) > 0)
+      ? Number(f.publish_fare)
+      : (net + margin);
     const airline = f.airline_name || f.airline_code || '';
     const route = formatRouteName(f.origin, f.destination, 'TO');
 
@@ -363,7 +371,7 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
     row.getCell(3).value = route;
     row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-    row.getCell(4).value = netFare;
+    row.getCell(4).value = publishFare;
     row.getCell(4).numFmt = '#,##0.00';
     row.getCell(4).alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
 

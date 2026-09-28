@@ -494,7 +494,11 @@ exports.exportToExcel = async (req, res) => {
       lastSectorKey = sectorKey;
       const currentFill = sectorColors[sectorColorIdx];
 
-      const netFare = Number(item.net_fare || item.publish_fare) || 0;
+      const net = Number(item.net_fare) || 0;
+      const margin = Number(item.margin_amount) || 0;
+      const publishFare = (Number(item.publish_fare) && Number(item.publish_fare) > 0)
+        ? Number(item.publish_fare)
+        : (net + margin);
       const airline = item.airline_name || item.airline_code || '';
       const route = item.route || formatRouteName(item.origin, item.destination, 'TO');
       const dates = item.date_label || '';
@@ -512,7 +516,7 @@ exports.exportToExcel = async (req, res) => {
       c3.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
       const c4 = row.getCell(4);
-      c4.value = netFare;
+      c4.value = publishFare;
       c4.numFmt = '#,##0.00';
       c4.alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
 
@@ -600,7 +604,11 @@ exports.exportToExcel = async (req, res) => {
       lastDetSector = sectorKey;
       const currentFill = sectorColors[detSectorColorIdx];
 
-      const netFare = Number(f['Publish Fare (INR)'] || f['Net Fare (INR)']) || 0;
+      const net = Number(f['Net Fare (INR)']) || 0;
+      const margin = Number(f['Travelx Margin (INR)']) || 0;
+      const publishFare = (Number(f['Publish Fare (INR)']) && Number(f['Publish Fare (INR)']) > 0)
+        ? Number(f['Publish Fare (INR)'])
+        : (net + margin);
       const airline = f['Airline Name'] || '';
       const route = formatRouteName(f.Origin, f.Destination, 'TO');
 
@@ -613,7 +621,7 @@ exports.exportToExcel = async (req, res) => {
       row.getCell(3).value = route;
       row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-      row.getCell(4).value = netFare;
+      row.getCell(4).value = publishFare;
       row.getCell(4).numFmt = '#,##0.00';
       row.getCell(4).alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
 
