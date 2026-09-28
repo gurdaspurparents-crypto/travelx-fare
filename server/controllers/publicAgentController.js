@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { calculateMargin } = require('../services/marginCalculator');
 
 function getPublicAgencyFromSettings() {
   const defaults = {
@@ -104,9 +105,13 @@ function formatStreakLabel(streak) {
 }
 
 function getFinalRate(f) {
+  const net = Number(f.net_fare) || 0;
   const pub = Number(f.publish_fare);
-  if (!isNaN(pub) && pub > 0) return pub;
-  return (Number(f.net_fare) || 0) + (Number(f.margin_amount) || 0);
+  const margin = Number(f.margin_amount) || 0;
+  if (!isNaN(pub) && pub > net) return pub;
+  if (margin > 0) return net + margin;
+  const calc = calculateMargin(net, f.airline_code, f.origin, f.destination);
+  return calc.publishFare || (net + calc.marginAmount);
 }
 
 function normalizeBaggage(bag) {

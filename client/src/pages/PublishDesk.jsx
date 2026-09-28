@@ -35,8 +35,14 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
       if (res.success && res.fares && res.fares.length > 0) {
         const loaded = res.fares.map(f => {
           const net = Number(f.net_fare) || 0;
-          const margin = Number(f.margin_amount) || 0;
-          const pub = Number(f.publish_fare) || (net + margin);
+          let margin = Number(f.margin_amount) || Number(f.calculated_margin) || 0;
+          let pub = Number(f.publish_fare);
+          if (!pub || pub <= net) {
+            pub = Number(f.calculated_publish_fare) || (net + margin);
+          }
+          if (margin === 0 && pub > net) {
+            margin = pub - net;
+          }
           return {
             ...f,
             net_fare: net,
@@ -52,8 +58,14 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
         if (bestRes.success && bestRes.bestFares && bestRes.bestFares.length > 0) {
           const loaded = bestRes.bestFares.map(f => {
             const net = Number(f.net_fare) || 0;
-            const margin = Number(f.margin_amount) || 0;
-            const pub = Number(f.publish_fare) || (net + margin);
+            let margin = Number(f.margin_amount) || Number(f.calculated_margin) || 0;
+            let pub = Number(f.publish_fare);
+            if (!pub || pub <= net) {
+              pub = Number(f.calculated_publish_fare) || (net + margin);
+            }
+            if (margin === 0 && pub > net) {
+              margin = pub - net;
+            }
             return {
               ...f,
               net_fare: net,
@@ -87,8 +99,14 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
         } else {
           const loaded = res.bestFares.map(f => {
             const net = Number(f.net_fare) || 0;
-            const margin = Number(f.margin_amount) || 0;
-            const pub = Number(f.publish_fare) || (net + margin);
+            let margin = Number(f.margin_amount) || Number(f.calculated_margin) || 0;
+            let pub = Number(f.publish_fare);
+            if (!pub || pub <= net) {
+              pub = Number(f.calculated_publish_fare) || (net + margin);
+            }
+            if (margin === 0 && pub > net) {
+              margin = pub - net;
+            }
             return {
               ...f,
               net_fare: net,
@@ -305,13 +323,22 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
 
       const updates = fares.map(f => {
         const net = Number(f.net_fare) || 0;
-        const margin = Number(f.margin_amount) || 0;
-        const pub = Number(f.publish_fare) || (net + margin);
+        let margin = Number(f.margin_amount) || Number(f.calculated_margin) || 0;
+        let pub = Number(f.publish_fare);
+        if (!pub || pub <= net) {
+          pub = Number(f.calculated_publish_fare) || (net + margin);
+        }
+        if (margin === 0 && pub > net) {
+          margin = pub - net;
+        }
         return {
           id: f.id,
           net_fare: net,
           margin_amount: margin,
-          publish_fare: pub
+          publish_fare: pub,
+          airline_code: f.airline_code,
+          origin: f.origin,
+          destination: f.destination
         };
       });
 

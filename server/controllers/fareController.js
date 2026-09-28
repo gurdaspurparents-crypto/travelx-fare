@@ -838,6 +838,20 @@ exports.getAllFares = (req, res) => {
 
     const fares = db.prepare(query).all(...params);
 
+    // Auto-enrich any fares that have missing margin_amount or publish_fare
+    for (const f of fares) {
+      const net = Number(f.net_fare) || 0;
+      const margin = Number(f.margin_amount) || 0;
+      const pub = Number(f.publish_fare) || 0;
+      if (margin === 0 || pub <= net) {
+        const calc = calculateMargin(net, f.airline_code, f.origin, f.destination);
+        if (calc.marginAmount > 0) {
+          f.margin_amount = calc.marginAmount;
+          f.publish_fare = calc.publishFare;
+        }
+      }
+    }
+
     // Lightweight live stats for KPI cards
     const summaryStats = db.prepare(`
       SELECT 
@@ -1207,9 +1221,22 @@ exports.batchUpdateMargins = (req, res) => {
 
     const tx = db.transaction(() => {
       for (const item of updates) {
-        const net = Number(item.net_fare) || Number(item.publish_fare) || 0;
-        const margin = 0;
-        const publish = net;
+        const net = Number(item.net_fare) || 0;
+        let margin = item.margin_amount !== undefined && item.margin_amount !== null
+          ? Number(item.margin_amount)
+          : null;
+        let publish = item.publish_fare !== undefined && item.publish_fare !== null
+          ? Number(item.publish_fare)
+          : null;
+
+        if (margin === null || isNaN(margin) || (margin === 0 && (!publish || publish <= net))) {
+          const calc = calculateMargin(net, item.airline_code, item.origin, item.destination);
+          margin = calc.marginAmount;
+          publish = calc.publishFare;
+        } else if (publish === null || isNaN(publish) || publish <= 0) {
+          publish = net + margin;
+        }
+
         updateStmt.run(margin, publish, mark_published ? 1 : 0, item.id);
         if (mark_published) {
           insertPublished.run(item.id, batchId, batch_title);

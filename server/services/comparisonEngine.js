@@ -87,6 +87,14 @@ function getFareComparisons(filterOptions = {}) {
     row.calculated_publish_fare = marginCalc.publishFare;
     row.margin_rule = marginCalc.ruleApplied;
 
+    // Ensure margin_amount and publish_fare are populated from rules if missing or wiped
+    if (!row.margin_amount || Number(row.margin_amount) === 0) {
+      row.margin_amount = marginCalc.marginAmount;
+    }
+    if (!row.publish_fare || Number(row.publish_fare) <= Number(row.net_fare)) {
+      row.publish_fare = (Number(row.net_fare) || 0) + (Number(row.margin_amount) || 0);
+    }
+
     const groupKey = `${row.origin}-${row.destination}_${row.travel_date}_${row.airline_code}_${row.cabin}`;
     if (!groups.has(groupKey)) {
       groups.set(groupKey, {

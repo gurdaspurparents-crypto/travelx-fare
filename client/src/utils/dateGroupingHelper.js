@@ -201,6 +201,16 @@ function createConsolidatedItem(routeKey, streak) {
   ).sort((a, b) => a.localeCompare(b));
   const vendorName = vendorList.join(', ') || first.vendor_name || first['Vendor / Source'] || '';
 
+  const net = Number(first.net_fare) || 0;
+  let margin = Number(first.margin_amount) || Number(first.calculated_margin) || 0;
+  let pub = Number(first.publish_fare);
+  if (!pub || pub <= net) {
+    pub = Number(first.calculated_publish_fare) || (net + margin);
+  }
+  if (margin === 0 && pub > net) {
+    margin = pub - net;
+  }
+
   return {
     id: `streak-${first.id}-${last.id}-${streak.length}`,
     route: routeKey,
@@ -213,9 +223,9 @@ function createConsolidatedItem(routeKey, streak) {
     start_date: first.travel_date,
     end_date: last.travel_date,
     dates_count: streak.length,
-    net_fare: Number(first.net_fare) || 0,
-    margin_amount: Number(first.margin_amount) || 0,
-    publish_fare: Number(first.publish_fare) || 0,
+    net_fare: net,
+    margin_amount: margin,
+    publish_fare: pub,
     baggage: first.baggage || '30kg',
     is_refundable: first.is_refundable,
     cabin: first.cabin || 'ECONOMY',
