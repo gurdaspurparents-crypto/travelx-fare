@@ -2,14 +2,64 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const dataDir = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Smart detection of data directory (handles Render persistent disk, environment variables, typos, and permissions)
+function resolveDataDir() {
+  const candidates = [];
+
+  // 1. If process.env.DATA_DIR is specified
+  if (process.env.DATA_DIR) {
+    let envDir = process.env.DATA_DIR.trim();
+    // Fix common typo where user typed /var/dat instead of /var/data
+    if (envDir === '/var/dat' || envDir === '/var/dat/') {
+      candidates.push('/var/data');
+    }
+    candidates.push(envDir);
+  }
+
+  // 2. Check standard Render persistent disk mount path
+  if (fs.existsSync('/var/data')) {
+    candidates.push('/var/data');
+  }
+
+  // 3. Check default app local data directory
+  candidates.push(path.join(__dirname, '..', 'data'));
+
+  // 4. Temporary directory fallback if everything else fails
+  candidates.push(path.join(require('os').tmpdir(), 'travelx_data'));
+
+  for (const candidate of candidates) {
+    try {
+      if (!fs.existsSync(candidate)) {
+        fs.mkdirSync(candidate, { recursive: true });
+      }
+      // Verify we have read & write permissions in this directory
+      fs.accessSync(candidate, fs.constants.R_OK | fs.constants.W_OK);
+      console.log(`Using writable data directory: ${candidate}`);
+      return candidate;
+    } catch (err) {
+      console.warn(`Candidate data directory "${candidate}" not usable (${err.message}). Trying next...`);
+    }
+  }
+
+  // Ultimate fallback
+  const fallback = path.join(__dirname, '..', 'data');
+  try { fs.mkdirSync(fallback, { recursive: true }); } catch (_) {}
+  return fallback;
 }
 
+const dataDir = resolveDataDir();
+const localFallbackDb = path.join(__dirname, '..', 'data', 'travelx_fares.db');
 const dbPath = path.join(dataDir, 'travelx_fares.db');
+
+if (dataDir !== path.join(__dirname, '..', 'data') && !fs.existsSync(dbPath) && fs.existsSync(localFallbackDb)) {
+  try {
+    fs.copyFileSync(localFallbackDb, dbPath);
+    console.log(`Copied initial seed database to persistent storage at: ${dbPath}`);
+  } catch (copyErr) {
+    console.warn('Could not copy initial database:', copyErr.message);
+  }
+}
+
 console.log('SQLite database:', dbPath);
 const db = new Database(dbPath, { timeout: 10000 });
 
