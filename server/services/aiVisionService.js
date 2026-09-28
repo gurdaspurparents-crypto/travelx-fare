@@ -64,9 +64,17 @@ const AIRLINE_CODE_MAP = {
   'malaysia airlines': 'MH',
   'batik air malaysia': 'OD',
   'batik air': 'OD',
+  'thai airasia x': 'XJ',
+  'airasia x': 'XJ',
+  'thai airasia': 'FD',
   'airasia': 'AK',
+  'xj': 'XJ',
+  'fd': 'FD',
+  'd7': 'D7',
+  'qz': 'QZ',
   'thai airways': 'TG',
   'thai lion air': 'SL',
+  'thai lion': 'SL',
   'vietjet air': 'VJ',
   'vietjet': 'VJ',
   'vietnam airlines': 'VN',
@@ -109,6 +117,10 @@ const AIRLINE_CODE_MAP = {
 };
 
 const CITY_IATA_MAP = {
+  'don mueang': 'DMK',
+  'dmk': 'DMK',
+  'bangkok': 'BKK',
+  'bkk': 'BKK',
   'adampur': 'AIP',
   'aip': 'AIP',
   'nanded': 'NDC',
@@ -241,7 +253,7 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
     let destination = (item.destination || routeDest || defaults.destination || defaults.defaultDestination || 'DXB').toUpperCase().trim();
     
     // Clean airline code using normalizeAirlineCode (never slices raw string into invalid code like "IN")
-    const rawAirline = item.airline_code || item.airline || defaults.airline || defaults.defaultAirline || 'AI';
+    const rawAirline = item.airline_code || item.airline || '';
     const cleanAirline = normalizeAirlineCode(rawAirline, item.flight_number, defaults.airline || defaults.defaultAirline || 'AI');
 
     // Map full names if returned
@@ -392,6 +404,8 @@ CRITICAL INSTRUCTIONS:
 
 4. AIRLINE & FLIGHT NUMBER EXTRACTION:
    - Look for airline indicators such as:
+     * "XJ" or "XJ 230" or "XJ230" -> Airline is "XJ" (Thai AirAsia X), flight_number is "XJ 230".
+     * "FD" -> Thai AirAsia (FD).
      * "S5" or "S5235/186" -> Airline is "S5" (Star Air), flight_number is "S5 235/186".
      * "IX" or "IX 191" -> Airline is "IX" (Air India Express).
      * "SG" -> SpiceJet (SG).
@@ -402,8 +416,10 @@ CRITICAL INSTRUCTIONS:
      * "IC" -> Fly91 (IC).
      * "G9" -> Air Arabia (G9).
      * "FZ" -> Flydubai (FZ).
-   - CRITICAL: ALWAYS return ONLY the 2-letter uppercase IATA code for airline_code (e.g. "6E", "IX", "SG", "AI", "UK", "QP", "G9", "FZ", "S5", "IC", "EK", "EY", "QR", "WY"). NEVER output full airline names like "IndiGo", "SpiceJet", or "IndiGo (6E)" in the airline_code field!
-   - NEVER overwrite or default S5, SG, IX, 6E to AI.
+     * "TG" -> Thai Airways (TG).
+     * "SL" -> Thai Lion Air (SL).
+   - CRITICAL: ALWAYS return ONLY the 2-letter uppercase IATA code for airline_code (e.g. "XJ", "6E", "IX", "SG", "AI", "UK", "QP", "G9", "FZ", "S5", "IC", "EK", "EY", "QR", "WY", "TG", "SL", "FD"). NEVER output full airline names like "IndiGo", "SpiceJet", or "IndiGo (6E)" in the airline_code field!
+   - NEVER overwrite or default XJ, FD, S5, SG, IX, 6E to AI. If a flyer or calendar shows XJ (e.g. "XJ 230"), airline_code MUST be "XJ", NEVER "AI"!
 
 3. CALENDAR VIEW / MONTHLY GRID FLYERS:
    - If the flyer is structured as a monthly calendar (e.g. header says "Sep 2026", "October 2026", etc.):

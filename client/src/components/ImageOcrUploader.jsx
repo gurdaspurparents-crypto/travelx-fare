@@ -39,6 +39,8 @@ const POPULAR_AIRLINES = [
   { code: 'MH', name: 'Malaysia Airlines' },
   { code: 'OD', name: 'Batik Air Malaysia' },
   { code: 'AK', name: 'AirAsia' },
+  { code: 'XJ', name: 'Thai AirAsia X' },
+  { code: 'FD', name: 'Thai AirAsia' },
   { code: 'TG', name: 'Thai Airways' },
   { code: 'SL', name: 'Thai Lion Air' },
   { code: 'VJ', name: 'VietJet Air' },

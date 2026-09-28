@@ -19,7 +19,8 @@ const KNOWN_AIRLINES = [
   'KC', 'HY',
   'BA', 'VS', 'LH', 'AF', 'KL', 'LX', 'TK', 'AZ', 'LO', 'AY', 'OS', 'SK',
   'AC', 'UA', 'AA', 'DL', 'QF',
-  'ET', 'KQ'
+  'ET', 'KQ',
+  'XJ', 'FD', 'D7', 'QZ', 'TR'
 ];
 
 // Known airport codes for quick detection
@@ -113,8 +114,12 @@ const AIRLINE_NAME_MAP = [
   { name: 'singapore airlines', code: 'SQ' },
   { name: 'malaysia airlines', code: 'MH' },
   { name: 'batik air', code: 'OD' },
+  { name: 'thai airasia x', code: 'XJ' },
+  { name: 'airasia x', code: 'XJ' },
+  { name: 'thai airasia', code: 'FD' },
   { name: 'airasia', code: 'AK' },
   { name: 'thai airways', code: 'TG' },
+  { name: 'thai lion air', code: 'SL' },
   { name: 'thai lion', code: 'SL' },
   { name: 'vietjet', code: 'VJ' },
   { name: 'vietnam airlines', code: 'VN' },
@@ -128,8 +133,34 @@ const AIRLINE_NAME_MAP = [
   { name: 'vistara', code: 'UK' },
   { name: 'akasa', code: 'QP' },
   { name: 'star air', code: 'S5' },
-  { name: 'fly91', code: 'IC' }
+  { name: 'fly91', code: 'IC' },
+  { name: 'scoot', code: 'TR' }
 ];
+
+let dbAirlineCodesCache = null;
+let lastDbCheckTime = 0;
+
+function getDbAirlineCodes() {
+  const now = Date.now();
+  if (!dbAirlineCodesCache || (now - lastDbCheckTime > 30000)) {
+    try {
+      const db = require('../config/database');
+      const rows = db.prepare('SELECT code FROM airlines').all();
+      dbAirlineCodesCache = new Set(rows.map(r => String(r.code || '').trim().toUpperCase()));
+      lastDbCheckTime = now;
+    } catch (_) {
+      dbAirlineCodesCache = new Set(KNOWN_AIRLINES);
+    }
+  }
+  return dbAirlineCodesCache;
+}
+
+function isKnownOrDbAirline(code) {
+  if (!code) return false;
+  const upper = String(code).trim().toUpperCase();
+  if (KNOWN_AIRLINES.includes(upper)) return true;
+  return getDbAirlineCodes().has(upper);
+}
 
 /**
  * Standardize date string into YYYY-MM-DD format
@@ -277,9 +308,9 @@ function parseWhatsAppFareText(text, defaults = {}) {
     let foundOrig = null;
     let foundDest = null;
 
-    // 3A. Combined Airline Code + Route Header e.g. "SG ATQ → DXB", "IX ATQ > SHJ", "6E ATQ -> DXB", "AI ATQ - DXB"
+    // 3A. Combined Airline Code + Route Header e.g. "SG ATQ → DXB", "IX ATQ > SHJ", "6E ATQ -> DXB", "AI ATQ - DXB", "XJ DMK -> DEL"
     const directHeaderMatch = upperLine.match(/\b([A-Z0-9]{2})\s+([A-Z]{3})\s*(?:[-–—/]|TO|->|-->|–>|—>|>|→|➔|➜|\s+)\s*([A-Z]{3})\b/);
-    if (directHeaderMatch && KNOWN_AIRLINES.includes(directHeaderMatch[1])) {
+    if (directHeaderMatch && isKnownOrDbAirline(directHeaderMatch[1])) {
       foundAirline = directHeaderMatch[1];
       foundOrig = directHeaderMatch[2];
       foundDest = directHeaderMatch[3];
@@ -308,7 +339,7 @@ function parseWhatsAppFareText(text, defaults = {}) {
       }
     }
     if (!foundAirline) {
-      for (const code of KNOWN_AIRLINES) {
+      for (const code of [...KNOWN_AIRLINES, ...getDbAirlineCodes()]) {
         if (new RegExp(`\\b${code}\\b`, 'i').test(line)) {
           foundAirline = code;
           break;
@@ -339,10 +370,11 @@ function parseWhatsAppFareText(text, defaults = {}) {
       }
     }
 
-    // Check Flight Number (e.g. AI 929, 6E 1451, IX 191, or standalone 191/137)
-    const flightMatch = upperLine.match(/\b([A-Z0-9]{2})\s*[-]?\s*(\d{3,4})\b/);
-    if (flightMatch && KNOWN_AIRLINES.includes(flightMatch[1])) {
+    // Check Flight Number (e.g. AI 929, 6E 1451, IX 191, XJ 230, or standalone 191/137)
+    const flightMatch = upperLine.match(/\b([A-Z0-9]{2})\s*[-]?\s*(\d{2,4})\b/);
+    if (flightMatch && isKnownOrDbAirline(flightMatch[1])) {
       activeFlightNo = `${flightMatch[1]} ${flightMatch[2]}`;
+      activeAirline = flightMatch[1].toUpperCase();
       if (['191', '192', '137', '138'].includes(flightMatch[2]) && flightMatch[1] === 'AI') {
         activeAirline = 'IX';
         activeFlightNo = `IX ${flightMatch[2]}`;
@@ -408,7 +440,7 @@ function parseWhatsAppFareText(text, defaults = {}) {
         }
 
         const upperP = cleanP.toUpperCase();
-        if (KNOWN_AIRLINES.includes(upperP) && !airline) {
+        if (isKnownOrDbAirline(upperP) && !airline) {
           airline = upperP;
           continue;
         }
@@ -600,19 +632,42 @@ function normalizeAirlineCode(rawAirline, flightNumber = '', defaultAirline = 'A
     return 'IX';
   }
 
+  // Pre-check flight number prefix (e.g. "XJ 230", "XJ230", "6E 1401", "SG 23")
+  let flightPrefixCode = null;
+  if (fltStr) {
+    const fltCodeMatch = fltStr.match(/^([A-Z0-9]{2})\s*[-]?\s*(\d{2,4})\b/i);
+    if (fltCodeMatch) {
+      const cand = fltCodeMatch[1].toUpperCase();
+      if (isKnownOrDbAirline(cand)) {
+        flightPrefixCode = cand;
+      }
+    }
+  }
+
   const raw = String(rawAirline || '').trim();
+
+  // If raw is empty or exactly equals the fallback defaultAirline, and flight number has a recognized airline prefix, use flight prefix!
+  if ((!raw || raw.toUpperCase() === String(defaultAirline || '').trim().toUpperCase()) && flightPrefixCode) {
+    return flightPrefixCode;
+  }
+
   if (!raw && !fltStr) return defaultAirline || 'AI';
+  if (!raw && flightPrefixCode) return flightPrefixCode;
 
   // 1. Direct 2-letter code check
   const upperRaw = raw.toUpperCase();
-  if (KNOWN_AIRLINES.includes(upperRaw)) {
+  if (isKnownOrDbAirline(upperRaw)) {
     return upperRaw;
   }
 
-  // 2. Look for known 2-letter IATA code enclosed in brackets or word boundary e.g. "IndiGo (6E)", "(6E)", "6E", "SG"
-  const iataMatch = raw.match(/\b(6E|IX|AI|SG|QP|UK|G9|FZ|EK|EY|QR|WY|OV|SV|XY|F3|KU|J9|GF|S5|IC|9I|MS|W5|UL|BG|BS|RA|H9|KB|RQ|SQ|MH|OD|AK|TG|SL|VJ|VN|CX|GA|NH|JL|KE|KC|HY|BA|VS|LH|AF|KL|LX|TK|AZ|LO|AY|OS|SK|AC|UA|AA|DL|QF|ET|KQ)\b/i);
-  if (iataMatch) {
-    return iataMatch[1].toUpperCase();
+  // 2. Look for known 2-letter IATA code enclosed in brackets or word boundary
+  const iataMatches = raw.match(/\b([A-Z0-9]{2})\b/gi);
+  if (iataMatches) {
+    for (const cand of iataMatches) {
+      if (isKnownOrDbAirline(cand)) {
+        return cand.toUpperCase();
+      }
+    }
   }
 
   // 3. Name to code map match
@@ -624,6 +679,8 @@ function normalizeAirlineCode(rawAirline, flightNumber = '', defaultAirline = 'A
   }
 
   // 4. Check specific common abbreviations / mistakes
+  if (lower.includes('thai airasia x') || lower.includes('airasia x') || lower === 'xj' || lower.startsWith('xj ') || lower.startsWith('xj-')) return 'XJ';
+  if (lower.includes('thai airasia') || lower === 'fd' || lower.startsWith('fd ') || lower.startsWith('fd-')) return 'FD';
   if (lower.includes('indigo') || lower.includes('6e') || lower === 'in') return '6E';
   if (lower.includes('spice') || lower.includes('sg') || lower === 'sp') return 'SG';
   if (lower.includes('air india express') || lower.includes('express') || lower.includes('ix')) return 'IX';
@@ -645,12 +702,9 @@ function normalizeAirlineCode(rawAirline, flightNumber = '', defaultAirline = 'A
   if (lower.includes('jazeera') || lower.includes('j9')) return 'J9';
   if (lower.includes('gulf') || lower.includes('gf')) return 'GF';
 
-  // 5. Check if flight number starts with a known airline code (e.g. "6E 1401" or "SG-23")
-  if (fltStr) {
-    const fltCodeMatch = fltStr.match(/^([A-Z0-9]{2})/i);
-    if (fltCodeMatch && KNOWN_AIRLINES.includes(fltCodeMatch[1].toUpperCase())) {
-      return fltCodeMatch[1].toUpperCase();
-    }
+  // 5. Fallback to flight number prefix if recognized
+  if (flightPrefixCode) {
+    return flightPrefixCode;
   }
 
   return defaultAirline || 'AI';

@@ -14,7 +14,11 @@ const CITY_CODES = [
   ['singapore', 'SIN'],
   ['atq', 'ATQ'],
   ['shj', 'SHJ'],
-  ['dxb', 'DXB']
+  ['dxb', 'DXB'],
+  ['don mueang', 'DMK'],
+  ['dmk', 'DMK'],
+  ['bangkok', 'BKK'],
+  ['bkk', 'BKK']
 ];
 
 const AIRLINE_CODES = [
@@ -25,6 +29,16 @@ const AIRLINE_CODES = [
   ['air arabia', 'G9'],
   ['flydubai', 'FZ'],
   ['fly dubai', 'FZ'],
+  ['thai airasia x', 'XJ'],
+  ['airasia x', 'XJ'],
+  ['thai airasia', 'FD'],
+  ['airasia', 'AK'],
+  ['thai airways', 'TG'],
+  ['thai lion air', 'SL'],
+  ['thai lion', 'SL'],
+  ['xj', 'XJ'],
+  ['fd', 'FD'],
+  ['star air', 'S5'],
   ['air india', 'AI']
 ];
 

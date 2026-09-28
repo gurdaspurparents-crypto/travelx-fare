@@ -395,12 +395,24 @@ function seedMasterData() {
       ['DL', 'Delta Air Lines', 'USA'],
       ['QF', 'Qantas', 'Australia'],
       ['ET', 'Ethiopian Airlines', 'Ethiopia'],
-      ['KQ', 'Kenya Airways', 'Kenya']
+      ['KQ', 'Kenya Airways', 'Kenya'],
+      ['XJ', 'Thai AirAsia X', 'Thailand'],
+      ['FD', 'Thai AirAsia', 'Thailand']
     ];
     for (const [code, name, country] of initialAirlines) {
       insertAirline.run(code, name, country);
     }
   }
+
+  // Ensure XJ and FD exist and country is correctly Thailand
+  try {
+    const upsertAirline = db.prepare(`
+      INSERT INTO airlines (code, name, country) VALUES (?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET country = excluded.country WHERE airlines.country = 'India' OR airlines.country IS NULL
+    `);
+    upsertAirline.run('XJ', 'Thai AirAsia X', 'Thailand');
+    upsertAirline.run('FD', 'Thai AirAsia', 'Thailand');
+  } catch (_) {}
 
   // Seed initial vendors if missing
   const initialVendors = [
