@@ -98,8 +98,7 @@ const INTERNAL_DESK_PROFILE = {
 export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffEmbedded = false }) {
   const isAllowedB2BSector = (f) => {
     if (!f) return false;
-    const s = f.sector_code || `${f.origin}-${f.destination}`;
-    return ALLOWED_B2B_SECTOR_KEYS.includes(s);
+    return true; // Backend getPublicFares is the authoritative source for sanitized B2B sectors
   };
 
   // Master API Data - strictly filtered to the 3 allowed B2B sectors (ATQ-DXB, ATQ-SHJ, IXC-AUH)
@@ -314,8 +313,8 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
         return current;
       });
 
-      const res = await api.getPublicFares();
-      if (res && res.maintenance) {
+      const res = await api.getPublicFares(isStaffEmbedded ? { ignore_maintenance: 1 } : {});
+      if (res && res.maintenance && !isStaffEmbedded) {
         setIsMaintenance(true);
         setIsServerSyncing(false);
         setMaintenanceMsg(res.message || "TravelX Special Fare Engine is currently synchronizing live flight allocations.");
@@ -2015,7 +2014,7 @@ ${contactFooter}`;
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1.5 LIVE MAINTENANCE / ROUTINE INVENTORY SYNCHRONIZATION      */}
       {/* ───────────────────────────────────────────────────────────── */}
-      {(isMaintenance || (isServerSyncing && (!dailyFlights || dailyFlights.length === 0))) ? (
+      {((isMaintenance && !isStaffEmbedded) || (isServerSyncing && (!dailyFlights || dailyFlights.length === 0))) ? (
         <main className="flex-1 max-w-[1200px] w-full mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
           <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-xl p-8 sm:p-12 text-center relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-500" />

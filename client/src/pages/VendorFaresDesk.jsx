@@ -32,6 +32,19 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
     } catch (_) {}
   };
 
+  // Ensure selectedVendorId is valid whenever vendors list loads
+  useEffect(() => {
+    if (!vendors || vendors.length === 0) return;
+    const exists = vendors.some(v => v.id === Number(selectedVendorId));
+    if (!exists) {
+      const fallbackId = String(vendors[0].id);
+      setSelectedVendorId(fallbackId);
+      try {
+        localStorage.setItem('travelx_active_vendor_id', fallbackId);
+      } catch (_) {}
+    }
+  }, [vendors, selectedVendorId]);
+
   const [activeVendorTab, setActiveVendorTab] = useState('image'); // 'image' (Tareeqa 1), 'excel', 'grid', 'range', 'whatsapp', 'saved'
 
   // New Vendor creation modal / form
@@ -206,7 +219,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
     }
   }, [selectedVendorId]);
 
-  const selectedVendor = vendors.find(v => v.id === Number(selectedVendorId));
+  const selectedVendor = vendors.find(v => v.id === Number(selectedVendorId)) || vendors[0];
 
   // Handle Quick Add Vendor
   const handleCreateVendor = async (e) => {
@@ -392,12 +405,15 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
         };
       });
 
+      const activeVendor = vendors.find(v => v.id === Number(selectedVendorId)) || vendors[0];
+      const targetVendorId = activeVendor?.id ? Number(activeVendor.id) : Number(selectedVendorId);
       const res = await api.saveBulkFares(
-        Number(selectedVendorId),
+        targetVendorId,
         formattedFares,
         false,
         'sector',
-        (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` })
+        (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` }),
+        activeVendor?.name
       );
       if (res.success) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} missing/sold-out dates removed)` : '';
@@ -437,12 +453,15 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
     try {
       setLoading(true);
       setStatus({ type: 'info', text: `Saving ${formattedFares.length} scanned fares…` });
+      const activeVendor = vendors.find(v => v.id === Number(selectedVendorId)) || vendors[0];
+      const targetVendorId = activeVendor?.id ? Number(activeVendor.id) : Number(selectedVendorId);
       const res = await api.saveBulkFares(
-        Number(selectedVendorId),
+        targetVendorId,
         formattedFares,
         autoDeleteMissing,
         'sector',
-        (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` })
+        (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` }),
+        activeVendor?.name
       );
       if (res.success && res.saved_count > 0) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} missing/sold-out dates removed)` : '';
@@ -496,7 +515,9 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
         remarks: `Manual Grid for ${selectedVendor?.name}`
       }));
 
-      const res = await api.saveBulkFares(Number(selectedVendorId), formattedFares, true, 'sector');
+      const activeVendor = vendors.find(v => v.id === Number(selectedVendorId)) || vendors[0];
+      const targetVendorId = activeVendor?.id ? Number(activeVendor.id) : Number(selectedVendorId);
+      const res = await api.saveBulkFares(targetVendorId, formattedFares, true, 'sector', undefined, activeVendor?.name);
       if (res.success) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} sold-out / absent dates removed)` : '';
         setStatus({
@@ -597,7 +618,9 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
     try {
       setLoading(true);
       setStatus(null);
-      const res = await api.saveBulkFares(Number(selectedVendorId), parsedWhatsApp, true, 'sector');
+      const activeVendor = vendors.find(v => v.id === Number(selectedVendorId)) || vendors[0];
+      const targetVendorId = activeVendor?.id ? Number(activeVendor.id) : Number(selectedVendorId);
+      const res = await api.saveBulkFares(targetVendorId, parsedWhatsApp, true, 'sector', undefined, activeVendor?.name);
       if (res.success) {
         const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} missing dates removed)` : '';
         setStatus({

@@ -189,7 +189,7 @@ export const api = {
     }, 3, 180000);
   },
 
-  saveBulkFares: async (vendor_id, fares, replace_missing_dates = true, replace_mode = 'sector', onProgress) => {
+  saveBulkFares: async (vendor_id, fares, replace_missing_dates = true, replace_mode = 'sector', onProgress, vendor_name) => {
     if (!fares || fares.length === 0) {
       return { success: false, error: 'No fare records to save' };
     }
@@ -202,6 +202,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vendor_id,
+          vendor_name,
           fares: rows,
           replace_missing_dates: false,
           replace_mode,

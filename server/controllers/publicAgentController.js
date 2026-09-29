@@ -183,7 +183,8 @@ const CITY_NAMES = {
 // Exclusively allowed sectors for B2B Agent portal
 const B2B_EXCLUSIVE_SECTORS = [
   'ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH',
-  'DEL-DXB', 'DEL-SHJ', 'DEL-AUH'
+  'DEL-DXB', 'DEL-SHJ', 'DEL-AUH',
+  'ATQ-MEL'
 ];
 const PRIORITY_PUBLIC_SECTORS = B2B_EXCLUSIVE_SECTORS;
 
@@ -224,7 +225,8 @@ function computeMasterPublicFares() {
         (f.origin = 'IXC' AND f.destination = 'AUH') OR
         (f.origin = 'DEL' AND f.destination = 'DXB') OR
         (f.origin = 'DEL' AND f.destination = 'SHJ') OR
-        (f.origin = 'DEL' AND f.destination = 'AUH')
+        (f.origin = 'DEL' AND f.destination = 'AUH') OR
+        (f.origin = 'ATQ' AND f.destination = 'MEL')
       )
       AND (
         f.is_published = 1 
@@ -516,7 +518,7 @@ function getCachedMasterFares() {
  */
 exports.getPublicFares = (req, res) => {
   try {
-    const { origin, destination, airline, search } = req.query;
+    const { origin, destination, airline, search, ignore_maintenance } = req.query;
 
     let isMaintenance = false;
     try {
@@ -524,7 +526,9 @@ exports.getPublicFares = (req, res) => {
       if (mRow && mRow.value === '1') isMaintenance = true;
     } catch (_) {}
 
-    if (isMaintenance) {
+    const isStaffBypass = ignore_maintenance === '1' || ignore_maintenance === 'true';
+
+    if (isMaintenance && !isStaffBypass) {
       const agencyContact = getPublicAgencyFromSettings();
       return res.json({
         success: true,
