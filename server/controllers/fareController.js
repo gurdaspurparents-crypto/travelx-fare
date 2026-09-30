@@ -13,20 +13,43 @@ function safeInvalidateFaresCache() {
   } catch (_) {}
 }
 
+function cleanupExpiredPastFares() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const res = db.prepare("DELETE FROM fares WHERE travel_date < ?").run(today);
+    if (res.changes > 0) {
+      console.log(`[AutoPrune] Cleaned up ${res.changes} expired past fares (travel_date < ${today})`);
+      safeInvalidateFaresCache();
+    }
+    return res.changes;
+  } catch (e) {
+    console.error('[AutoPrune] Error cleaning past fares:', e.message);
+    return 0;
+  }
+}
+
+// Auto-clean expired fares on module load
+try {
+  cleanupExpiredPastFares();
+} catch (_) {}
+
 const STMT_GET_EXISTING_FARE = db.prepare(`
   SELECT * FROM fares 
   WHERE vendor_id = ? 
-    AND airline_code = ? 
-    AND origin = ? 
-    AND destination = ? 
+    AND UPPER(airline_code) = ? 
+    AND UPPER(origin) = ? 
+    AND UPPER(destination) = ? 
     AND travel_date = ? 
-    AND cabin = ?
+    AND UPPER(COALESCE(cabin, 'ECONOMY')) = ?
   LIMIT 1
 `);
 
 const STMT_AFFIRM_DUPLICATE = db.prepare(`
   UPDATE fares 
   SET updated_at = datetime('now', 'localtime'),
+      flight_number = COALESCE(NULLIF(?, ''), flight_number),
+      departure_time = COALESCE(NULLIF(?, ''), departure_time),
+      arrival_time = COALESCE(NULLIF(?, ''), arrival_time),
       baggage = COALESCE(?, baggage),
       is_refundable = COALESCE(?, is_refundable),
       remarks = COALESCE(?, remarks),
@@ -44,6 +67,9 @@ const STMT_UPDATE_FARE_PRICE = db.prepare(`
   SET net_fare = ?,
       margin_amount = ?,
       publish_fare = ?,
+      flight_number = COALESCE(NULLIF(?, ''), flight_number),
+      departure_time = COALESCE(NULLIF(?, ''), departure_time),
+      arrival_time = COALESCE(NULLIF(?, ''), arrival_time),
       baggage = ?,
       is_refundable = ?,
       remarks = ?,
@@ -145,11 +171,11 @@ function saveOrUpdateFareRecord(data, options = {}) {
   // Check for existing matching active fare for this vendor
   const existing = STMT_GET_EXISTING_FARE.get(
     effectiveVendorId,
-    effectiveAirline,
+    effectiveAirline.toUpperCase(),
     origin.toUpperCase(),
     destination.toUpperCase(),
     cleanTravelDate,
-    cabin
+    String(cabin || 'ECONOMY').trim().toUpperCase()
   );
 
   if (existing) {
@@ -157,6 +183,9 @@ function saveOrUpdateFareRecord(data, options = {}) {
     // Case 1: Exact same fare
     if (Math.abs(existing.net_fare - effectiveFare) < 0.01) {
       STMT_AFFIRM_DUPLICATE.run(
+        flight_number,
+        departure_time,
+        arrival_time,
         baggage,
         is_refundable,
         effectiveRemarks || existing.remarks,
@@ -192,6 +221,9 @@ function saveOrUpdateFareRecord(data, options = {}) {
       effectiveFare,
       marginCalc.marginAmount,
       marginCalc.publishFare,
+      flight_number,
+      departure_time,
+      arrival_time,
       baggage,
       is_refundable,
       effectiveRemarks,
@@ -550,11 +582,20 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now', 'localtime'), 'Sold out / removed from vendor rate sheet')
   `);
 
+  cleanupExpiredPastFares();
+
+  const currentYear = new Date().getFullYear();
+
   if (replace_mode === 'entire_vendor') {
     const incomingKeySet = new Set();
     for (const f of fares) {
       if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
-      const key = `${f.airline_code.trim().toUpperCase()}_${f.origin.trim().toUpperCase()}_${f.destination.trim().toUpperCase()}_${(f.cabin || 'ECONOMY').trim().toUpperCase()}_${f.travel_date}`;
+      const air = normalizeAirlineCode(f.airline_code, f.flight_number, 'AI').toUpperCase();
+      const orig = f.origin.trim().toUpperCase();
+      const dest = f.destination.trim().toUpperCase();
+      const cab = (f.cabin || 'ECONOMY').trim().toUpperCase();
+      const cleanD = parseDateString(f.travel_date, currentYear) || String(f.travel_date).trim();
+      const key = `${air}_${orig}_${dest}_${cab}_${cleanD}`;
       incomingKeySet.add(key);
     }
 
@@ -580,16 +621,17 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
     const sectorMap = new Map();
     for (const f of fares) {
       if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
-      const airline = f.airline_code.trim().toUpperCase();
+      const airline = normalizeAirlineCode(f.airline_code, f.flight_number, 'AI').toUpperCase();
       const origin = f.origin.trim().toUpperCase();
       const dest = f.destination.trim().toUpperCase();
       const cabin = (f.cabin || 'ECONOMY').trim().toUpperCase();
+      const cleanDate = parseDateString(f.travel_date, currentYear) || String(f.travel_date).trim();
       const key = `${airline}_${origin}_${dest}_${cabin}`;
 
       if (!sectorMap.has(key)) {
         sectorMap.set(key, { airline_code: airline, origin, destination: dest, cabin, dates: new Set() });
       }
-      sectorMap.get(key).dates.add(f.travel_date);
+      sectorMap.get(key).dates.add(cleanDate);
     }
 
     const existingStmt = db.prepare(`
@@ -765,12 +807,15 @@ exports.saveBulkParsedFares = (req, res) => {
  */
 exports.getAllFares = (req, res) => {
   try {
+    cleanupExpiredPastFares();
+
     const {
       origin,
       destination,
       travel_date,
       date_from,
       date_to,
+      include_past,
       airline_code,
       vendor_id,
       min_fare,
@@ -821,6 +866,8 @@ exports.getAllFares = (req, res) => {
     if (date_from) {
       query += ` AND f.travel_date >= ?`;
       params.push(date_from);
+    } else if (!travel_date && include_past !== 'true') {
+      query += ` AND f.travel_date >= date('now', 'localtime')`;
     }
     if (date_to) {
       query += ` AND f.travel_date <= ?`;
@@ -1389,4 +1436,24 @@ exports.extensionSyncFares = (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
+
+/**
+ * Controller: Explicit manual or scheduled trigger to prune expired past travel dates
+ */
+exports.cleanupPastFaresEndpoint = (req, res) => {
+  try {
+    const deletedCount = cleanupExpiredPastFares();
+    return res.json({
+      success: true,
+      deleted_count: deletedCount,
+      message: `Cleaned up ${deletedCount} expired past fares.`
+    });
+  } catch (err) {
+    console.error('Error cleaning past fares endpoint:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.cleanupExpiredPastFares = cleanupExpiredPastFares;
+
 

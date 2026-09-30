@@ -410,7 +410,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
       const res = await api.saveBulkFares(
         targetVendorId,
         formattedFares,
-        false,
+        true,
         'sector',
         (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` }),
         activeVendor?.name
@@ -449,7 +449,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
   }, [excelRows, selectedExcelFilter]);
 
   // ====================== IMAGE OCR HANDLERS ======================
-  const handleSaveImageFaresToVendor = async (formattedFares, andSort = false, autoDeleteMissing = false) => {
+  const handleSaveImageFaresToVendor = async (formattedFares, andSort = false, autoDeleteMissing = true) => {
     try {
       setLoading(true);
       setStatus({ type: 'info', text: `Saving ${formattedFares.length} scanned fares…` });
@@ -458,7 +458,7 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
       const res = await api.saveBulkFares(
         targetVendorId,
         formattedFares,
-        autoDeleteMissing,
+        autoDeleteMissing !== false,
         'sector',
         (p) => setStatus({ type: 'info', text: p.label || `Saving batch ${p.current}/${p.total}…` }),
         activeVendor?.name

@@ -267,15 +267,52 @@ export const api = {
       savedRows += chunk.length;
     }
 
+    // Automatically synchronize vendor inventory to prune old/absent dates for updated sectors
+    let deletedCount = 0;
+    let deletedDates = [];
+    if (replace_missing_dates && savedTotal > 0) {
+      if (onProgress) {
+        onProgress({
+          phase: 'sync',
+          label: 'Synchronizing vendor inventory & removing sold-out dates…'
+        });
+      }
+      try {
+        const syncRes = await safeFetch('/api/fares/sync-inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vendor_id,
+            fares,
+            replace_mode: replace_mode || 'sector'
+          })
+        }, 2, 30000, false);
+        if (syncRes?.success) {
+          deletedCount = syncRes.deleted_count || 0;
+          deletedDates = syncRes.deleted_dates || [];
+        }
+      } catch (syncErr) {
+        console.warn('Inventory sync error:', syncErr);
+      }
+    }
+
     return {
       success: savedTotal > 0,
       saved_count: savedTotal,
       created_count: createdTotal,
       updated_count: updatedTotal,
-      deleted_count: 0,
+      deleted_count: deletedCount,
+      deleted_dates: deletedDates,
       replace_missing_dates,
-      message: `Saved ${savedTotal} fares`
+      message: `Saved ${savedTotal} fares${deletedCount > 0 ? ` (${deletedCount} sold-out/old dates removed)` : ''}`
     };
+  },
+
+  cleanupPastFares: async () => {
+    return safeFetch('/api/fares/cleanup-past', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
   },
 
   batchUpdateMargins: async (updates, mark_published = 1, batch_title = 'Special Fare Release') => {

@@ -399,14 +399,16 @@ export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
           travel_date: r.travel_date,
           net_fare: Number(r.net_fare),
           flight_number: ''
-        }))
+        })),
+        replace_missing_dates: true
       };
 
       const res = await api.saveQuickGrid(payload);
       if (res.success && res.saved_count > 0) {
+        const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} absent/sold-out dates removed)` : '';
         setStatus({
           type: 'success',
-          text: `🎉 Direct Save Success! All ${res.saved_count} fares from "${excelSummary.fileName}" saved for vendor "${activeVendor.name}"!`
+          text: `🎉 Direct Save Success! All ${res.saved_count} fares from "${excelSummary.fileName}" saved for vendor "${activeVendor.name}"!${delMsg}`
         });
         if (onFaresSaved) onFaresSaved();
       } else {
@@ -455,14 +457,16 @@ export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
           travel_date: r.travel_date,
           net_fare: Number(r.net_fare),
           flight_number: ''
-        }))
+        })),
+        replace_missing_dates: true
       };
 
       const res = await api.saveQuickGrid(payload);
       if (res.success && res.saved_count > 0) {
+        const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} absent/sold-out dates removed)` : '';
         setStatus({
           type: 'success',
-          text: `🎉 Successfully saved ${res.saved_count} fares for vendor "${activeVendor.name}" (${activeAirline.name}: ${origin} → ${destination})! SQLite database updated.`
+          text: `🎉 Successfully saved ${res.saved_count} fares for vendor "${activeVendor.name}" (${activeAirline.name}: ${origin} → ${destination})!${delMsg} SQLite database updated.`
         });
         if (onFaresSaved) onFaresSaved();
       } else {

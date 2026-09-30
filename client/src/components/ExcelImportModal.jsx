@@ -197,7 +197,7 @@ export default function ExcelImportModal({
       const res = await api.saveBulkFares(
         Number(selectedVendorId),
         formattedFares,
-        false,
+        true,
         'sector',
         (p) => setSaveProgress(p.label || `Saving batch ${p.current}/${p.total}…`)
       );

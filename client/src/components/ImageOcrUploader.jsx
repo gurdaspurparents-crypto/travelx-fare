@@ -118,7 +118,7 @@ export default function ImageOcrUploader({
   const [isRawTextOpen, setIsRawTextOpen] = useState(false);
   const [rawTextEdit, setRawTextEdit] = useState('');
   const [saving, setSaving] = useState(false);
-  const [autoDeleteMissing, setAutoDeleteMissing] = useState(false);
+  const [autoDeleteMissing, setAutoDeleteMissing] = useState(true);
   const [saveFeedback, setSaveFeedback] = useState(null);
 
   // AI Vision Engine & Key States
