@@ -165,16 +165,22 @@ function getFareComparisons(filterOptions = {}) {
       }
     }
 
-    // Attach analysis tags
+    // Attach analysis tags and identify all vendors offering the lowest net fare
+    const minNet = lowestFareCandidate.net_fare;
+    const tiedWinningFares = group.fares.filter(f => Math.abs(f.net_fare - minNet) < 0.01);
+    const tiedVendorNames = Array.from(new Set(tiedWinningFares.map(f => f.vendor_name).filter(Boolean))).sort().join(', ');
+
     group.fares.forEach((f, idx) => {
-      f.is_best_net = (f.id === lowestFareCandidate.id);
-      f.price_difference_from_lowest = f.net_fare - lowestFareCandidate.net_fare;
+      f.is_best_net = Math.abs(f.net_fare - minNet) < 0.01;
+      f.price_difference_from_lowest = f.net_fare - minNet;
       f.rank = idx + 1;
+      f.all_winning_vendors = tiedVendorNames;
     });
 
-    group.best_net_fare = lowestFareCandidate.net_fare;
-    group.best_vendor_name = lowestFareCandidate.vendor_name;
+    group.best_net_fare = minNet;
+    group.best_vendor_name = tiedVendorNames;
     group.best_fare_id = bestFare.id;
+    group.best_fare_ids = tiedWinningFares.map(f => f.id);
     group.recommended_publish_fare = bestFare.calculated_publish_fare;
     group.recommended_margin = bestFare.calculated_margin;
     group.warnings = warnings;

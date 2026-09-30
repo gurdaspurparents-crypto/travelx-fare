@@ -8,6 +8,34 @@
 
 const { formatRouteName } = require('./airportHelper');
 
+const AIRLINE_NAMES = {
+  AI: 'Air India',
+  '6E': 'IndiGo',
+  IX: 'Air India Express',
+  SG: 'SpiceJet',
+  UK: 'Vistara',
+  G9: 'Air Arabia',
+  FZ: 'Flydubai',
+  EK: 'Emirates',
+  WY: 'Oman Air',
+  QR: 'Qatar Airways',
+  SV: 'Saudia',
+  KU: 'Kuwait Airways',
+  GF: 'Gulf Air',
+  EY: 'Etihad Airways',
+  QP: 'Akasa Air'
+};
+
+function getAirlineName(codeOrName) {
+  if (!codeOrName) return '';
+  const trimmed = String(codeOrName).trim();
+  const upper = trimmed.toUpperCase();
+  if (AIRLINE_NAMES[upper]) return AIRLINE_NAMES[upper];
+  const matchKey = Object.keys(AIRLINE_NAMES).find(k => k.toLowerCase() === trimmed.toLowerCase());
+  if (matchKey) return AIRLINE_NAMES[matchKey];
+  return trimmed;
+}
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function parseDateParts(dateStr) {
@@ -133,10 +161,10 @@ function groupFaresByDateRanges(faresList = []) {
   const consolidatedList = [];
 
   for (const [routeKey, routeFares] of routeMap.entries()) {
-    // 2. Group by Airline
+    // 2. Group by Airline (Standardized Name)
     const airlineMap = new Map();
     for (const f of routeFares) {
-      const airKey = f.airline_name || f.airline_code || 'Airline';
+      const airKey = getAirlineName(f.airline_code || f.airline_name) || f.airline_name || f.airline_code || 'Airline';
       if (!airlineMap.has(airKey)) {
         airlineMap.set(airKey, []);
       }
@@ -144,40 +172,91 @@ function groupFaresByDateRanges(faresList = []) {
     }
 
     for (const [airName, airFares] of airlineMap.entries()) {
-      // Deduplicate by date: keep the most recently updated or lowest fare (ensures zero double dates)
+      // Step A: For each travel date, pick lowest fare and collect ALL tied vendors
       const dateMap = new Map();
       for (const f of airFares) {
-        const d = String(f.travel_date).split('T')[0];
-        const dayMonthKey = d.length >= 10 ? d.slice(5) : d; // e.g. "09-16"
-        const existing = dateMap.get(dayMonthKey);
-        if (!existing) {
-          dateMap.set(dayMonthKey, f);
+        const dStr = String(f.travel_date).split('T')[0];
+        const net = Number(f.net_fare) || 0;
+        const margin = Number(f.margin_amount) || Number(f.calculated_margin) || 0;
+        let fare = Number(f.publish_fare);
+        if (!fare || fare <= net) {
+          fare = Number(f.calculated_publish_fare) || (net + margin);
+        }
+        if (fare <= 0) continue;
+
+        const vName = (f.vendor_name || f['Vendor / Source'] || f.vendor_id || '').trim();
+
+        if (!dateMap.has(dStr)) {
+          dateMap.set(dStr, { 
+            minFare: fare, 
+            winningFares: [{ ...f, publish_fare: fare, vendor_name: vName }] 
+          });
         } else {
-          const fTime = f.updated_at || f.created_at || '';
-          const exTime = existing.updated_at || existing.created_at || '';
-          const isNewer = fTime > exTime;
-          const isCheaper = Number(f.publish_fare) < Number(existing.publish_fare);
-
-          if (isNewer || isCheaper) {
-            dateMap.set(dayMonthKey, f);
+          const cur = dateMap.get(dStr);
+          if (fare < cur.minFare - 0.01) {
+            // Strictly cheaper selling rate found: replace with cheaper winner!
+            dateMap.set(dStr, { 
+              minFare: fare, 
+              winningFares: [{ ...f, publish_fare: fare, vendor_name: vName }] 
+            });
+          } else if (Math.abs(fare - cur.minFare) < 0.01) {
+            // Same lowest rate: collect tied vendor offering the exact same lowest rate
+            const exists = cur.winningFares.some(w => 
+              (w.vendor_name || w['Vendor / Source'] || w.vendor_id || '').trim() === vName
+            );
+            if (!exists) {
+              cur.winningFares.push({ ...f, publish_fare: fare, vendor_name: vName });
+            } else {
+              // Update with newer entry if same vendor
+              const existingIdx = cur.winningFares.findIndex(w => 
+                (w.vendor_name || w['Vendor / Source'] || w.vendor_id || '').trim() === vName
+              );
+              if (existingIdx !== -1) {
+                const fTime = f.updated_at || f.created_at || '';
+                const exTime = cur.winningFares[existingIdx].updated_at || cur.winningFares[existingIdx].created_at || '';
+                if (fTime > exTime) {
+                  cur.winningFares[existingIdx] = { ...f, publish_fare: fare, vendor_name: vName };
+                }
+              }
+            }
           }
+          // If fare > cur.minFare: IGNORE more expensive quote!
         }
       }
-      const uniqueFares = Array.from(dateMap.values()).sort((a, b) => String(a.travel_date).localeCompare(String(b.travel_date)));
 
-      // 3. Group by (Month, publish_fare, vendor) so all dates sharing the same fare & vendor in a month group into 1 clean row
+      // Step B: Build unique date items with combined vendor names
+      const uniqueDates = [];
+      for (const [dStr, { minFare, winningFares }] of dateMap.entries()) {
+        const first = winningFares[0];
+        const vNames = Array.from(new Set(
+          winningFares.map(w => (w.vendor_name || w['Vendor / Source'] || w.vendor_id || '').trim()).filter(Boolean)
+        )).sort();
+        const vendorLabel = vNames.join(', ') || first.vendor_name || '';
+
+        uniqueDates.push({
+          ...first,
+          travel_date: dStr,
+          publish_fare: minFare,
+          vendor_name: vendorLabel,
+          all_vendors: vNames,
+          winning_fares: winningFares,
+          fare_ids: winningFares.map(w => w.id || w.fare_id).filter(Boolean)
+        });
+      }
+
+      uniqueDates.sort((a, b) => a.travel_date.localeCompare(b.travel_date));
+
+      // Step C: Group into buckets by (Month + publish_fare + vendor_name)
       const bucketMap = new Map();
-      for (const f of uniqueFares) {
-        const monthKey = String(f.travel_date).slice(0, 7); // YYYY-MM
-        const vendorKey = (f.vendor_name || f['Vendor / Source'] || f.vendor_id || '').trim();
-        const bucketKey = `${monthKey}_${Number(f.publish_fare)}_${vendorKey}`;
-        if (!bucketMap.has(bucketKey)) {
-          bucketMap.set(bucketKey, []);
+      for (const item of uniqueDates) {
+        const mKey = item.travel_date.slice(0, 7);
+        const bKey = `${mKey}_${item.publish_fare}_${item.vendor_name}`;
+        if (!bucketMap.has(bKey)) {
+          bucketMap.set(bKey, []);
         }
-        bucketMap.get(bucketKey).push(f);
+        bucketMap.get(bKey).push(item);
       }
 
-      // Sort buckets chronologically by their earliest travel date
       const sortedBuckets = Array.from(bucketMap.values()).sort((a, b) => 
         String(a[0].travel_date).localeCompare(String(b[0].travel_date))
       );
@@ -198,8 +277,8 @@ function createConsolidatedItem(routeKey, streak) {
   const dateLabel = formatStreakLabel(streak);
 
   const vendorList = Array.from(
-    new Set(streak.map(s => s.vendor_name || s['Vendor / Source'] || '').filter(Boolean))
-  );
+    new Set(streak.flatMap(s => s.all_vendors || [(s.vendor_name || s['Vendor / Source'] || '').trim()]).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
   const vendorName = vendorList.join(', ') || first.vendor_name || first['Vendor / Source'] || '';
 
   const net = Number(first.net_fare) || 0;
@@ -212,13 +291,16 @@ function createConsolidatedItem(routeKey, streak) {
     margin = pub - net;
   }
 
+  const allFareIds = Array.from(new Set(streak.flatMap(s => s.fare_ids || [s.id]).filter(Boolean)));
+  const airName = getAirlineName(first.airline_code || first.airline_name) || first.airline_name || first.airline_code;
+
   return {
     id: `streak-${first.id}-${last.id}-${streak.length}`,
     route: routeKey,
     origin: first.origin,
     destination: first.destination,
     airline_code: first.airline_code,
-    airline_name: first.airline_name,
+    airline_name: airName,
     vendor_name: vendorName,
     date_label: dateLabel,
     start_date: first.travel_date,
@@ -230,7 +312,7 @@ function createConsolidatedItem(routeKey, streak) {
     baggage: first.baggage || '30kg',
     is_refundable: first.is_refundable,
     cabin: first.cabin || 'ECONOMY',
-    fare_ids: streak.map(s => s.id),
+    fare_ids: allFareIds,
     streak_items: streak
   };
 }

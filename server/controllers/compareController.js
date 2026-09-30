@@ -42,6 +42,9 @@ exports.getBestFares = (req, res) => {
       if (winner) {
         bestFares.push({
           ...winner,
+          vendor_name: group.best_vendor_name || winner.vendor_name,
+          all_vendors: (group.best_vendor_name || winner.vendor_name).split(', '),
+          tied_fare_ids: group.best_fare_ids || [winner.id],
           groupKey: group.groupKey,
           competitor_count: group.fares.length
         });

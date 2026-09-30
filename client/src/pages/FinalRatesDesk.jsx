@@ -502,10 +502,10 @@ export default function FinalRatesDesk({ masterData = {}, setActiveTab, faresRef
               dateMinFareMap.set(dStr, { minFare: fare, vendorMap: new Map([[vKey, item]]) });
             } else {
               const current = dateMinFareMap.get(dStr);
-              if (fare < current.minFare) {
+              if (fare < current.minFare - 0.01) {
                 // Found cheaper selling rate: replace with cheaper winner
                 dateMinFareMap.set(dStr, { minFare: fare, vendorMap: new Map([[vKey, item]]) });
-              } else if (fare === current.minFare) {
+              } else if (Math.abs(fare - current.minFare) < 0.01) {
                 // Same lowest rate across vendors: keep all vendors offering this rate
                 const vMap = current.vendorMap;
                 if (!vMap.has(vKey) || (item.updated_at || '') > (vMap.get(vKey).updated_at || '')) {
