@@ -312,24 +312,44 @@ function computeMasterPublicFares() {
           }
         });
 
-        // Step B: Group dates by (Month + minFare) into clean streaks
-        const bucketMap = new Map();
+        // Step B: Group consecutive dates sharing the same lowest rate into clean streaks
+        const streaks = [];
         const sortedDates = Array.from(dateMinFareMap.keys()).sort();
+
+        let currentStreak = null;
 
         sortedDates.forEach(dStr => {
           const { minFare, item } = dateMinFareMap.get(dStr);
-          const monthKey = dStr.slice(0, 7);
-          const bKey = `${monthKey}_${minFare}`;
-          if (!bucketMap.has(bKey)) bucketMap.set(bKey, []);
-          bucketMap.get(bKey).push({
-            travel_date: dStr,
-            minFare,
-            item
-          });
+
+          if (!currentStreak) {
+            currentStreak = {
+              minFare,
+              dateEntries: [{ travel_date: dStr, minFare, item }]
+            };
+          } else {
+            const lastEntry = currentStreak.dateEntries[currentStreak.dateEntries.length - 1];
+            const lastDateStr = lastEntry.travel_date;
+            const isConsecutive = isConsecutiveDay(lastDateStr, dStr);
+            const sameFare = currentStreak.minFare === minFare;
+            const sameMonth = lastDateStr.slice(0, 7) === dStr.slice(0, 7);
+
+            if (sameFare && isConsecutive && sameMonth) {
+              currentStreak.dateEntries.push({ travel_date: dStr, minFare, item });
+            } else {
+              streaks.push(currentStreak.dateEntries);
+              currentStreak = {
+                minFare,
+                dateEntries: [{ travel_date: dStr, minFare, item }]
+              };
+            }
+          }
         });
+        if (currentStreak) {
+          streaks.push(currentStreak.dateEntries);
+        }
 
         // Step C: Build sanitized streak items
-        for (const dateEntries of bucketMap.values()) {
+        for (const dateEntries of streaks) {
           dateEntries.sort((x, y) => x.travel_date.localeCompare(y.travel_date));
 
           const repStreak = dateEntries.map(e => e.item);

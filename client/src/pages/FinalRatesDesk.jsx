@@ -516,24 +516,46 @@ export default function FinalRatesDesk({ masterData = {}, setActiveTab, faresRef
             }
           });
 
-          // Step 2: Group consecutive dates sharing the same lowest rate in the same month into streaks
-          const bucketMap = new Map();
+          // Step 2: Group consecutive dates sharing the same lowest rate into streaks
+          // Breaking on date gaps prevents disjoint dates (and different vendors) from merging into misleading cards!
+          const streaks = [];
           const sortedDates = Array.from(dateMinFareMap.keys()).sort();
+
+          let currentStreak = null;
 
           sortedDates.forEach(dStr => {
             const { minFare, vendorMap } = dateMinFareMap.get(dStr);
-            const monthKey = dStr.slice(0, 7);
-            const bKey = `${monthKey}_${minFare}`;
-            if (!bucketMap.has(bKey)) bucketMap.set(bKey, []);
-            bucketMap.get(bKey).push({
-              travel_date: dStr,
-              minFare,
-              vendors: Array.from(vendorMap.values())
-            });
-          });
+            const vendorItems = Array.from(vendorMap.values());
 
-          // Step 3: For each bucket, sort chronologically and format streak
-          for (const dateEntries of bucketMap.values()) {
+            if (!currentStreak) {
+              currentStreak = {
+                minFare,
+                dateEntries: [{ travel_date: dStr, minFare, vendors: vendorItems }]
+              };
+            } else {
+              const lastEntry = currentStreak.dateEntries[currentStreak.dateEntries.length - 1];
+              const lastDateStr = lastEntry.travel_date;
+              const isConsecutive = isConsecutiveDay(lastDateStr, dStr);
+              const sameFare = currentStreak.minFare === minFare;
+              const sameMonth = lastDateStr.slice(0, 7) === dStr.slice(0, 7);
+
+              if (sameFare && isConsecutive && sameMonth) {
+                currentStreak.dateEntries.push({ travel_date: dStr, minFare, vendors: vendorItems });
+              } else {
+                streaks.push(currentStreak.dateEntries);
+                currentStreak = {
+                  minFare,
+                  dateEntries: [{ travel_date: dStr, minFare, vendors: vendorItems }]
+                };
+              }
+            }
+          });
+          if (currentStreak) {
+            streaks.push(currentStreak.dateEntries);
+          }
+
+          // Step 3: For each streak, sort chronologically and format streak
+          for (const dateEntries of streaks) {
             dateEntries.sort((x, y) => x.travel_date.localeCompare(y.travel_date));
 
             const repDateStreak = dateEntries.map(e => e.vendors[0]);

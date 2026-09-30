@@ -165,25 +165,34 @@ export function groupFaresByDateRanges(faresList = []) {
       }
       const uniqueFares = Array.from(dateMap.values()).sort((a, b) => String(a.travel_date).localeCompare(String(b.travel_date)));
 
-      // 3. Group by (Month, publish_fare) across vendors so dates sharing the same fare in a month group into 1 clean row
-      const bucketMap = new Map();
+      // 3. Group strictly consecutive dates sharing the same publish_fare into clean streaks
+      const streaks = [];
+      let currentStreak = null;
+
       for (const f of uniqueFares) {
-        const monthKey = String(f.travel_date).slice(0, 7); // YYYY-MM
-        const bucketKey = `${monthKey}_${Number(f.publish_fare)}`;
-        if (!bucketMap.has(bucketKey)) {
-          bucketMap.set(bucketKey, []);
+        if (!currentStreak) {
+          currentStreak = [f];
+        } else {
+          const last = currentStreak[currentStreak.length - 1];
+          const isConsec = isConsecutiveDay(last.travel_date, f.travel_date);
+          const sameFare = Math.abs(Number(last.publish_fare) - Number(f.publish_fare)) < 0.01;
+          const sameMonth = String(last.travel_date).slice(0, 7) === String(f.travel_date).slice(0, 7);
+
+          if (sameFare && isConsec && sameMonth) {
+            currentStreak.push(f);
+          } else {
+            streaks.push(currentStreak);
+            currentStreak = [f];
+          }
         }
-        bucketMap.get(bucketKey).push(f);
+      }
+      if (currentStreak) {
+        streaks.push(currentStreak);
       }
 
-      // Sort buckets chronologically by their earliest travel date
-      const sortedBuckets = Array.from(bucketMap.values()).sort((a, b) => 
-        String(a[0].travel_date).localeCompare(String(b[0].travel_date))
-      );
-
-      for (const bucket of sortedBuckets) {
-        bucket.sort((x, y) => String(x.travel_date).localeCompare(String(y.travel_date)));
-        consolidatedList.push(createConsolidatedItem(routeKey, bucket));
+      for (const streak of streaks) {
+        streak.sort((x, y) => String(x.travel_date).localeCompare(String(y.travel_date)));
+        consolidatedList.push(createConsolidatedItem(routeKey, streak));
       }
     }
   }
