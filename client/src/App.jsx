@@ -77,7 +77,7 @@ export default function App() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('enquiries');
   const [masterData, setMasterData] = useState({
     airlines: [],
     vendors: [],

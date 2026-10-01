@@ -62,8 +62,8 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
 
   // Primary Desks (Core daily workflow)
   const primaryNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'enquiries', label: 'Booking Requests', icon: Inbox, isBooking: true },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'final-rates', label: 'Final Rates', icon: FileSpreadsheet, isMaster: true, badgeText: 'EXCEL' },
     { id: 'all-rates', label: 'All Rates Desk', icon: Layers, isMaster: true },
     { id: 'vendor-heads', label: 'Vendor Rates Desk', icon: Building2 },
