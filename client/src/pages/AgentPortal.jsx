@@ -4767,8 +4767,32 @@ ${contactFooter}`;
             <span>B2B Fixed Departure Special Air Fares Engine</span>
           </div>
 
-          <div className="flex items-center space-x-4 text-[11px]">
+          <div className="flex items-center space-x-3 text-[11px]">
             <span>Rates verified live</span>
+            {onSwitchToStaff && (
+              <>
+                <span className="text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={onSwitchToStaff}
+                  className="text-slate-400 hover:text-blue-900 transition underline cursor-pointer"
+                >
+                  Staff Desk
+                </button>
+              </>
+            )}
+            {onSwitchToAdmin && (
+              <>
+                <span className="text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={onSwitchToAdmin}
+                  className="text-slate-400 hover:text-slate-800 transition underline cursor-pointer"
+                >
+                  Admin
+                </button>
+              </>
+            )}
           </div>
         </div>
       </footer>

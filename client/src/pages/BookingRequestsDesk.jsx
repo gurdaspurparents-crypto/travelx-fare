@@ -128,7 +128,8 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
   // WhatsApp Alert & Automation Settings Modal States
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsData, setSettingsData] = useState({
-    admin_whatsapp_phone: '',
+    admin_whatsapp_phone: '918146526257',
+    staff_whatsapp_phone: '917814508351',
     agency_contact_phone: '',
     agency_email: 'desk@travelx.co.in',
     admin_pin: '',
@@ -136,13 +137,15 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     staff_pin: '',
     staff_pin_set: false,
     callmebot_api_key: '',
-    whatsapp_alerts_enabled: false,
+    staff_callmebot_api_key: '',
+    whatsapp_alerts_enabled: true,
     auto_expiry_enabled: true
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [testAlertLoading, setTestAlertLoading] = useState(false);
+  const [testTarget, setTestTarget] = useState(null);
   const [testAlertStatus, setTestAlertStatus] = useState(null);
 
   // Confirm with PNR Modal States
@@ -224,7 +227,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     }
   };
 
-  // Show native OS desktop notification (pops up on Windows even when browser is minimized!)
+  // Show native OS desktop notification (pops up on Windows & Android even when browser is minimized!)
   const showDesktopNotification = (b, customTitle = null, customBody = null) => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     
@@ -242,22 +245,41 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
       try {
         const notifTitle = customTitle || `⚡ New Booking Query! #${b.request_ref}`;
         const notifBody = customBody || `${b.agency_name} • ${b.origin} ➔ ${b.destination} (${b.travel_date})\n${formatPaxBreakdown(b)} • Quoted: ₹${Number(b.quoted_rate).toLocaleString('en-IN')}\n👉 Click to review & reply now!`;
-
-        const notif = new Notification(notifTitle, {
+        const notifOptions = {
           body: notifBody,
-          icon: '/favicon.ico',
+          icon: '/travelx-logo.png',
+          badge: '/travelx-logo.png',
           tag: `booking-${b.id}-${b.status}-${Date.now()}`,
-          requireInteraction: true // Stays visible on Windows screen until clicked!
-        });
-
-        notif.onclick = () => {
-          window.focus();
-          if (onSwitchToEnquiries) onSwitchToEnquiries();
-          setActiveSubTab('requests');
-          if (b.status === 'PENDING') handleOpenReviewModal(b);
-          else if (b.status === 'DOCS_SUBMITTED') setViewingPassportsBooking(b);
-          notif.close();
+          vibrate: [600, 150, 600, 150, 600, 150, 900],
+          requireInteraction: true,
+          data: { url: isStaffMode ? '/staff' : '/admin' }
         };
+
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.showNotification(notifTitle, notifOptions);
+          }).catch(() => {
+            const notif = new Notification(notifTitle, notifOptions);
+            notif.onclick = () => {
+              window.focus();
+              if (onSwitchToEnquiries) onSwitchToEnquiries();
+              setActiveSubTab('requests');
+              if (b.status === 'PENDING') handleOpenReviewModal(b);
+              else if (b.status === 'DOCS_SUBMITTED') setViewingPassportsBooking(b);
+              notif.close();
+            };
+          });
+        } else {
+          const notif = new Notification(notifTitle, notifOptions);
+          notif.onclick = () => {
+            window.focus();
+            if (onSwitchToEnquiries) onSwitchToEnquiries();
+            setActiveSubTab('requests');
+            if (b.status === 'PENDING') handleOpenReviewModal(b);
+            else if (b.status === 'DOCS_SUBMITTED') setViewingPassportsBooking(b);
+            notif.close();
+          };
+        }
       } catch (e) {
         console.warn('Desktop notification show error:', e);
       }
@@ -293,7 +315,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
       const url = getDingDongWavUrl();
       if (url && typeof Audio !== 'undefined') {
         const audio = new Audio(url);
-        audio.volume = 0.85;
+        audio.volume = 1.0;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise.catch((e) => {
@@ -306,14 +328,14 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     }
   };
 
-  // Play attention-grabbing double chime when a new query arrives
+  // Play attention-grabbing loud multi-tone chime when a new query arrives
   const playNotificationChime = () => {
     if (!soundEnabled) return;
 
-    // Trigger mobile vibration if on smartphone
+    // Trigger strong mobile vibration
     try {
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([300, 150, 300, 150, 450]);
+        navigator.vibrate([600, 150, 600, 150, 600, 150, 900]);
       }
     } catch (_) {}
 
@@ -327,26 +349,26 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
       const runDingDong = () => {
         try {
           const now = audioCtx.currentTime;
-          const playTone = (startTime, freq, duration) => {
+          const playTone = (startTime, freq, duration, type = 'triangle', gainVal = 0.95) => {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain);
             gain.connect(audioCtx.destination);
-            osc.type = 'sine';
+            osc.type = type;
             osc.frequency.setValueAtTime(freq, startTime);
-            gain.gain.setValueAtTime(0.55, startTime);
+            gain.gain.setValueAtTime(gainVal, startTime);
             gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
             osc.start(startTime);
             osc.stop(startTime + duration);
           };
 
-          // Tone 1: Ding-Dong (D5 -> A5)
-          playTone(now, 587.33, 0.25);
-          playTone(now + 0.15, 880.00, 0.35);
+          // Tone 1: High Urgent Chime (A5 880Hz -> D6 1174Hz)
+          playTone(now, 880.00, 0.28, 'triangle', 0.95);
+          playTone(now + 0.16, 1174.66, 0.38, 'sine', 0.90);
 
-          // Tone 2: Echo Ding-Dong for attention even if minimized (E5 -> C6)
-          playTone(now + 0.55, 659.25, 0.25);
-          playTone(now + 0.70, 1046.50, 0.50);
+          // Tone 2: Double Echo Chime (F#6 1479Hz -> A6 1760Hz)
+          playTone(now + 0.52, 1174.66, 0.25, 'triangle', 0.95);
+          playTone(now + 0.68, 1760.00, 0.55, 'sine', 0.95);
         } catch (err) {
           console.warn('DingDong tone error:', err);
         }
@@ -872,21 +894,24 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     }
   };
 
-  const handleTestWhatsAppAlert = async () => {
+  const handleTestWhatsAppAlert = async (target = 'admin') => {
     try {
+      setTestTarget(target);
       setTestAlertLoading(true);
       setTestAlertStatus(null);
+      const phone = target === 'admin' ? settingsData.admin_whatsapp_phone : settingsData.staff_whatsapp_phone;
+      const apiKey = target === 'admin' ? settingsData.callmebot_api_key : settingsData.staff_callmebot_api_key;
       const res = await api.testWhatsAppAlert({
-        phone: settingsData.admin_whatsapp_phone,
-        api_key: settingsData.callmebot_api_key
+        phone,
+        api_key: apiKey
       });
       if (res && res.success) {
-        setTestAlertStatus({ success: true, message: res.message });
+        setTestAlertStatus({ success: true, target, message: res.message });
       } else {
-        setTestAlertStatus({ success: false, message: res?.error || 'Failed to send test alert' });
+        setTestAlertStatus({ success: false, target, message: res?.error || 'Failed to send test alert' });
       }
     } catch (err) {
-      setTestAlertStatus({ success: false, message: err.message || 'Connection error' });
+      setTestAlertStatus({ success: false, target, message: err.message || 'Connection error' });
     } finally {
       setTestAlertLoading(false);
     }
@@ -2404,65 +2429,131 @@ Thank you for booking with TravelX!`;
                 </div>
               </div>
 
-              {/* Phone Number */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Admin WhatsApp Business Number (with Country Code)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 919888919465"
-                  value={settingsData.admin_whatsapp_phone}
-                  onChange={(e) => setSettingsData({ ...settingsData, admin_whatsapp_phone: e.target.value.replace(/\D/g, '') })}
-                  className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-900"
-                />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Must include country code without + or dashes (e.g. 919888919465 for India).
+              {/* 24/7 Mobile Alerts when Computer is OFF Notice */}
+              <div className="p-3 bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 text-white rounded-2xl border border-emerald-500/30 space-y-1.5 shadow-md">
+                <div className="flex items-center space-x-2 text-emerald-400 font-extrabold text-xs">
+                  <span>📱</span>
+                  <span>24/7 WhatsApp Alerts when Computer is OFF ("System Band Ho")</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Jab aapka laptop/PC band ho ya mobile lock ho, browser sound play nahi kar sakta. Par <b>CallMeBot WhatsApp</b> se aapke dono phone numbers par instant loud ringtone ke saath WhatsApp message aayega! Niche dono phones ke CallMeBot API key save karein:
                 </p>
               </div>
 
-              {/* CallMeBot API Key */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  CallMeBot Free API Key
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 123456"
-                  value={settingsData.callmebot_api_key}
-                  onChange={(e) => setSettingsData({ ...settingsData, callmebot_api_key: e.target.value.trim() })}
-                  className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-900"
-                />
-
-                {/* 10-Second Free Setup Instructions */}
-                <div className="mt-2 p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-[11px] text-emerald-950 space-y-1.5">
-                  <div className="font-bold flex items-center space-x-1 text-emerald-900">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>How to get your Free API Key (10 Seconds):</span>
-                  </div>
-                  <ol className="list-decimal list-inside space-y-1 text-emerald-800">
-                    <li>
-                      Apne phone WhatsApp Business se is link par click karein:{' '}
-                      <a
-                        href="https://wa.me/34911981111?text=I%20allow%20callmebot%20to%20send%20me%20messages"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-bold underline text-emerald-950 inline-flex items-center space-x-0.5"
-                      >
-                        <span>Activate CallMeBot on WhatsApp</span>
-                        <ExternalLink className="w-3 h-3 ml-0.5" />
-                      </a>
-                    </li>
-                    <li>
-                      Chat khulne par <b>"I allow callmebot to send me messages"</b> send karein.
-                    </li>
-                    <li>
-                      CallMeBot aapko turant reply mein aapka <b>apikey</b> bhej dega. Usko yahan paste karein!
-                    </li>
-                  </ol>
+              {/* 1. Admin WhatsApp Alert (+91 81465 26257) */}
+              <div className="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-emerald-950 flex items-center space-x-1.5">
+                    <span>👑</span>
+                    <span>Admin WhatsApp Alert (+91 81465 26257)</span>
+                  </span>
+                  <a
+                    href="https://wa.me/34911981111?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center space-x-0.5"
+                  >
+                    <span>Activate on WhatsApp</span>
+                    <ExternalLink className="w-3 h-3 ml-0.5" />
+                  </a>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Admin WhatsApp Phone</label>
+                    <input
+                      type="text"
+                      placeholder="918146526257"
+                      value={settingsData.admin_whatsapp_phone}
+                      onChange={(e) => setSettingsData({ ...settingsData, admin_whatsapp_phone: e.target.value.replace(/\D/g, '') })}
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Admin CallMeBot API Key</label>
+                    <input
+                      type="text"
+                      placeholder="Paste Admin API Key"
+                      value={settingsData.callmebot_api_key}
+                      onChange={(e) => setSettingsData({ ...settingsData, callmebot_api_key: e.target.value.trim() })}
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={testAlertLoading || !settingsData.admin_whatsapp_phone || !settingsData.callmebot_api_key}
+                  onClick={() => handleTestWhatsAppAlert('admin')}
+                  className="w-full py-2 bg-white hover:bg-emerald-100 disabled:opacity-50 text-emerald-900 font-bold rounded-xl transition cursor-pointer border border-emerald-300 text-xs flex items-center justify-center space-x-1.5 shadow-2xs"
+                >
+                  {testAlertLoading && testTarget === 'admin' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>Test WhatsApp Alert to Admin (+91 81465 26257)</span>
+                </button>
               </div>
+
+              {/* 2. Staff WhatsApp Alert (+91 78145 08351) */}
+              <div className="p-3.5 bg-blue-50/50 rounded-2xl border border-blue-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-blue-950 flex items-center space-x-1.5">
+                    <span>🎧</span>
+                    <span>Staff WhatsApp Alert (+91 78145 08351)</span>
+                  </span>
+                  <a
+                    href="https://wa.me/34911981111?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-bold text-blue-700 hover:text-blue-950 underline inline-flex items-center space-x-0.5"
+                  >
+                    <span>Activate on WhatsApp</span>
+                    <ExternalLink className="w-3 h-3 ml-0.5" />
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Staff WhatsApp Phone</label>
+                    <input
+                      type="text"
+                      placeholder="917814508351"
+                      value={settingsData.staff_whatsapp_phone}
+                      onChange={(e) => setSettingsData({ ...settingsData, staff_whatsapp_phone: e.target.value.replace(/\D/g, '') })}
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Staff CallMeBot API Key</label>
+                    <input
+                      type="text"
+                      placeholder="Paste Staff API Key"
+                      value={settingsData.staff_callmebot_api_key}
+                      onChange={(e) => setSettingsData({ ...settingsData, staff_callmebot_api_key: e.target.value.trim() })}
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-600"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={testAlertLoading || !settingsData.staff_whatsapp_phone || !settingsData.staff_callmebot_api_key}
+                  onClick={() => handleTestWhatsAppAlert('staff')}
+                  className="w-full py-2 bg-white hover:bg-blue-100 disabled:opacity-50 text-blue-900 font-bold rounded-xl transition cursor-pointer border border-blue-300 text-xs flex items-center justify-center space-x-1.5 shadow-2xs"
+                >
+                  {testAlertLoading && testTarget === 'staff' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>Test WhatsApp Alert to Staff (+91 78145 08351)</span>
+                </button>
+              </div>
+
+              {testAlertStatus && (
+                <div className={`p-3 rounded-xl text-xs font-medium flex items-center space-x-2 ${
+                  testAlertStatus.success 
+                    ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
+                    : 'bg-rose-100 text-rose-950 border border-rose-300'
+                }`}>
+                  {testAlertStatus.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-700" />}
+                  <span>{testAlertStatus.message}</span>
+                </div>
+              )}
 
               {/* Toggles */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
@@ -2473,7 +2564,7 @@ Thank you for booking with TravelX!`;
                     onChange={(e) => setSettingsData({ ...settingsData, whatsapp_alerts_enabled: e.target.checked })}
                     className="w-4 h-4 rounded text-emerald-600 cursor-pointer"
                   />
-                  <span>Enable Live WhatsApp Alerts on New Bookings</span>
+                  <span>Enable Live WhatsApp Alerts on New Bookings (24/7)</span>
                 </label>
 
                 <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-bold text-slate-800">
@@ -2485,30 +2576,6 @@ Thank you for booking with TravelX!`;
                   />
                   <span>Auto-Expire Past Flight Dates from Portal (Self-Hygiene)</span>
                 </label>
-              </div>
-
-              {/* Test Alert Button & Response */}
-              <div className="pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  disabled={testAlertLoading || !settingsData.admin_whatsapp_phone || !settingsData.callmebot_api_key}
-                  onClick={handleTestWhatsAppAlert}
-                  className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 text-emerald-900 font-bold rounded-xl transition cursor-pointer border border-emerald-200 text-xs flex items-center justify-center space-x-1.5"
-                >
-                  {testAlertLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  <span>Send Test WhatsApp Alert to My Phone</span>
-                </button>
-
-                {testAlertStatus && (
-                  <div className={`mt-2 p-2.5 rounded-lg text-xs font-medium flex items-center space-x-1.5 ${
-                    testAlertStatus.success 
-                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                      : 'bg-rose-100 text-rose-900 border border-rose-300'
-                  }`}>
-                    {testAlertStatus.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-700" />}
-                    <span>{testAlertStatus.message}</span>
-                  </div>
-                )}
               </div>
 
               {/* Action Buttons */}

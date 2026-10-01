@@ -63,32 +63,44 @@ function generateRefId() {
   return `TX-${rand}`;
 }
 
+async function sendWhatsAppAlertToPhone(phone, apiKey, text) {
+  if (!phone || !apiKey) return;
+  let cleanPhone = String(phone).replace(/\D/g, '');
+  if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
+  const encodedText = encodeURIComponent(text);
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodedText}&apikey=${encodeURIComponent(apiKey.trim())}`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    const body = await res.text();
+    console.log(`[WhatsApp Alert] Sent to ${cleanPhone}: HTTP ${res.status} -> ${body.slice(0, 60)}`);
+  } catch (err) {
+    console.warn(`[WhatsApp Alert Error] ${cleanPhone}:`, err.message);
+  }
+}
+
 /**
- * Dispatch automatic instant alert to Admin's WhatsApp Business via free CallMeBot webhook
+ * Dispatch automatic instant alert to Admin and Staff WhatsApp Business via free CallMeBot webhook
  */
 function sendWhatsAppAdminAlert(booking) {
   try {
-    const phoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'admin_whatsapp_phone'").get();
-    const apiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'callmebot_api_key'").get();
+    const adminPhoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'admin_whatsapp_phone'").get();
+    const staffPhoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_whatsapp_phone'").get();
+    const adminApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'callmebot_api_key'").get();
+    const staffApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_callmebot_api_key'").get();
     const enabledSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'whatsapp_alerts_enabled'").get();
 
-    if (!enabledSetting || enabledSetting.value !== '1') {
-      return; // Alerts disabled
+    if (enabledSetting && enabledSetting.value === '0') {
+      return; // Alerts explicitly disabled
     }
 
-    let phone = phoneSetting?.value ? phoneSetting.value.replace(/\D/g, '') : '';
-    const apiKey = apiKeySetting?.value ? apiKeySetting.value.trim() : '';
+    const adminPhone = adminPhoneSetting?.value ? adminPhoneSetting.value.replace(/\D/g, '') : '918146526257';
+    const staffPhone = staffPhoneSetting?.value ? staffPhoneSetting.value.replace(/\D/g, '') : '917814508351';
+    const adminApiKey = adminApiKeySetting?.value ? adminApiKeySetting.value.trim() : '';
+    const staffApiKey = staffApiKeySetting?.value ? staffApiKeySetting.value.trim() : '';
 
-    if (!phone || !apiKey) {
-      console.log('WhatsApp alert skipped: missing phone or API key');
-      return;
-    }
-
-    if (phone.length === 10) {
-      phone = '91' + phone;
-    }
-
-    const text = `🚨 *TRAVELX NEW BOOKING REQUEST!*
+    // Message for Admin (includes vendor net rate if available)
+    const adminText = `🚨 *TRAVELX NEW BOOKING REQUEST!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • *Reference:* #${booking.request_ref}
 • *Agency:* ${booking.agency_name}${booking.agent_city ? ` (${booking.agent_city})` : ''}
@@ -102,63 +114,55 @@ function sendWhatsAppAdminAlert(booking) {
 • *Baggage:* ${booking.baggage || '30+7 KG'}
 ${booking.vendor_name ? `• *Winning Vendor:* ${booking.vendor_name} (Net: ₹${booking.net_fare})` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 Open TravelX Admin Desk to confirm seats!`;
+👉 Open Admin Desk: https://rates.travelx.co.in/admin`;
 
-    const encodedText = encodeURIComponent(text);
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedText}&apikey=${apiKey}`;
+    // Message for Staff (vendor net rate hidden for confidentiality)
+    const staffText = `🚨 *TRAVELX NEW BOOKING REQUEST!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Reference:* #${booking.request_ref}
+• *Agency:* ${booking.agency_name}${booking.agent_city ? ` (${booking.agent_city})` : ''}
+• *Mobile:* ${booking.agent_mobile}
+• *Sector:* ${booking.origin} ➔ ${booking.destination}
+• *Flight:* ${booking.airline_name || booking.airline_code} (${booking.flight_number || ''})
+• *Date:* ${booking.travel_date} (${booking.departure_time || 'Non-Stop'})
+• *Pax:* ${booking.pax_count} Passengers
+• *Quoted Rate:* ₹${Number(booking.quoted_rate).toLocaleString('en-IN')}/pax
+• *Total Value:* ₹${Number(booking.total_amount).toLocaleString('en-IN')}
+• *Baggage:* ${booking.baggage || '30+7 KG'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 Open Staff Desk: https://rates.travelx.co.in/staff`;
 
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        console.log(`WhatsApp Alert sent for #${booking.request_ref}: HTTP ${res.statusCode} -> ${data.slice(0, 80)}`);
-      });
-    }).on('error', (err) => {
-      console.warn('CallMeBot notification warning:', err.message);
-    });
+    if (adminApiKey) {
+      sendWhatsAppAlertToPhone(adminPhone, adminApiKey, adminText);
+    }
+    if (staffApiKey) {
+      sendWhatsAppAlertToPhone(staffPhone, staffApiKey, staffText);
+    }
   } catch (err) {
     console.warn('WhatsApp alert warning:', err.message);
   }
 }
 
 /**
- * Dispatch custom alert text to Admin's WhatsApp via CallMeBot webhook
+ * Dispatch custom alert text to Admin and Staff WhatsApp via CallMeBot webhook
  */
 function sendWhatsAppCustomAlert(text) {
   try {
-    const phoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'admin_whatsapp_phone'").get();
-    const apiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'callmebot_api_key'").get();
+    const adminPhoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'admin_whatsapp_phone'").get();
+    const staffPhoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_whatsapp_phone'").get();
+    const adminApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'callmebot_api_key'").get();
+    const staffApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_callmebot_api_key'").get();
     const enabledSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'whatsapp_alerts_enabled'").get();
 
-    if (!enabledSetting || enabledSetting.value !== '1') {
-      console.log('WhatsApp custom alert skipped: alerts not enabled');
-      return;
-    }
+    if (enabledSetting && enabledSetting.value === '0') return;
 
-    let phone = phoneSetting?.value ? phoneSetting.value.replace(/\D/g, '') : '';
-    const apiKey = apiKeySetting?.value ? apiKeySetting.value.trim() : '';
+    const adminPhone = adminPhoneSetting?.value ? adminPhoneSetting.value.replace(/\D/g, '') : '918146526257';
+    const staffPhone = staffPhoneSetting?.value ? staffPhoneSetting.value.replace(/\D/g, '') : '917814508351';
+    const adminApiKey = adminApiKeySetting?.value ? adminApiKeySetting.value.trim() : '';
+    const staffApiKey = staffApiKeySetting?.value ? staffApiKeySetting.value.trim() : '';
 
-    if (!phone || !apiKey) {
-      console.log('WhatsApp custom alert skipped: missing phone or API key');
-      return;
-    }
-
-    if (phone.length === 10) {
-      phone = '91' + phone;
-    }
-
-    const encodedText = encodeURIComponent(text);
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedText}&apikey=${apiKey}`;
-
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        console.log(`WhatsApp Custom Alert sent: HTTP ${res.statusCode} -> ${data.slice(0, 80)}`);
-      });
-    }).on('error', (err) => {
-      console.warn('CallMeBot notification warning:', err.message);
-    });
+    if (adminApiKey) sendWhatsAppAlertToPhone(adminPhone, adminApiKey, text);
+    if (staffApiKey) sendWhatsAppAlertToPhone(staffPhone, staffApiKey, text);
   } catch (err) {
     console.warn('WhatsApp custom alert warning:', err.message);
   }
@@ -1150,6 +1154,18 @@ exports.uploadPassports = (req, res) => {
       WHERE id = ?
     `).run(JSON.stringify(combined), newStatus, booking.id);
 
+    // Asynchronously dispatch WhatsApp alert to Admin & Staff
+    try {
+      sendWhatsAppCustomAlert(`📄 *TRAVELX: PASSPORTS UPLOADED!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Reference:* #${booking.request_ref}
+• *Agency:* ${booking.agency_name}
+• *Passports:* ${newPassports.length} new passport file(s) attached
+• *Sector:* ${booking.origin} ➔ ${booking.destination} (${booking.travel_date})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 Open Desk to Review & Issue Ticket!`);
+    } catch (_) {}
+
     return res.json({
       success: true,
       message: `${newPassports.length} passport(s) uploaded successfully`,
@@ -1406,15 +1422,17 @@ exports.getWhatsAppSettings = (req, res) => {
     return res.json({
       success: true,
       settings: {
-        admin_whatsapp_phone: settings.admin_whatsapp_phone || '',
-        agency_contact_phone: settings.agency_contact_phone || '',
+        admin_whatsapp_phone: settings.admin_whatsapp_phone || '918146526257',
+        staff_whatsapp_phone: settings.staff_whatsapp_phone || '917814508351',
+        agency_contact_phone: settings.agency_contact_phone || '+91 81465 26257',
         agency_email: settings.agency_email || 'desk@travelx.co.in',
         admin_pin: settings.admin_pin ? '********' : '',
         admin_pin_set: !!settings.admin_pin,
         staff_pin: settings.staff_pin ? '********' : '',
         staff_pin_set: !!settings.staff_pin,
         callmebot_api_key: settings.callmebot_api_key || '',
-        whatsapp_alerts_enabled: settings.whatsapp_alerts_enabled === '1',
+        staff_callmebot_api_key: settings.staff_callmebot_api_key || '',
+        whatsapp_alerts_enabled: settings.whatsapp_alerts_enabled !== '0',
         auto_expiry_enabled: settings.auto_expiry_enabled !== '0',
         maintenance_mode: settings.maintenance_mode === '1'
       }
@@ -1432,11 +1450,13 @@ exports.saveWhatsAppSettings = (req, res) => {
   try {
     const {
       admin_whatsapp_phone,
+      staff_whatsapp_phone,
       agency_contact_phone,
       agency_email,
       admin_pin,
       staff_pin,
       callmebot_api_key,
+      staff_callmebot_api_key,
       whatsapp_alerts_enabled,
       auto_expiry_enabled,
       maintenance_mode
@@ -1453,6 +1473,9 @@ exports.saveWhatsAppSettings = (req, res) => {
     if (admin_whatsapp_phone !== undefined) {
       upsert.run('admin_whatsapp_phone', String(admin_whatsapp_phone).replace(/\D/g, ''));
     }
+    if (staff_whatsapp_phone !== undefined) {
+      upsert.run('staff_whatsapp_phone', String(staff_whatsapp_phone).replace(/\D/g, ''));
+    }
     if (agency_contact_phone !== undefined) {
       upsert.run('agency_contact_phone', String(agency_contact_phone).trim());
     }
@@ -1467,6 +1490,9 @@ exports.saveWhatsAppSettings = (req, res) => {
     }
     if (callmebot_api_key !== undefined) {
       upsert.run('callmebot_api_key', String(callmebot_api_key).trim());
+    }
+    if (staff_callmebot_api_key !== undefined) {
+      upsert.run('staff_callmebot_api_key', String(staff_callmebot_api_key).trim());
     }
     if (whatsapp_alerts_enabled !== undefined) {
       upsert.run('whatsapp_alerts_enabled', whatsapp_alerts_enabled ? '1' : '0');
@@ -1489,41 +1515,40 @@ exports.saveWhatsAppSettings = (req, res) => {
 /**
  * Admin: Test WhatsApp Alert to phone
  */
-exports.testWhatsAppAlert = (req, res) => {
+exports.testWhatsAppAlert = async (req, res) => {
   try {
     const { phone: rawPhone, api_key: rawKey } = req.body;
-    const phone = rawPhone ? String(rawPhone).replace(/\D/g, '') : '';
+    let phone = rawPhone ? String(rawPhone).replace(/\D/g, '') : '';
     const apiKey = rawKey ? String(rawKey).trim() : '';
 
     if (!phone || phone.length < 10) {
-      return res.status(400).json({ success: false, error: 'Valid 10+ digit WhatsApp phone number required (with country code, e.g. 919888888888)' });
+      return res.status(400).json({ success: false, error: 'Valid 10+ digit WhatsApp phone number required (with country code, e.g. 918146526257)' });
     }
+    if (phone.length === 10) phone = '91' + phone;
+
     if (!apiKey) {
-      return res.status(400).json({ success: false, error: 'CallMeBot API Key is required' });
+      return res.status(400).json({ success: false, error: 'CallMeBot API Key is required for this number' });
     }
 
     const testMessage = `✅ *TravelX Live Alert Connected!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Congratulations! Your WhatsApp Business is now connected to TravelX Special Fare Manager.
-You will now receive instant live alerts on this number whenever an agent books a seat!`;
+Congratulations! Your WhatsApp (+${phone}) is now connected to TravelX Special Fare Manager.
+You will now receive instant live alerts on this number whenever an agent books a seat, even when your system is CLOSED!`;
 
     const encoded = encodeURIComponent(testMessage);
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encoded}&apikey=${apiKey}`;
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encoded}&apikey=${encodeURIComponent(apiKey)}`;
 
-    https.get(url, (botRes) => {
-      let data = '';
-      botRes.on('data', chunk => data += chunk);
-      botRes.on('end', () => {
-        if (botRes.statusCode === 200 && !data.toLowerCase().includes('error')) {
-          return res.json({ success: true, message: 'Test message sent to your WhatsApp Business! Check your phone.' });
-        } else {
-          return res.status(400).json({ success: false, error: data || `CallMeBot returned HTTP ${botRes.statusCode}` });
-        }
-      });
-    }).on('error', (err) => {
-      return res.status(500).json({ success: false, error: `Connection failed: ${err.message}` });
-    });
-
+    try {
+      const botRes = await fetch(url, { signal: AbortSignal.timeout(12000) });
+      const data = await botRes.text();
+      if (botRes.status === 200 && !data.toLowerCase().includes('error')) {
+        return res.json({ success: true, message: `Test message sent to WhatsApp +${phone}! Check your phone.` });
+      } else {
+        return res.status(400).json({ success: false, error: data || `CallMeBot returned HTTP ${botRes.status}` });
+      }
+    } catch (fetchErr) {
+      return res.status(500).json({ success: false, error: `Connection failed: ${fetchErr.message}` });
+    }
   } catch (err) {
     console.error('Error testing WhatsApp alert:', err);
     return res.status(500).json({ success: false, error: 'Failed to dispatch test alert' });

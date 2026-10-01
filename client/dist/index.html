@@ -22,11 +22,19 @@
             el.href = '/manifest-staff.json';
           }
         } catch (_) {}
+
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js').catch(function(e) {
+              console.warn('SW registration:', e);
+            });
+          });
+        }
       })();
     </script>
     <title>TravelX Pro - Special Fare Manager & B2B Rates Portal</title>
-    <script type="module" crossorigin src="/assets/index-BF39xcoG.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DGZ4Wxmy.css">
+    <script type="module" crossorigin src="/assets/index-gN2xSWZB.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CBFacisg.css">
   </head>
   <body>
     <div id="root"></div>
