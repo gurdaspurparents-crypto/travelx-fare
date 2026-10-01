@@ -95,6 +95,28 @@ async function sendTelegramAlertToUser(username, text) {
   }
 }
 
+async function sendNtfyAlert(title, message) {
+  try {
+    const topicSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'ntfy_topic'").get();
+    const topic = topicSetting?.value ? topicSetting.value.trim() : 'travelx-alerts-8286';
+    if (!topic) return;
+
+    await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
+      method: 'POST',
+      headers: {
+        'Title': title,
+        'Priority': 'urgent',
+        'Tags': 'airplane,bell'
+      },
+      body: message,
+      signal: AbortSignal.timeout(8000)
+    });
+    console.log(`[ntfy Alert] Sent to https://ntfy.sh/${topic}`);
+  } catch (e) {
+    console.warn('[ntfy Alert Error]', e.message);
+  }
+}
+
 /**
  * Dispatch automatic instant alert to Admin and Staff WhatsApp Business and Telegram
  */
@@ -164,6 +186,12 @@ ${booking.vendor_name ? `• *Winning Vendor:* ${booking.vendor_name} (Net: ₹$
     if (staffTg) {
       sendTelegramAlertToUser(staffTg, staffText);
     }
+
+    // High-priority 24/7 mobile siren alert via ntfy (Android & iPhone push notification)
+    sendNtfyAlert(
+      `🚨 New Booking #${booking.request_ref}`,
+      `${booking.agency_name} booked ${booking.pax_count} Pax for ${booking.origin} ➔ ${booking.destination} (₹${Number(booking.total_amount).toLocaleString('en-IN')})`
+    );
   } catch (err) {
     console.warn('Alert warning:', err.message);
   }
@@ -195,6 +223,8 @@ function sendWhatsAppCustomAlert(text) {
     if (staffApiKey) sendWhatsAppAlertToPhone(staffPhone, staffApiKey, text);
     if (adminTg) sendTelegramAlertToUser(adminTg, text);
     if (staffTg) sendTelegramAlertToUser(staffTg, text);
+
+    sendNtfyAlert('⚡ TravelX Booking Update', text.replace(/\*/g, ''));
   } catch (err) {
     console.warn('Custom alert warning:', err.message);
   }
@@ -1466,6 +1496,7 @@ exports.getWhatsAppSettings = (req, res) => {
         staff_callmebot_api_key: settings.staff_callmebot_api_key || '',
         admin_telegram_username: settings.admin_telegram_username || '',
         staff_telegram_username: settings.staff_telegram_username || '',
+        ntfy_topic: settings.ntfy_topic || 'travelx-alerts-8286',
         whatsapp_alerts_enabled: settings.whatsapp_alerts_enabled !== '0',
         auto_expiry_enabled: settings.auto_expiry_enabled !== '0',
         maintenance_mode: settings.maintenance_mode === '1'
@@ -1493,6 +1524,7 @@ exports.saveWhatsAppSettings = (req, res) => {
       staff_callmebot_api_key,
       admin_telegram_username,
       staff_telegram_username,
+      ntfy_topic,
       whatsapp_alerts_enabled,
       auto_expiry_enabled,
       maintenance_mode
@@ -1536,6 +1568,9 @@ exports.saveWhatsAppSettings = (req, res) => {
     if (staff_telegram_username !== undefined) {
       upsert.run('staff_telegram_username', String(staff_telegram_username).trim());
     }
+    if (ntfy_topic !== undefined) {
+      upsert.run('ntfy_topic', String(ntfy_topic).trim());
+    }
     if (whatsapp_alerts_enabled !== undefined) {
       upsert.run('whatsapp_alerts_enabled', whatsapp_alerts_enabled ? '1' : '0');
     }
@@ -1555,11 +1590,31 @@ exports.saveWhatsAppSettings = (req, res) => {
 };
 
 /**
- * Admin: Test WhatsApp or Telegram Alert
+ * Admin: Test WhatsApp, Telegram or ntfy Alert
  */
 exports.testWhatsAppAlert = async (req, res) => {
   try {
-    const { phone: rawPhone, api_key: rawKey, type, telegram_username } = req.body;
+    const { phone: rawPhone, api_key: rawKey, type, telegram_username, ntfy_topic } = req.body;
+
+    // ntfy Instant Mobile Siren Test
+    if (type === 'ntfy' || ntfy_topic) {
+      const topic = ntfy_topic || 'travelx-alerts-8286';
+      try {
+        await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
+          method: 'POST',
+          headers: {
+            'Title': '🔔 TravelX Siren Alert Active!',
+            'Priority': 'urgent',
+            'Tags': 'tada,rotating_light'
+          },
+          body: 'Congratulations! This phone is now connected to TravelX 24/7 Mobile Alerts. You will hear a loud sound when agents book seats, even with PC OFF!',
+          signal: AbortSignal.timeout(8000)
+        });
+        return res.json({ success: true, message: `Test siren sent to ntfy topic '${topic}'! Check your mobile.` });
+      } catch (err) {
+        return res.status(500).json({ success: false, error: `ntfy test failed: ${err.message}` });
+      }
+    }
 
     // Telegram Test
     if (type === 'telegram' || telegram_username) {

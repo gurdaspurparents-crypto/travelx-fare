@@ -140,6 +140,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     staff_callmebot_api_key: '',
     admin_telegram_username: '',
     staff_telegram_username: '',
+    ntfy_topic: 'travelx-alerts-8286',
     whatsapp_alerts_enabled: true,
     auto_expiry_enabled: true
   });
@@ -902,7 +903,12 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
       setTestAlertLoading(true);
       setTestAlertStatus(null);
       let res;
-      if (target === 'admin_tg') {
+      if (target === 'ntfy') {
+        res = await api.testWhatsAppAlert({
+          type: 'ntfy',
+          ntfy_topic: settingsData.ntfy_topic || 'travelx-alerts-8286'
+        });
+      } else if (target === 'admin_tg') {
         res = await api.testWhatsAppAlert({
           type: 'telegram',
           telegram_username: settingsData.admin_telegram_username
@@ -2451,41 +2457,82 @@ Thank you for booking with TravelX!`;
                   <span>24/7 Mobile Alerts when Computer is OFF ("System Band Ho")</span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Jab laptop/PC band ho ya phone lock ho, browser background sound play nahi kar sakta (Android/iOS battery rule). Iske liye <b>WhatsApp</b> aur <b>Telegram</b> alerts integrate kiye gaye hain jo phone lock hone par bhi loud ringtone ke saath notify karenge!
+                  Jab laptop/PC band ho ya phone lock ho, browser background sound play nahi kar sakta (Android/iOS battery rule). Iske liye <b>ntfy Mobile Siren</b>, <b>WhatsApp</b>, ya <b>Telegram</b> alerts integrate kiye gaye hain jo phone lock hone par bhi loud siren/ringtone ke saath notify karenge!
                 </p>
-                <div className="bg-amber-950/60 border border-amber-500/40 rounded-xl p-2.5 text-[11px] text-amber-200">
-                  <div className="font-bold flex items-center space-x-1 text-amber-300 mb-0.5">
-                    <span>⚠️</span>
-                    <span>Important WhatsApp Activation Note:</span>
-                  </div>
-                  <div>
-                    CallMeBot ka purana number (<span className="line-through text-amber-400">+34 911 98 11 11</span>) WhatsApp ne deactivate kar diya hai.
-                    Ab naya official bot number <b>+34 684 783 708</b> hai! Niche diye gaye direct button se WhatsApp open karein:
-                  </div>
+              </div>
+
+              {/* 0. INSTANT MOBILE SIREN (ntfy.sh - 100% FREE, NO WAIT, ZERO BAN RISK) */}
+              <div className="p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border-2 border-amber-400 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-amber-950 flex items-center space-x-1.5">
+                    <span className="text-base">🚨</span>
+                    <span>100% Guaranteed 24/7 Mobile Siren (Android & iPhone - No Waiting!)</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+                    Recommended
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-amber-950 space-y-1 leading-relaxed bg-white/70 p-2.5 rounded-xl border border-amber-200">
+                  <p><b>Aapke phone par turant 24/7 loud alert bajane ka sabse aasan tarika:</b></p>
+                  <ol className="list-decimal pl-4 space-y-1 text-slate-800">
+                    <li>Apne mobile par Play Store / App Store se free app download karein: <b>ntfy</b></li>
+                    <li>App open karke <b>+ (Subscribe)</b> dabayein aur Topic name daalein: <code className="bg-amber-100 font-bold px-1 py-0.5 rounded text-amber-950">travelx-alerts-8286</code></li>
+                    <li>Niche <b>"Test Mobile Siren"</b> button dabakar check karein. Phone lock screen par bhi loud emergency alert bajaayega!</li>
+                  </ol>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Topic: travelx-alerts-8286"
+                    value={settingsData.ntfy_topic || 'travelx-alerts-8286'}
+                    onChange={(e) => setSettingsData({ ...settingsData, ntfy_topic: e.target.value.trim() })}
+                    className="flex-1 px-3 py-2 bg-white rounded-xl border border-amber-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-amber-600"
+                  />
+                  <button
+                    type="button"
+                    disabled={testAlertLoading}
+                    onClick={() => handleTestWhatsAppAlert('ntfy')}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-extrabold rounded-xl transition cursor-pointer text-xs flex items-center space-x-1.5 shadow-md active:scale-95 shrink-0"
+                  >
+                    {testAlertLoading && testTarget === 'ntfy' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🔊 Test Mobile Siren</span>}
+                  </button>
                 </div>
               </div>
 
               {/* 1. Admin WhatsApp Alert (+91 81465 26257) */}
               <div className="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-200 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-1.5">
                   <span className="text-xs font-black text-emerald-950 flex items-center space-x-1.5">
                     <span>👑</span>
                     <span>Admin WhatsApp Alert (+91 81465 26257)</span>
                   </span>
-                  <a
-                    href="https://wa.me/34684783708?text=I%20allow%20callmebot%20to%20send%20me%20messages"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] font-extrabold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center space-x-0.5 bg-emerald-100/80 px-2 py-0.5 rounded-lg border border-emerald-300"
-                  >
-                    <span>1. Click to Activate (+34 684 783 708)</span>
-                    <ExternalLink className="w-3 h-3 ml-0.5" />
-                  </a>
+                  <div className="flex items-center space-x-1.5">
+                    <a
+                      href="https://wa.me/34684783708?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-extrabold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center space-x-0.5 bg-emerald-100/80 px-2 py-0.5 rounded-lg border border-emerald-300"
+                    >
+                      <span>Bot 1 (+34 684 783 708)</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5" />
+                    </a>
+                    <a
+                      href="https://wa.me/34623786449?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-extrabold text-teal-700 hover:text-teal-950 underline inline-flex items-center space-x-0.5 bg-teal-100/80 px-2 py-0.5 rounded-lg border border-teal-300"
+                    >
+                      <span>Bot 2 (+34 623 786 449)</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5" />
+                    </a>
+                  </div>
                 </div>
 
                 <p className="text-[10px] text-slate-500">
-                  Step 1: Upar button dabakar WhatsApp par message bhejein: <code className="bg-slate-200 px-1 rounded text-slate-900 font-bold">I allow callmebot to send me messages</code><br/>
-                  Step 2: Bot 1-2 minute me API Key bhejega. Us API Key ko niche daal kar Test karein.
+                  Upar dono bot numbers me se kisi ek par WhatsApp par message karein: <code className="bg-slate-200 px-1 rounded text-slate-900 font-bold">I allow callmebot to send me messages</code><br/>
+                  Bot se API Key aate hi niche daal kar Test karein.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2524,24 +2571,35 @@ Thank you for booking with TravelX!`;
 
               {/* 2. Staff WhatsApp Alert (+91 78145 08351) */}
               <div className="p-3.5 bg-blue-50/50 rounded-2xl border border-blue-200 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-1.5">
                   <span className="text-xs font-black text-blue-950 flex items-center space-x-1.5">
                     <span>🎧</span>
                     <span>Staff WhatsApp Alert (+91 78145 08351)</span>
                   </span>
-                  <a
-                    href="https://wa.me/34684783708?text=I%20allow%20callmebot%20to%20send%20me%20messages"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] font-extrabold text-blue-700 hover:text-blue-950 underline inline-flex items-center space-x-0.5 bg-blue-100/80 px-2 py-0.5 rounded-lg border border-blue-300"
-                  >
-                    <span>1. Click to Activate (+34 684 783 708)</span>
-                    <ExternalLink className="w-3 h-3 ml-0.5" />
-                  </a>
+                  <div className="flex items-center space-x-1.5">
+                    <a
+                      href="https://wa.me/34684783708?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-extrabold text-blue-700 hover:text-blue-950 underline inline-flex items-center space-x-0.5 bg-blue-100/80 px-2 py-0.5 rounded-lg border border-blue-300"
+                    >
+                      <span>Bot 1 (+34 684 783 708)</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5" />
+                    </a>
+                    <a
+                      href="https://wa.me/34623786449?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-extrabold text-indigo-700 hover:text-indigo-950 underline inline-flex items-center space-x-0.5 bg-indigo-100/80 px-2 py-0.5 rounded-lg border border-indigo-300"
+                    >
+                      <span>Bot 2 (+34 623 786 449)</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5" />
+                    </a>
+                  </div>
                 </div>
 
                 <p className="text-[10px] text-slate-500">
-                  Staff phone (+91 78145 08351) se upar link click karein ya number save karke WhatsApp message karein: <code className="bg-slate-200 px-1 rounded text-slate-900 font-bold">I allow callmebot to send me messages</code>
+                  Staff phone (+91 78145 08351) se upar dono bot numbers me se kisi ek par message karein: <code className="bg-slate-200 px-1 rounded text-slate-900 font-bold">I allow callmebot to send me messages</code>
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
