@@ -254,10 +254,28 @@ function initSchema() {
       updated_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
 
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      endpoint TEXT UNIQUE NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      role TEXT DEFAULT 'admin',
+      user_agent TEXT,
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_bookings_status ON booking_requests (status);
     CREATE INDEX IF NOT EXISTS idx_bookings_date ON booking_requests (created_at);
     CREATE INDEX IF NOT EXISTS idx_bookings_mobile ON booking_requests (agent_mobile);
   `);
+
+  try {
+    const pubKey = 'BPe2BBGQPCuIA7yYaCTLXtyYsCUwmShPHvYLXQH-EPXqKk7WNclZlaCp4Z56jFrnLrAaxqP7bvy2ngmjygK2QGk';
+    const privKey = 'PkBHJthkmpY_ISf1AAr-g76fpK8CVZ5u4HWK9Wc97sU';
+    const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');
+    insertSetting.run('vapid_public_key', pubKey);
+    insertSetting.run('vapid_private_key', privKey);
+  } catch (e) {}
 
   // Safe migrations: check columns first before ALTER TABLE to prevent error crashes
   function ensureColumn(table, column, type) {

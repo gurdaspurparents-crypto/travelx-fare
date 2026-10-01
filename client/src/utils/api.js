@@ -646,6 +646,25 @@ export const api = {
     });
   },
 
+  // Web Push 24/7 Mobile Native Notifications
+  getVapidPublicKey: async () => {
+    return safeFetch('/api/push/vapid-key');
+  },
+  subscribeWebPush: async (data) => {
+    return safeFetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+  testWebPush: async (data) => {
+    return safeFetch('/api/push/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {})
+    });
+  },
+
   publishAllFutureFares: async () => {
     return safeFetch('/api/export/publish-all-future', {
       method: 'POST',

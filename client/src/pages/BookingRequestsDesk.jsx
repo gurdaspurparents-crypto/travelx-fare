@@ -150,6 +150,8 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
   const [testAlertLoading, setTestAlertLoading] = useState(false);
   const [testTarget, setTestTarget] = useState(null);
   const [testAlertStatus, setTestAlertStatus] = useState(null);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   // Confirm with PNR Modal States
   const [confirmingBooking, setConfirmingBooking] = useState(null);
@@ -207,6 +209,87 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
       });
     };
   }, []);
+
+  // Helper to convert base64 VAPID public key to Uint8Array for PushManager
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  // Check if browser already has an active push subscription on load
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.pushManager.getSubscription().then(sub => {
+          if (sub) {
+            setPushSubscribed(true);
+            setDesktopNotifsEnabled(true);
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+  }, []);
+
+  // 1-Click Activate 24/7 Mobile Native Push Notification
+  const handleEnableMobilePush = async () => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      return requestDesktopPermission();
+    }
+    try {
+      setPushLoading(true);
+      // Unconditionally resume AudioContext on gesture
+      try {
+        const audioCtx = getPersistentAudioCtx();
+        if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+      } catch (_) {}
+
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        alert('Notification permission was denied. Please allow notifications in your phone/browser settings.');
+        setPushLoading(false);
+        return;
+      }
+
+      setDesktopNotifsEnabled(true);
+      const reg = await navigator.serviceWorker.ready;
+      const vapidRes = await api.getVapidPublicKey();
+      if (!vapidRes?.success || !vapidRes?.publicKey) {
+        throw new Error('Failed to retrieve VAPID key from server');
+      }
+
+      const convertedKey = urlBase64ToUint8Array(vapidRes.publicKey);
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey
+        });
+      }
+
+      await api.subscribeWebPush({
+        subscription: sub,
+        role: isStaffMode ? 'staff' : 'admin'
+      });
+
+      setPushSubscribed(true);
+      playNotificationChime();
+
+      // Trigger test notification immediately to confirm
+      await api.testWebPush({ subscription: sub });
+      alert('🎉 Phone Successfully Paired! Test alert sent with loud sound. Your phone will now receive live alerts 24/7 even when your laptop/PC is shut down!');
+    } catch (err) {
+      console.error('Error enabling mobile push:', err);
+      handleTestAlerts();
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   // Request browser desktop notification permission
   const requestDesktopPermission = async () => {
@@ -1223,47 +1306,49 @@ Thank you for booking with TravelX!`;
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 0. NOTIFICATION & SOUND SETUP BANNER (STAFF & DESK)           */}
       {/* ───────────────────────────────────────────────────────────── */}
-      {!desktopNotifsEnabled ? (
-        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-3 sm:p-4 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-pulse">
+      {!pushSubscribed ? (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-3.5 sm:p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-pulse">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 text-xl shadow-inner">
+            <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 text-2xl shadow-inner">
               🔔
             </div>
             <div>
-              <h3 className="font-extrabold text-sm sm:text-base leading-snug">
-                Notification & Sound Chime Permission Required on this Device (PC / Mobile)!
+              <h3 className="font-black text-sm sm:text-base leading-snug">
+                Phone par 24/7 Notification & Siren Activate Karein (System Band Hone Par Bhi Aayega!)
               </h3>
-              <p className="text-xs text-amber-100 font-medium">
-                Click the button below to enable sound chimes, phone vibration, and popup alerts for incoming queries.
+              <p className="text-xs text-emerald-100 font-medium">
+                Niche button dabakar "Allow" karein. WhatsApp bot ke bina, sidha aapke phone par banking/Zomato app jaise loud alert bajega!
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={handleTestAlerts}
-            className="shrink-0 px-4 py-2.5 rounded-xl bg-white text-amber-900 font-black text-xs sm:text-sm hover:bg-amber-50 active:scale-95 transition shadow-md flex items-center space-x-2 cursor-pointer"
+            disabled={pushLoading}
+            onClick={handleEnableMobilePush}
+            className="shrink-0 px-5 py-3 rounded-xl bg-white text-emerald-950 font-black text-xs sm:text-sm hover:bg-emerald-50 active:scale-95 transition shadow-lg flex items-center space-x-2 cursor-pointer"
           >
-            <span>🔊 Enable & Test Sound / Vibration</span>
+            {pushLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>⚡ Enable 24/7 Mobile Alerts & Test Siren</span>}
             <span>➔</span>
           </button>
         </div>
       ) : (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs shadow-2xs">
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-950 px-3.5 py-2.5 rounded-xl flex items-center justify-between text-xs shadow-xs">
           <div className="flex items-center space-x-2">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
-            <span className="font-bold">
-              🔔 Sound Chime, Vibration & Desktop/Mobile Alerts are ACTIVE on this device
+            <span className="font-extrabold text-emerald-900">
+              🔔 24/7 Mobile Native Push Alerts Active! Screen lock ya computer band hone par bhi phone par loud sound bajega.
             </span>
           </div>
           <button
             type="button"
-            onClick={handleTestAlerts}
+            disabled={pushLoading}
+            onClick={handleEnableMobilePush}
             className="text-[11px] font-black text-emerald-800 hover:text-emerald-950 underline cursor-pointer flex items-center space-x-1"
           >
-            <span>🔊 Test Speaker Volume</span>
+            <span>🔊 Test Phone Siren Now</span>
           </button>
         </div>
       )}

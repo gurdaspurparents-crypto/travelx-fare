@@ -95,6 +95,11 @@ app.post('/api/settings/whatsapp/test', bookingController.testWhatsAppAlert);
 app.get('/api/settings/backup/download', settingsController.downloadDatabaseBackup);
 app.post('/api/settings/backup/restore', settingsController.uploadBackupMiddleware, settingsController.restoreDatabaseBackup);
 
+// Web Push 24/7 Mobile Notifications
+app.get('/api/push/vapid-key', bookingController.getVapidPublicKey);
+app.post('/api/push/subscribe', bookingController.subscribeWebPush);
+app.post('/api/push/test', bookingController.testWebPush);
+
 // Dashboard APIs
 app.get('/api/dashboard/stats', compareController.getDashboardStats);
 

@@ -3,8 +3,19 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
+const webpush = require('web-push');
 const db = require('../config/database');
 const { invalidateFaresCache } = require('./publicAgentController');
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BPe2BBGQPCuIA7yYaCTLXtyYsCUwmShPHvYLXQH-EPXqKk7WNclZlaCp4Z56jFrnLrAaxqP7bvy2ngmjygK2QGk';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'PkBHJthkmpY_ISf1AAr-g76fpK8CVZ5u4HWK9Wc97sU';
+const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:desk@travelx.co.in';
+
+try {
+  webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} catch (e) {
+  console.warn('VAPID setup warning:', e.message);
+}
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const passportDir = path.join(uploadsDir, 'passports');
@@ -117,6 +128,47 @@ async function sendNtfyAlert(title, message) {
   }
 }
 
+async function sendWebPushNotification(title, body, url = '/admin') {
+  try {
+    const subs = db.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions').all();
+    if (!subs || subs.length === 0) return;
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      icon: '/travelx-logo.png',
+      badge: '/travelx-logo.png',
+      tag: 'travelx-alert-' + Date.now(),
+      vibrate: [600, 150, 600, 150, 600, 150, 900],
+      data: { url }
+    });
+
+    const deleteStmt = db.prepare('DELETE FROM push_subscriptions WHERE id = ?');
+
+    for (const sub of subs) {
+      const pushSubscription = {
+        endpoint: sub.endpoint,
+        keys: {
+          p256dh: sub.p256dh,
+          auth: sub.auth
+        }
+      };
+
+      webpush.sendNotification(pushSubscription, payload).catch((err) => {
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          console.log(`[WebPush] Removing expired subscription #${sub.id}`);
+          try { deleteStmt.run(sub.id); } catch (_) {}
+        } else {
+          console.warn(`[WebPush Error] Sub #${sub.id}:`, err.message);
+        }
+      });
+    }
+    console.log(`[WebPush] Dispatched notification to ${subs.length} registered device(s)`);
+  } catch (err) {
+    console.warn('[WebPush Dispatch Warning]', err.message);
+  }
+}
+
 /**
  * Dispatch automatic instant alert to Admin and Staff WhatsApp Business and Telegram
  */
@@ -192,6 +244,13 @@ ${booking.vendor_name ? `• *Winning Vendor:* ${booking.vendor_name} (Net: ₹$
       `🚨 New Booking #${booking.request_ref}`,
       `${booking.agency_name} booked ${booking.pax_count} Pax for ${booking.origin} ➔ ${booking.destination} (₹${Number(booking.total_amount).toLocaleString('en-IN')})`
     );
+
+    // Native Web Push Notification to paired Android & iPhone home screen apps
+    sendWebPushNotification(
+      `🚨 New Booking #${booking.request_ref}`,
+      `${booking.agency_name} • ${booking.origin} ➔ ${booking.destination} (${booking.pax_count} Pax) • ₹${Number(booking.total_amount).toLocaleString('en-IN')}`,
+      '/admin'
+    );
   } catch (err) {
     console.warn('Alert warning:', err.message);
   }
@@ -225,6 +284,7 @@ function sendWhatsAppCustomAlert(text) {
     if (staffTg) sendTelegramAlertToUser(staffTg, text);
 
     sendNtfyAlert('⚡ TravelX Booking Update', text.replace(/\*/g, ''));
+    sendWebPushNotification('⚡ TravelX Booking Update', text.replace(/\*/g, ''), '/admin');
   } catch (err) {
     console.warn('Custom alert warning:', err.message);
   }
@@ -1678,5 +1738,80 @@ You will now receive instant live alerts on this number whenever an agent books 
   } catch (err) {
     console.error('Error testing WhatsApp alert:', err);
     return res.status(500).json({ success: false, error: 'Failed to dispatch test alert' });
+  }
+};
+
+/**
+ * Web Push: Get VAPID Public Key for client-side push subscription
+ */
+exports.getVapidPublicKey = (req, res) => {
+  return res.json({ success: true, publicKey: VAPID_PUBLIC_KEY });
+};
+
+/**
+ * Web Push: Save PushSubscription from mobile/desktop browser
+ */
+exports.subscribeWebPush = (req, res) => {
+  try {
+    const { subscription, role } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ success: false, error: 'Invalid push subscription payload' });
+    }
+
+    const { endpoint, keys } = subscription;
+    const { p256dh, auth } = keys;
+    const userAgent = req.headers['user-agent'] || '';
+
+    const stmt = db.prepare(`
+      INSERT INTO push_subscriptions (endpoint, p256dh, auth, role, user_agent, created_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      ON CONFLICT(endpoint) DO UPDATE SET
+        p256dh = excluded.p256dh,
+        auth = excluded.auth,
+        role = excluded.role,
+        user_agent = excluded.user_agent,
+        created_at = datetime('now', 'localtime')
+    `);
+
+    stmt.run(endpoint, p256dh, auth, role || 'admin', userAgent);
+    console.log(`[WebPush] Registered push subscriber for ${role || 'admin'}`);
+
+    return res.json({ success: true, message: 'Push subscription successfully registered!' });
+  } catch (err) {
+    console.error('Error saving push subscription:', err);
+    return res.status(500).json({ success: false, error: 'Failed to register push subscription' });
+  }
+};
+
+/**
+ * Web Push: Trigger instant test push to device
+ */
+exports.testWebPush = async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    const testPayload = JSON.stringify({
+      title: '🔔 TravelX 24/7 Mobile Alert Active!',
+      body: 'Success! Your mobile device is now paired. You will receive instant notifications with sound & vibration even when locked or computer is OFF!',
+      icon: '/travelx-logo.png',
+      badge: '/travelx-logo.png',
+      tag: 'travelx-test-' + Date.now(),
+      vibrate: [600, 150, 600, 150, 600, 150, 900],
+      data: { url: '/admin' }
+    });
+
+    if (subscription && subscription.endpoint && subscription.keys) {
+      await webpush.sendNotification(subscription, testPayload);
+      return res.json({ success: true, message: 'Test notification sent directly to your phone! Check your screen.' });
+    } else {
+      await sendWebPushNotification(
+        '🔔 TravelX 24/7 Mobile Alert Active!',
+        'Success! Your mobile device is now paired. You will receive instant notifications with sound & vibration even when locked!',
+        '/admin'
+      );
+      return res.json({ success: true, message: 'Test notification dispatched to all paired devices!' });
+    }
+  } catch (err) {
+    console.error('Error testing web push:', err);
+    return res.status(500).json({ success: false, error: `Push delivery failed: ${err.message}` });
   }
 };

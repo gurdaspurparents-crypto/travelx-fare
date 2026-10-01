@@ -31,12 +31,13 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon,
-      badge: data.badge,
-      tag: data.tag,
-      vibrate: data.vibrate,
+      icon: data.icon || '/travelx-logo.png',
+      badge: data.badge || '/travelx-logo.png',
+      tag: data.tag || ('travelx-alert-' + Date.now()),
+      vibrate: data.vibrate || [600, 150, 600, 150, 600, 150, 900],
       requireInteraction: true,
-      data: data.data
+      renotify: true,
+      data: data.data || { url: '/admin' }
     })
   );
 });
