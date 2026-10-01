@@ -2,21 +2,109 @@
  * Airline Code to Full Name Mapping and Helper
  */
 export const AIRLINE_NAMES = {
+  // India Domestic & Regional
   AI: 'Air India',
   '6E': 'IndiGo',
   IX: 'Air India Express',
   SG: 'SpiceJet',
   UK: 'Vistara',
-  G9: 'Air Arabia',
-  FZ: 'Flydubai',
+  QP: 'Akasa Air',
+  G8: 'Go First',
+  I5: 'AIX Connect',
+  '9I': 'Alliance Air',
+  S5: 'Star Air',
+  IC: 'Fly91',
+
+  // Middle East & Gulf
   EK: 'Emirates',
-  WY: 'Oman Air',
+  FZ: 'Flydubai',
+  G9: 'Air Arabia',
+  '3L': 'Air Arabia Abu Dhabi',
+  EY: 'Etihad Airways',
   QR: 'Qatar Airways',
   SV: 'Saudia',
-  KU: 'Kuwait Airways',
+  WY: 'Oman Air',
   GF: 'Gulf Air',
-  EY: 'Etihad Airways',
-  QP: 'Akasa Air'
+  KU: 'Kuwait Airways',
+  J9: 'Jazeera Airways',
+  XY: 'Flynas',
+  F3: 'Flyadeal',
+  OV: 'SalamAir',
+  RJ: 'Royal Jordanian',
+  ME: 'Middle East Airlines',
+
+  // Europe & Transatlantic
+  KL: 'KLM',
+  AF: 'Air France',
+  LH: 'Lufthansa',
+  BA: 'British Airways',
+  VS: 'Virgin Atlantic',
+  LX: 'Swiss',
+  OS: 'Austrian Airlines',
+  SN: 'Brussels Airlines',
+  IB: 'Iberia',
+  AZ: 'ITA Airways',
+  AY: 'Finnair',
+  SK: 'SAS',
+  LO: 'LOT Polish Airlines',
+  TP: 'TAP Air Portugal',
+  EI: 'Aer Lingus',
+  TK: 'Turkish Airlines',
+  PC: 'Pegasus Airlines',
+
+  // North America & Canada
+  AC: 'Air Canada',
+  WS: 'WestJet',
+  UA: 'United Airlines',
+  AA: 'American Airlines',
+  DL: 'Delta Air Lines',
+
+  // Southeast Asia & Far East
+  SQ: 'Singapore Airlines',
+  TR: 'Scoot',
+  MH: 'Malaysia Airlines',
+  AK: 'AirAsia',
+  D7: 'AirAsia X',
+  OD: 'Batik Air',
+  TG: 'Thai Airways',
+  FD: 'Thai AirAsia',
+  XJ: 'Thai AirAsia X',
+  SL: 'Thai Lion Air',
+  VZ: 'Thai Vietjet Air',
+  VJ: 'VietJet Air',
+  VN: 'Vietnam Airlines',
+  CX: 'Cathay Pacific',
+  JL: 'Japan Airlines',
+  NH: 'ANA',
+  KE: 'Korean Air',
+  OZ: 'Asiana Airlines',
+  CI: 'China Airlines',
+  BR: 'EVA Air',
+  PR: 'Philippine Airlines',
+  GA: 'Garuda Indonesia',
+
+  // South Asia
+  UL: 'SriLankan Airlines',
+  RA: 'Nepal Airlines',
+  BG: 'Biman Bangladesh',
+  BS: 'US-Bangla Airlines',
+  KB: 'Drukair',
+  B3: 'Bhutan Airlines',
+  H9: 'Himalaya Airlines',
+  RQ: 'Kam Air',
+
+  // Central Asia & CIS
+  HY: 'Uzbekistan Airways',
+  KC: 'Air Astana',
+  T5: 'Turkmenistan Airlines',
+  W5: 'Mahan Air',
+
+  // Africa & Oceania
+  ET: 'Ethiopian Airlines',
+  MS: 'EgyptAir',
+  KQ: 'Kenya Airways',
+  QF: 'Qantas',
+  NZ: 'Air New Zealand'
 };
 
 /**
@@ -25,25 +113,32 @@ export const AIRLINE_NAMES = {
 export function getAirlineName(codeOrName, airlinesList = []) {
   if (!codeOrName) return '';
   const trimmed = String(codeOrName).trim();
-  
-  // 1. Check if it's in master airlines list
+  const upper = trimmed.toUpperCase();
+
+  // 1. Check in standard mapping by exact code
+  if (AIRLINE_NAMES[upper]) {
+    return AIRLINE_NAMES[upper];
+  }
+
+  // 2. Check if it's already one of our full names (case-insensitive)
+  const existingName = Object.values(AIRLINE_NAMES).find(
+    name => name.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (existingName) return existingName;
+
+  // 3. Check in master airlines list (from DB)
   if (Array.isArray(airlinesList)) {
     const found = airlinesList.find(
-      a => a.code?.toUpperCase() === trimmed.toUpperCase() || 
+      a => a.code?.toUpperCase() === upper || 
            a.name?.toLowerCase() === trimmed.toLowerCase()
     );
     if (found && found.name) return found.name;
   }
 
-  // 2. Check in standard mapping
-  const upper = trimmed.toUpperCase();
-  if (AIRLINE_NAMES[upper]) {
-    return AIRLINE_NAMES[upper];
+  // 4. If codeOrName is already a descriptive full name (more than 3 chars and not a 2/3 letter code)
+  if (trimmed.length > 3 && !/^[A-Z0-9]{2,3}$/.test(trimmed)) {
+    return trimmed;
   }
-
-  // 3. Check case-insensitive key
-  const matchKey = Object.keys(AIRLINE_NAMES).find(k => k.toLowerCase() === trimmed.toLowerCase());
-  if (matchKey) return AIRLINE_NAMES[matchKey];
 
   return trimmed;
 }

@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { formatRouteName } from './airportHelper';
+import { getAirlineName } from './airlineHelper';
 import { TRAVELX_LOGO_BASE64, IATA_LOGO_BASE64 } from '../assets/logoBase64';
 
 /**
@@ -240,7 +241,7 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
     const publishFare = (Number(item.publish_fare) && Number(item.publish_fare) > 0)
       ? Number(item.publish_fare)
       : (net + margin);
-    const airline = item.airline_name || item.airline_code || '';
+    const airline = getAirlineName(item.airline_code) || getAirlineName(item.airline_name) || item.airline_name || item.airline_code || '';
     const route = item.route || formatRouteName(item.origin, item.destination, 'TO');
     const dates = item.date_label || '';
 
@@ -359,7 +360,7 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
     const publishFare = (Number(f.publish_fare) && Number(f.publish_fare) > 0)
       ? Number(f.publish_fare)
       : (net + margin);
-    const airline = f.airline_name || f.airline_code || '';
+    const airline = getAirlineName(f.airline_code) || getAirlineName(f.airline_name) || f.airline_name || f.airline_code || '';
     const route = formatRouteName(f.origin, f.destination, 'TO');
 
     row.getCell(1).value = idx + 1;
@@ -475,7 +476,7 @@ export async function exportComparisonDeskToExcel(sectorGroups = [], customFileN
         sno: counter++,
         sector: formatRouteName(group.origin, group.destination, 'TO'),
         travel_date: group.travel_date,
-        airline: group.airline_name || group.airline_code,
+        airline: getAirlineName(group.airline_code) || getAirlineName(group.airline_name) || group.airline_name || group.airline_code || '',
         fare: Number(group.best_net_fare) || 0,
         best_vendor: group.best_vendor_name,
         quotes: allQuotes,

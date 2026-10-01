@@ -883,7 +883,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                           
                           <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60">
                             <span className="font-extrabold text-slate-900 text-xs">
-                              {streakItem.airline_name || streakItem.airline_code}
+                              {getAirlineName(streakItem.airline_code, masterData?.airlines) || getAirlineName(streakItem.airline_name, masterData?.airlines) || streakItem.airline_name || streakItem.airline_code}
                             </span>
                           </td>
 
@@ -947,7 +947,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
 
                           <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60">
                             <span className="font-extrabold text-slate-900 text-xs">
-                              {f.airline_name || getAirlineName(f.airline_code, masterData?.airlines)}
+                              {getAirlineName(f.airline_code, masterData?.airlines) || getAirlineName(f.airline_name, masterData?.airlines) || f.airline_name || f.airline_code}
                             </span>
                           </td>
 

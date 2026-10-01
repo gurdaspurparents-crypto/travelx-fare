@@ -137,11 +137,15 @@ export function groupFaresByDateRanges(faresList = []) {
     // 2. Group by Airline (Standardized Name)
     const airlineMap = new Map();
     for (const f of routeFares) {
-      const airKey = getAirlineName(f.airline_code || f.airline_name) || f.airline_name || f.airline_code || 'Airline';
+      const airCode = f.airline_code || '';
+      const airKey = getAirlineName(airCode) || getAirlineName(f.airline_name) || f.airline_name || airCode || 'Airline';
       if (!airlineMap.has(airKey)) {
         airlineMap.set(airKey, []);
       }
-      airlineMap.get(airKey).push(f);
+      airlineMap.get(airKey).push({
+        ...f,
+        airline_name: airKey
+      });
     }
 
     for (const [airName, airFares] of airlineMap.entries()) {
@@ -265,7 +269,8 @@ function createConsolidatedItem(routeKey, streak) {
   }
 
   const allFareIds = Array.from(new Set(streak.flatMap(s => s.fare_ids || [s.id]).filter(Boolean)));
-  const airName = getAirlineName(first.airline_code || first.airline_name) || first.airline_name || first.airline_code;
+  const airCode = first.airline_code || '';
+  const airName = getAirlineName(airCode) || getAirlineName(first.airline_name) || first.airline_name || airCode || 'Airline';
 
   return {
     id: `streak-${first.id}-${last.id}-${streak.length}`,
@@ -308,8 +313,9 @@ export function formatWhatsAppBroadcast(faresList, options = {}) {
     for (const f of faresList) {
       const d = formatDayMonth(f.travel_date);
       const routeText = formatRouteName(f.origin, f.destination, 'TO');
+      const airLabel = getAirlineName(f.airline_code) || getAirlineName(f.airline_name) || f.airline_name || f.airline_code || 'Airline';
       text += `🗓️ *${d}* | ${routeText}\n`;
-      text += `✈️ ${f.airline_name || f.airline_code} – *₹${Number(f.publish_fare).toLocaleString('en-IN')}* | ${f.baggage || '30kg'}\n\n`;
+      text += `✈️ ${airLabel} – *₹${Number(f.publish_fare).toLocaleString('en-IN')}* | ${f.baggage || '30kg'}\n\n`;
     }
     text += `${footer}\n`;
     return text;
@@ -325,7 +331,8 @@ export function formatWhatsAppBroadcast(faresList, options = {}) {
       routeMap.set(item.route, new Map());
     }
     const airMap = routeMap.get(item.route);
-    const airName = item.airline_name || item.airline_code || 'Airline';
+    const airCode = item.airline_code || '';
+    const airName = getAirlineName(airCode) || getAirlineName(item.airline_name) || item.airline_name || airCode || 'Airline';
     if (!airMap.has(airName)) {
       airMap.set(airName, []);
     }
@@ -338,8 +345,9 @@ export function formatWhatsAppBroadcast(faresList, options = {}) {
     text += `📍 *${routeKey}*\n\n`;
 
     for (const [airName, items] of airMap.entries()) {
+      const fullAirName = getAirlineName(items[0]?.airline_code) || getAirlineName(airName) || airName;
       const baggage = items[0]?.baggage ? ` (${items[0].baggage})` : '';
-      text += `✈️ *${airName}*${baggage}\n`;
+      text += `✈️ *${fullAirName}*${baggage}\n`;
 
       for (const item of items) {
         text += `• *${item.date_label}* – *₹${Number(item.publish_fare).toLocaleString('en-IN')}*\n`;

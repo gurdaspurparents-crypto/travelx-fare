@@ -9,30 +9,134 @@
 const { formatRouteName } = require('./airportHelper');
 
 const AIRLINE_NAMES = {
+  // India Domestic & Regional
   AI: 'Air India',
   '6E': 'IndiGo',
   IX: 'Air India Express',
   SG: 'SpiceJet',
   UK: 'Vistara',
-  G9: 'Air Arabia',
-  FZ: 'Flydubai',
+  QP: 'Akasa Air',
+  G8: 'Go First',
+  I5: 'AIX Connect',
+  '9I': 'Alliance Air',
+  S5: 'Star Air',
+  IC: 'Fly91',
+
+  // Middle East & Gulf
   EK: 'Emirates',
-  WY: 'Oman Air',
+  FZ: 'Flydubai',
+  G9: 'Air Arabia',
+  '3L': 'Air Arabia Abu Dhabi',
+  EY: 'Etihad Airways',
   QR: 'Qatar Airways',
   SV: 'Saudia',
-  KU: 'Kuwait Airways',
+  WY: 'Oman Air',
   GF: 'Gulf Air',
-  EY: 'Etihad Airways',
-  QP: 'Akasa Air'
+  KU: 'Kuwait Airways',
+  J9: 'Jazeera Airways',
+  XY: 'Flynas',
+  F3: 'Flyadeal',
+  OV: 'SalamAir',
+  RJ: 'Royal Jordanian',
+  ME: 'Middle East Airlines',
+
+  // Europe & Transatlantic
+  KL: 'KLM',
+  AF: 'Air France',
+  LH: 'Lufthansa',
+  BA: 'British Airways',
+  VS: 'Virgin Atlantic',
+  LX: 'Swiss',
+  OS: 'Austrian Airlines',
+  SN: 'Brussels Airlines',
+  IB: 'Iberia',
+  AZ: 'ITA Airways',
+  AY: 'Finnair',
+  SK: 'SAS',
+  LO: 'LOT Polish Airlines',
+  TP: 'TAP Air Portugal',
+  EI: 'Aer Lingus',
+  TK: 'Turkish Airlines',
+  PC: 'Pegasus Airlines',
+
+  // North America & Canada
+  AC: 'Air Canada',
+  WS: 'WestJet',
+  UA: 'United Airlines',
+  AA: 'American Airlines',
+  DL: 'Delta Air Lines',
+
+  // Southeast Asia & Far East
+  SQ: 'Singapore Airlines',
+  TR: 'Scoot',
+  MH: 'Malaysia Airlines',
+  AK: 'AirAsia',
+  D7: 'AirAsia X',
+  OD: 'Batik Air',
+  TG: 'Thai Airways',
+  FD: 'Thai AirAsia',
+  XJ: 'Thai AirAsia X',
+  SL: 'Thai Lion Air',
+  VZ: 'Thai Vietjet Air',
+  VJ: 'VietJet Air',
+  VN: 'Vietnam Airlines',
+  CX: 'Cathay Pacific',
+  JL: 'Japan Airlines',
+  NH: 'ANA',
+  KE: 'Korean Air',
+  OZ: 'Asiana Airlines',
+  CI: 'China Airlines',
+  BR: 'EVA Air',
+  PR: 'Philippine Airlines',
+  GA: 'Garuda Indonesia',
+
+  // South Asia
+  UL: 'SriLankan Airlines',
+  RA: 'Nepal Airlines',
+  BG: 'Biman Bangladesh',
+  BS: 'US-Bangla Airlines',
+  KB: 'Drukair',
+  B3: 'Bhutan Airlines',
+  H9: 'Himalaya Airlines',
+  RQ: 'Kam Air',
+
+  // Central Asia & CIS
+  HY: 'Uzbekistan Airways',
+  KC: 'Air Astana',
+  T5: 'Turkmenistan Airlines',
+  W5: 'Mahan Air',
+
+  // Africa & Oceania
+  ET: 'Ethiopian Airlines',
+  MS: 'EgyptAir',
+  KQ: 'Kenya Airways',
+  QF: 'Qantas',
+  NZ: 'Air New Zealand'
 };
 
 function getAirlineName(codeOrName) {
   if (!codeOrName) return '';
   const trimmed = String(codeOrName).trim();
   const upper = trimmed.toUpperCase();
+
+  // 1. Check in standard mapping by exact code
   if (AIRLINE_NAMES[upper]) return AIRLINE_NAMES[upper];
+
+  // 2. Check if it's already one of our full names (case-insensitive)
+  const existingName = Object.values(AIRLINE_NAMES).find(
+    name => name.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (existingName) return existingName;
+
+  // 3. Check case-insensitive key
   const matchKey = Object.keys(AIRLINE_NAMES).find(k => k.toLowerCase() === trimmed.toLowerCase());
   if (matchKey) return AIRLINE_NAMES[matchKey];
+
+  // 4. If codeOrName is already a descriptive full name (more than 3 chars and not a 2/3 letter code)
+  if (trimmed.length > 3 && !/^[A-Z0-9]{2,3}$/.test(trimmed)) {
+    return trimmed;
+  }
+
   return trimmed;
 }
 
@@ -164,11 +268,15 @@ function groupFaresByDateRanges(faresList = []) {
     // 2. Group by Airline (Standardized Name)
     const airlineMap = new Map();
     for (const f of routeFares) {
-      const airKey = getAirlineName(f.airline_code || f.airline_name) || f.airline_name || f.airline_code || 'Airline';
+      const airCode = f.airline_code || '';
+      const airKey = getAirlineName(airCode) || getAirlineName(f.airline_name) || f.airline_name || airCode || 'Airline';
       if (!airlineMap.has(airKey)) {
         airlineMap.set(airKey, []);
       }
-      airlineMap.get(airKey).push(f);
+      airlineMap.get(airKey).push({
+        ...f,
+        airline_name: airKey
+      });
     }
 
     for (const [airName, airFares] of airlineMap.entries()) {
@@ -292,7 +400,8 @@ function createConsolidatedItem(routeKey, streak) {
   }
 
   const allFareIds = Array.from(new Set(streak.flatMap(s => s.fare_ids || [s.id]).filter(Boolean)));
-  const airName = getAirlineName(first.airline_code || first.airline_name) || first.airline_name || first.airline_code;
+  const airCode = first.airline_code || '';
+  const airName = getAirlineName(airCode) || getAirlineName(first.airline_name) || first.airline_name || airCode || 'Airline';
 
   return {
     id: `streak-${first.id}-${last.id}-${streak.length}`,
@@ -334,8 +443,9 @@ function formatWhatsAppBroadcast(faresList, options = {}) {
     for (const f of faresList) {
       const d = formatDayMonth(f.travel_date);
       const routeText = formatRouteName(f.origin, f.destination, 'TO');
+      const airLabel = getAirlineName(f.airline_code) || getAirlineName(f.airline_name) || f.airline_name || f.airline_code || 'Airline';
       text += `🗓️ *${d}* | ${routeText}\n`;
-      text += `✈️ ${f.airline_name || f.airline_code} – *₹${Number(f.publish_fare).toLocaleString('en-IN')}* | ${f.baggage || '30kg'}\n\n`;
+      text += `✈️ ${airLabel} – *₹${Number(f.publish_fare).toLocaleString('en-IN')}* | ${f.baggage || '30kg'}\n\n`;
     }
     text += `${footer}\n`;
     return text;
@@ -351,7 +461,8 @@ function formatWhatsAppBroadcast(faresList, options = {}) {
       routeMap.set(item.route, new Map());
     }
     const airMap = routeMap.get(item.route);
-    const airName = item.airline_name || item.airline_code || 'Airline';
+    const airCode = item.airline_code || '';
+    const airName = getAirlineName(airCode) || getAirlineName(item.airline_name) || item.airline_name || airCode || 'Airline';
     if (!airMap.has(airName)) {
       airMap.set(airName, []);
     }
@@ -364,8 +475,9 @@ function formatWhatsAppBroadcast(faresList, options = {}) {
     text += `📍 *${routeKey}*\n\n`;
 
     for (const [airName, items] of airMap.entries()) {
+      const fullAirName = getAirlineName(items[0]?.airline_code) || getAirlineName(airName) || airName;
       const baggage = items[0]?.baggage ? ` (${items[0].baggage})` : '';
-      text += `✈️ *${airName}*${baggage}\n`;
+      text += `✈️ *${fullAirName}*${baggage}\n`;
 
       for (const item of items) {
         text += `• *${item.date_label}* – *₹${Number(item.publish_fare).toLocaleString('en-IN')}*\n`;
