@@ -143,8 +143,10 @@ export default function App() {
 
   const handlePinSubmit = async (e) => {
     e?.preventDefault();
+    const cleanPin = pinInput.trim();
+    if (!cleanPin) return;
     try {
-      const res = await api.adminLogin(pinInput.trim());
+      const res = await api.adminLogin(cleanPin);
       if (res?.success && res.token) {
         const role = res.role || (isStaffRoute ? 'staff' : 'admin');
         localStorage.setItem('travelx_admin_token', res.token);
@@ -155,8 +157,17 @@ export default function App() {
         setAdminUnlocked(true);
         setPinError(false);
         setPinInput('');
-        if (role !== 'staff' && !isStaffRoute) {
+        if (role === 'admin') {
+          setIsStaffRoute(false);
+          if (window.history.pushState) {
+            window.history.pushState({}, '', '/admin');
+          }
           await loadMasters();
+        } else if (role === 'staff') {
+          setIsStaffRoute(true);
+          if (window.history.pushState) {
+            window.history.pushState({}, '', '/staff');
+          }
         }
       } else {
         setPinError(true);
@@ -258,7 +269,7 @@ export default function App() {
               {isStaffScreen ? 'TravelX Staff Operations Desk' : 'TravelX Operations Desk'}
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              {isStaffScreen ? 'Staff Access • Enter Staff PIN (2233)' : 'Authorized Management Access Only'}
+              {isStaffScreen ? 'Staff Access • Security Authentication' : 'Authorized Management Access Only'}
             </p>
           </div>
 
@@ -269,12 +280,12 @@ export default function App() {
               </label>
               <input
                 type="password"
-                maxLength={6}
+                maxLength={20}
                 autoFocus
                 value={pinInput}
                 onChange={(e) => { setPinInput(e.target.value); setPinError(false); }}
-                placeholder="• • • •"
-                className={`w-full text-center text-2xl tracking-[0.6em] py-3.5 px-4 bg-slate-950 border ${pinError ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'} rounded-2xl text-white font-mono outline-none transition-all placeholder:text-slate-600 placeholder:tracking-normal`}
+                placeholder="Enter PIN"
+                className={`w-full text-center text-2xl tracking-[0.4em] py-3.5 px-4 bg-slate-950 border ${pinError ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'} rounded-2xl text-white font-mono outline-none transition-all placeholder:text-slate-600 placeholder:tracking-normal`}
               />
               {pinError && (
                 <p className="text-xs text-rose-400 text-center mt-2 font-medium">
@@ -293,13 +304,21 @@ export default function App() {
           </form>
 
           <div className="mt-6 pt-5 border-t border-slate-800/80 text-center flex flex-col space-y-2">
-            {!isStaffScreen && (
+            {!isStaffScreen ? (
               <button
                 type="button"
                 onClick={handleSwitchToStaff}
                 className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
               >
-                Switch to Staff Operations Login (PIN 2233) →
+                Switch to Staff Operations Login →
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSwitchToAdmin}
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+              >
+                Switch to Admin Management Login →
               </button>
             )}
             <button

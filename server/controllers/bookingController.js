@@ -1411,6 +1411,8 @@ exports.getWhatsAppSettings = (req, res) => {
         agency_email: settings.agency_email || 'desk@travelx.co.in',
         admin_pin: settings.admin_pin ? '********' : '',
         admin_pin_set: !!settings.admin_pin,
+        staff_pin: settings.staff_pin ? '********' : '',
+        staff_pin_set: !!settings.staff_pin,
         callmebot_api_key: settings.callmebot_api_key || '',
         whatsapp_alerts_enabled: settings.whatsapp_alerts_enabled === '1',
         auto_expiry_enabled: settings.auto_expiry_enabled !== '0',
@@ -1433,6 +1435,7 @@ exports.saveWhatsAppSettings = (req, res) => {
       agency_contact_phone,
       agency_email,
       admin_pin,
+      staff_pin,
       callmebot_api_key,
       whatsapp_alerts_enabled,
       auto_expiry_enabled,
@@ -1458,6 +1461,9 @@ exports.saveWhatsAppSettings = (req, res) => {
     }
     if (admin_pin !== undefined && String(admin_pin).trim() && String(admin_pin).trim() !== '********') {
       upsert.run('admin_pin', String(admin_pin).trim());
+    }
+    if (staff_pin !== undefined && String(staff_pin).trim() && String(staff_pin).trim() !== '********') {
+      upsert.run('staff_pin', String(staff_pin).trim());
     }
     if (callmebot_api_key !== undefined) {
       upsert.run('callmebot_api_key', String(callmebot_api_key).trim());

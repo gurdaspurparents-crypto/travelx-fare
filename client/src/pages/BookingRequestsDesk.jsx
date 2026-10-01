@@ -133,6 +133,8 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     agency_email: 'desk@travelx.co.in',
     admin_pin: '',
     admin_pin_set: false,
+    staff_pin: '',
+    staff_pin_set: false,
     callmebot_api_key: '',
     whatsapp_alerts_enabled: false,
     auto_expiry_enabled: true
@@ -755,7 +757,7 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     try {
       const res = await api.getWhatsAppSettings();
       if (res && res.success && res.settings) {
-        setSettingsData({ ...res.settings, admin_pin: '' });
+        setSettingsData({ ...res.settings, admin_pin: '', staff_pin: '' });
       }
     } catch (e) {
       console.warn('Error loading settings:', e);
@@ -815,6 +817,10 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
         delete payload.admin_pin;
       }
       delete payload.admin_pin_set;
+      if (!payload.staff_pin) {
+        delete payload.staff_pin;
+      }
+      delete payload.staff_pin_set;
       const res = await api.saveWhatsAppSettings(payload);
       if (res && res.success) {
         alert('Portal, security & WhatsApp settings saved successfully!');
@@ -2338,13 +2344,24 @@ Thank you for booking with TravelX!`;
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
                 <p className="text-xs font-bold text-slate-900">Admin & Agent Portal</p>
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Admin Desk PIN</label>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">Admin Desk PIN (Full Management)</label>
                   <input
                     type="password"
-                    maxLength={12}
-                    placeholder={settingsData.admin_pin_set ? 'PIN set — enter new PIN only to change' : 'Set 4–6 digit PIN'}
+                    maxLength={20}
+                    placeholder={settingsData.admin_pin_set ? 'Admin PIN set — enter new PIN only to change' : 'Set Admin PIN'}
                     value={settingsData.admin_pin}
                     onChange={(e) => setSettingsData({ ...settingsData, admin_pin: e.target.value.replace(/\s/g, '') })}
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">Staff Operations PIN (Inquiries Desk Only)</label>
+                  <input
+                    type="password"
+                    maxLength={20}
+                    placeholder={settingsData.staff_pin_set ? 'Staff PIN set — enter new PIN only to change' : 'Set Staff PIN'}
+                    value={settingsData.staff_pin}
+                    onChange={(e) => setSettingsData({ ...settingsData, staff_pin: e.target.value.replace(/\s/g, '') })}
                     className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-900"
                   />
                 </div>

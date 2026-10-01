@@ -17,7 +17,7 @@ function getAdminPin() {
   if (process.env.ADMIN_PIN && String(process.env.ADMIN_PIN).trim()) {
     return String(process.env.ADMIN_PIN).trim();
   }
-  return '7788';
+  return '8286#';
 }
 
 function getStaffPin() {
@@ -30,7 +30,7 @@ function getStaffPin() {
   if (process.env.STAFF_PIN && String(process.env.STAFF_PIN).trim()) {
     return String(process.env.STAFF_PIN).trim();
   }
-  return '2233';
+  return '2018#';
 }
 
 function issueToken(role = 'admin') {

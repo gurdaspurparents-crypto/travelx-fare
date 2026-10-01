@@ -14,7 +14,7 @@ echo.
 echo ============================================
 echo  SAVE yahan chalega (502 nahi aayega):
 echo  http://localhost:5173/admin
-echo  PIN: 7788
+echo  PIN: 8286#
 echo ============================================
 echo.
 echo IMPORTANT: rates.travelx.co.in MAT kholo

@@ -323,14 +323,23 @@ function initSchema() {
   try {
     const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');
     insertSetting.run('admin_whatsapp_phone', '918146526257');
-    insertSetting.run('admin_pin', process.env.ADMIN_PIN || '7788');
-    insertSetting.run('staff_pin', process.env.STAFF_PIN || '2233');
+    insertSetting.run('admin_pin', process.env.ADMIN_PIN || '8286#');
+    insertSetting.run('staff_pin', process.env.STAFF_PIN || '2018#');
     insertSetting.run('agency_contact_phone', '+91 81465 26257');
     insertSetting.run('agency_email', 'desk@travelx.co.in');
     insertSetting.run('callmebot_api_key', '');
     insertSetting.run('whatsapp_alerts_enabled', '0');
     insertSetting.run('auto_expiry_enabled', '1');
     insertSetting.run('maintenance_mode', '0');
+
+    // Ensure PIN credentials match requested production credentials (Admin: 8286#, Staff: 2018#)
+    const upsertPin = db.prepare(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES (?, ?, datetime('now', 'localtime'))
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `);
+    upsertPin.run('admin_pin', process.env.ADMIN_PIN || '8286#');
+    upsertPin.run('staff_pin', process.env.STAFF_PIN || '2018#');
 
     // Update any dummy/placeholder phone numbers in app_settings to Navkiran's official number
     db.prepare(`
@@ -370,7 +379,8 @@ function ensureAppSettingsDefaults() {
       VALUES (?, ?, datetime('now', 'localtime'))
       ON CONFLICT(key) DO NOTHING
     `);
-    upsert.run('admin_pin', process.env.ADMIN_PIN || '7788');
+    upsert.run('admin_pin', process.env.ADMIN_PIN || '8286#');
+    upsert.run('staff_pin', process.env.STAFF_PIN || '2018#');
     upsert.run('agency_contact_phone', '+91 81465 26257');
     upsert.run('admin_whatsapp_phone', '918146526257');
     upsert.run('agency_email', 'desk@travelx.co.in');
