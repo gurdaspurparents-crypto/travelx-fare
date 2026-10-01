@@ -79,8 +79,24 @@ async function sendWhatsAppAlertToPhone(phone, apiKey, text) {
   }
 }
 
+async function sendTelegramAlertToUser(username, text) {
+  if (!username) return;
+  let cleanUser = String(username).trim();
+  if (!cleanUser.startsWith('@')) cleanUser = '@' + cleanUser;
+  const encodedText = encodeURIComponent(text);
+  const url = `https://api.callmebot.com/text.php?user=${encodeURIComponent(cleanUser)}&text=${encodedText}`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    const body = await res.text();
+    console.log(`[Telegram Alert] Sent to ${cleanUser}: HTTP ${res.status} -> ${body.slice(0, 60)}`);
+  } catch (err) {
+    console.warn(`[Telegram Alert Error] ${cleanUser}:`, err.message);
+  }
+}
+
 /**
- * Dispatch automatic instant alert to Admin and Staff WhatsApp Business via free CallMeBot webhook
+ * Dispatch automatic instant alert to Admin and Staff WhatsApp Business and Telegram
  */
 function sendWhatsAppAdminAlert(booking) {
   try {
@@ -88,6 +104,8 @@ function sendWhatsAppAdminAlert(booking) {
     const staffPhoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_whatsapp_phone'").get();
     const adminApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'callmebot_api_key'").get();
     const staffApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_callmebot_api_key'").get();
+    const adminTgSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'admin_telegram_username'").get();
+    const staffTgSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_telegram_username'").get();
     const enabledSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'whatsapp_alerts_enabled'").get();
 
     if (enabledSetting && enabledSetting.value === '0') {
@@ -98,6 +116,8 @@ function sendWhatsAppAdminAlert(booking) {
     const staffPhone = staffPhoneSetting?.value ? staffPhoneSetting.value.replace(/\D/g, '') : '917814508351';
     const adminApiKey = adminApiKeySetting?.value ? adminApiKeySetting.value.trim() : '';
     const staffApiKey = staffApiKeySetting?.value ? staffApiKeySetting.value.trim() : '';
+    const adminTg = adminTgSetting?.value ? adminTgSetting.value.trim() : '';
+    const staffTg = staffTgSetting?.value ? staffTgSetting.value.trim() : '';
 
     // Message for Admin (includes vendor net rate if available)
     const adminText = `🚨 *TRAVELX NEW BOOKING REQUEST!*
@@ -138,13 +158,19 @@ ${booking.vendor_name ? `• *Winning Vendor:* ${booking.vendor_name} (Net: ₹$
     if (staffApiKey) {
       sendWhatsAppAlertToPhone(staffPhone, staffApiKey, staffText);
     }
+    if (adminTg) {
+      sendTelegramAlertToUser(adminTg, adminText);
+    }
+    if (staffTg) {
+      sendTelegramAlertToUser(staffTg, staffText);
+    }
   } catch (err) {
-    console.warn('WhatsApp alert warning:', err.message);
+    console.warn('Alert warning:', err.message);
   }
 }
 
 /**
- * Dispatch custom alert text to Admin and Staff WhatsApp via CallMeBot webhook
+ * Dispatch custom alert text to Admin and Staff WhatsApp and Telegram via CallMeBot webhook
  */
 function sendWhatsAppCustomAlert(text) {
   try {
@@ -152,6 +178,8 @@ function sendWhatsAppCustomAlert(text) {
     const staffPhoneSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_whatsapp_phone'").get();
     const adminApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'callmebot_api_key'").get();
     const staffApiKeySetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_callmebot_api_key'").get();
+    const adminTgSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'admin_telegram_username'").get();
+    const staffTgSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'staff_telegram_username'").get();
     const enabledSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'whatsapp_alerts_enabled'").get();
 
     if (enabledSetting && enabledSetting.value === '0') return;
@@ -160,11 +188,15 @@ function sendWhatsAppCustomAlert(text) {
     const staffPhone = staffPhoneSetting?.value ? staffPhoneSetting.value.replace(/\D/g, '') : '917814508351';
     const adminApiKey = adminApiKeySetting?.value ? adminApiKeySetting.value.trim() : '';
     const staffApiKey = staffApiKeySetting?.value ? staffApiKeySetting.value.trim() : '';
+    const adminTg = adminTgSetting?.value ? adminTgSetting.value.trim() : '';
+    const staffTg = staffTgSetting?.value ? staffTgSetting.value.trim() : '';
 
     if (adminApiKey) sendWhatsAppAlertToPhone(adminPhone, adminApiKey, text);
     if (staffApiKey) sendWhatsAppAlertToPhone(staffPhone, staffApiKey, text);
+    if (adminTg) sendTelegramAlertToUser(adminTg, text);
+    if (staffTg) sendTelegramAlertToUser(staffTg, text);
   } catch (err) {
-    console.warn('WhatsApp custom alert warning:', err.message);
+    console.warn('Custom alert warning:', err.message);
   }
 }
 
@@ -1432,6 +1464,8 @@ exports.getWhatsAppSettings = (req, res) => {
         staff_pin_set: !!settings.staff_pin,
         callmebot_api_key: settings.callmebot_api_key || '',
         staff_callmebot_api_key: settings.staff_callmebot_api_key || '',
+        admin_telegram_username: settings.admin_telegram_username || '',
+        staff_telegram_username: settings.staff_telegram_username || '',
         whatsapp_alerts_enabled: settings.whatsapp_alerts_enabled !== '0',
         auto_expiry_enabled: settings.auto_expiry_enabled !== '0',
         maintenance_mode: settings.maintenance_mode === '1'
@@ -1457,6 +1491,8 @@ exports.saveWhatsAppSettings = (req, res) => {
       staff_pin,
       callmebot_api_key,
       staff_callmebot_api_key,
+      admin_telegram_username,
+      staff_telegram_username,
       whatsapp_alerts_enabled,
       auto_expiry_enabled,
       maintenance_mode
@@ -1494,6 +1530,12 @@ exports.saveWhatsAppSettings = (req, res) => {
     if (staff_callmebot_api_key !== undefined) {
       upsert.run('staff_callmebot_api_key', String(staff_callmebot_api_key).trim());
     }
+    if (admin_telegram_username !== undefined) {
+      upsert.run('admin_telegram_username', String(admin_telegram_username).trim());
+    }
+    if (staff_telegram_username !== undefined) {
+      upsert.run('staff_telegram_username', String(staff_telegram_username).trim());
+    }
     if (whatsapp_alerts_enabled !== undefined) {
       upsert.run('whatsapp_alerts_enabled', whatsapp_alerts_enabled ? '1' : '0');
     }
@@ -1513,16 +1555,44 @@ exports.saveWhatsAppSettings = (req, res) => {
 };
 
 /**
- * Admin: Test WhatsApp Alert to phone
+ * Admin: Test WhatsApp or Telegram Alert
  */
 exports.testWhatsAppAlert = async (req, res) => {
   try {
-    const { phone: rawPhone, api_key: rawKey } = req.body;
+    const { phone: rawPhone, api_key: rawKey, type, telegram_username } = req.body;
+
+    // Telegram Test
+    if (type === 'telegram' || telegram_username) {
+      const username = telegram_username || rawPhone;
+      if (!username) {
+        return res.status(400).json({ success: false, error: 'Telegram username is required (e.g. @yourname)' });
+      }
+      let cleanUser = String(username).trim();
+      if (!cleanUser.startsWith('@')) cleanUser = '@' + cleanUser;
+
+      const testMsg = `✅ *TravelX Live Telegram Alert Connected!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nHello ${cleanUser}! You will now receive instant live alerts on Telegram whenever an agent books a seat, even when your system is CLOSED!`;
+      const url = `https://api.callmebot.com/text.php?user=${encodeURIComponent(cleanUser)}&text=${encodeURIComponent(testMsg)}`;
+
+      try {
+        const botRes = await fetch(url, { signal: AbortSignal.timeout(12000) });
+        const data = await botRes.text();
+        if (botRes.status === 200 && !data.toLowerCase().includes('error') && !data.toLowerCase().includes('denied')) {
+          return res.json({ success: true, message: `Test message sent to Telegram ${cleanUser}! Check your Telegram.` });
+        } else {
+          const cleanErr = data.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+          return res.status(400).json({ success: false, error: cleanErr || 'Failed to send Telegram message. Please send /start to @CallMeBot_txtbot first.' });
+        }
+      } catch (err) {
+        return res.status(500).json({ success: false, error: `Telegram connection failed: ${err.message}` });
+      }
+    }
+
+    // WhatsApp Test
     let phone = rawPhone ? String(rawPhone).replace(/\D/g, '') : '';
     const apiKey = rawKey ? String(rawKey).trim() : '';
 
     if (!phone || phone.length < 10) {
-      return res.status(400).json({ success: false, error: 'Valid 10+ digit WhatsApp phone number required (with country code, e.g. 918146526257)' });
+      return res.status(400).json({ success: false, error: 'Valid 10+ digit WhatsApp phone number required (e.g. 918146526257)' });
     }
     if (phone.length === 10) phone = '91' + phone;
 
@@ -1541,10 +1611,11 @@ You will now receive instant live alerts on this number whenever an agent books 
     try {
       const botRes = await fetch(url, { signal: AbortSignal.timeout(12000) });
       const data = await botRes.text();
-      if (botRes.status === 200 && !data.toLowerCase().includes('error')) {
+      if (botRes.status === 200 && !data.toLowerCase().includes('error') && !data.toLowerCase().includes('invalid')) {
         return res.json({ success: true, message: `Test message sent to WhatsApp +${phone}! Check your phone.` });
       } else {
-        return res.status(400).json({ success: false, error: data || `CallMeBot returned HTTP ${botRes.status}` });
+        const cleanErr = data.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+        return res.status(400).json({ success: false, error: cleanErr || `CallMeBot returned HTTP ${botRes.status}` });
       }
     } catch (fetchErr) {
       return res.status(500).json({ success: false, error: `Connection failed: ${fetchErr.message}` });

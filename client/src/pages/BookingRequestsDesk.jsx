@@ -138,6 +138,8 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
     staff_pin_set: false,
     callmebot_api_key: '',
     staff_callmebot_api_key: '',
+    admin_telegram_username: '',
+    staff_telegram_username: '',
     whatsapp_alerts_enabled: true,
     auto_expiry_enabled: true
   });
@@ -899,12 +901,25 @@ export default function BookingRequestsDesk({ onSwitchToEnquiries, isStaffMode =
       setTestTarget(target);
       setTestAlertLoading(true);
       setTestAlertStatus(null);
-      const phone = target === 'admin' ? settingsData.admin_whatsapp_phone : settingsData.staff_whatsapp_phone;
-      const apiKey = target === 'admin' ? settingsData.callmebot_api_key : settingsData.staff_callmebot_api_key;
-      const res = await api.testWhatsAppAlert({
-        phone,
-        api_key: apiKey
-      });
+      let res;
+      if (target === 'admin_tg') {
+        res = await api.testWhatsAppAlert({
+          type: 'telegram',
+          telegram_username: settingsData.admin_telegram_username
+        });
+      } else if (target === 'staff_tg') {
+        res = await api.testWhatsAppAlert({
+          type: 'telegram',
+          telegram_username: settingsData.staff_telegram_username
+        });
+      } else {
+        const phone = target === 'admin' ? settingsData.admin_whatsapp_phone : settingsData.staff_whatsapp_phone;
+        const apiKey = target === 'admin' ? settingsData.callmebot_api_key : settingsData.staff_callmebot_api_key;
+        res = await api.testWhatsAppAlert({
+          phone,
+          api_key: apiKey
+        });
+      }
       if (res && res.success) {
         setTestAlertStatus({ success: true, target, message: res.message });
       } else {
@@ -2430,14 +2445,24 @@ Thank you for booking with TravelX!`;
               </div>
 
               {/* 24/7 Mobile Alerts when Computer is OFF Notice */}
-              <div className="p-3 bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 text-white rounded-2xl border border-emerald-500/30 space-y-1.5 shadow-md">
+              <div className="p-3.5 bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 text-white rounded-2xl border border-emerald-500/30 space-y-2 shadow-md">
                 <div className="flex items-center space-x-2 text-emerald-400 font-extrabold text-xs">
                   <span>📱</span>
-                  <span>24/7 WhatsApp Alerts when Computer is OFF ("System Band Ho")</span>
+                  <span>24/7 Mobile Alerts when Computer is OFF ("System Band Ho")</span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Jab aapka laptop/PC band ho ya mobile lock ho, browser sound play nahi kar sakta. Par <b>CallMeBot WhatsApp</b> se aapke dono phone numbers par instant loud ringtone ke saath WhatsApp message aayega! Niche dono phones ke CallMeBot API key save karein:
+                  Jab laptop/PC band ho ya phone lock ho, browser background sound play nahi kar sakta (Android/iOS battery rule). Iske liye <b>WhatsApp</b> aur <b>Telegram</b> alerts integrate kiye gaye hain jo phone lock hone par bhi loud ringtone ke saath notify karenge!
                 </p>
+                <div className="bg-amber-950/60 border border-amber-500/40 rounded-xl p-2.5 text-[11px] text-amber-200">
+                  <div className="font-bold flex items-center space-x-1 text-amber-300 mb-0.5">
+                    <span>⚠️</span>
+                    <span>Important WhatsApp Activation Note:</span>
+                  </div>
+                  <div>
+                    CallMeBot ka purana number (<span className="line-through text-amber-400">+34 911 98 11 11</span>) WhatsApp ne deactivate kar diya hai.
+                    Ab naya official bot number <b>+34 684 783 708</b> hai! Niche diye gaye direct button se WhatsApp open karein:
+                  </div>
+                </div>
               </div>
 
               {/* 1. Admin WhatsApp Alert (+91 81465 26257) */}
@@ -2448,15 +2473,20 @@ Thank you for booking with TravelX!`;
                     <span>Admin WhatsApp Alert (+91 81465 26257)</span>
                   </span>
                   <a
-                    href="https://wa.me/34911981111?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    href="https://wa.me/34684783708?text=I%20allow%20callmebot%20to%20send%20me%20messages"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center space-x-0.5"
+                    className="text-[11px] font-extrabold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center space-x-0.5 bg-emerald-100/80 px-2 py-0.5 rounded-lg border border-emerald-300"
                   >
-                    <span>Activate on WhatsApp</span>
+                    <span>1. Click to Activate (+34 684 783 708)</span>
                     <ExternalLink className="w-3 h-3 ml-0.5" />
                   </a>
                 </div>
+
+                <p className="text-[10px] text-slate-500">
+                  Step 1: Upar button dabakar WhatsApp par message bhejein: <code className="bg-slate-200 px-1 rounded text-slate-900 font-bold">I allow callmebot to send me messages</code><br/>
+                  Step 2: Bot 1-2 minute me API Key bhejega. Us API Key ko niche daal kar Test karein.
+                </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
@@ -2473,7 +2503,7 @@ Thank you for booking with TravelX!`;
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Admin CallMeBot API Key</label>
                     <input
                       type="text"
-                      placeholder="Paste Admin API Key"
+                      placeholder="Paste Admin API Key (e.g. 123456)"
                       value={settingsData.callmebot_api_key}
                       onChange={(e) => setSettingsData({ ...settingsData, callmebot_api_key: e.target.value.trim() })}
                       className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-emerald-600"
@@ -2500,15 +2530,19 @@ Thank you for booking with TravelX!`;
                     <span>Staff WhatsApp Alert (+91 78145 08351)</span>
                   </span>
                   <a
-                    href="https://wa.me/34911981111?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    href="https://wa.me/34684783708?text=I%20allow%20callmebot%20to%20send%20me%20messages"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] font-bold text-blue-700 hover:text-blue-950 underline inline-flex items-center space-x-0.5"
+                    className="text-[11px] font-extrabold text-blue-700 hover:text-blue-950 underline inline-flex items-center space-x-0.5 bg-blue-100/80 px-2 py-0.5 rounded-lg border border-blue-300"
                   >
-                    <span>Activate on WhatsApp</span>
+                    <span>1. Click to Activate (+34 684 783 708)</span>
                     <ExternalLink className="w-3 h-3 ml-0.5" />
                   </a>
                 </div>
+
+                <p className="text-[10px] text-slate-500">
+                  Staff phone (+91 78145 08351) se upar link click karein ya number save karke WhatsApp message karein: <code className="bg-slate-200 px-1 rounded text-slate-900 font-bold">I allow callmebot to send me messages</code>
+                </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
@@ -2525,7 +2559,7 @@ Thank you for booking with TravelX!`;
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Staff CallMeBot API Key</label>
                     <input
                       type="text"
-                      placeholder="Paste Staff API Key"
+                      placeholder="Paste Staff API Key (e.g. 123456)"
                       value={settingsData.staff_callmebot_api_key}
                       onChange={(e) => setSettingsData({ ...settingsData, staff_callmebot_api_key: e.target.value.trim() })}
                       className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-blue-600"
@@ -2542,6 +2576,70 @@ Thank you for booking with TravelX!`;
                   {testAlertLoading && testTarget === 'staff' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   <span>Test WhatsApp Alert to Staff (+91 78145 08351)</span>
                 </button>
+              </div>
+
+              {/* 3. Telegram Alerts (Optional 100% Free & Zero-Ban Alternative) */}
+              <div className="p-3.5 bg-sky-50/50 rounded-2xl border border-sky-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-sky-950 flex items-center space-x-1.5">
+                    <span>✈️</span>
+                    <span>Telegram Alerts (Optional 100% Free & Never Banned)</span>
+                  </span>
+                  <a
+                    href="https://t.me/CallMeBot_txtbot"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-extrabold text-sky-700 hover:text-sky-950 underline inline-flex items-center space-x-0.5 bg-sky-100 px-2 py-0.5 rounded-lg border border-sky-300"
+                  >
+                    <span>Open @CallMeBot_txtbot & Start</span>
+                    <ExternalLink className="w-3 h-3 ml-0.5" />
+                  </a>
+                </div>
+
+                <p className="text-[10px] text-slate-500">
+                  Telegram alerts kabhi block nahi hote. Telegram par <code className="bg-slate-200 px-1 rounded text-slate-900 font-bold">@CallMeBot_txtbot</code> open karke <b>/start</b> dabayein, fir apna username (e.g. @your_name) niche daalein:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-700">Admin Telegram Username</label>
+                    <input
+                      type="text"
+                      placeholder="@admin_username"
+                      value={settingsData.admin_telegram_username || ''}
+                      onChange={(e) => setSettingsData({ ...settingsData, admin_telegram_username: e.target.value.trim() })}
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-sky-600"
+                    />
+                    <button
+                      type="button"
+                      disabled={testAlertLoading || !settingsData.admin_telegram_username}
+                      onClick={() => handleTestWhatsAppAlert('admin_tg')}
+                      className="w-full py-1.5 bg-white hover:bg-sky-100 disabled:opacity-50 text-sky-900 font-bold rounded-xl transition cursor-pointer border border-sky-300 text-[11px] flex items-center justify-center space-x-1"
+                    >
+                      {testAlertLoading && testTarget === 'admin_tg' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                      <span>Test Admin Telegram</span>
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-700">Staff Telegram Username</label>
+                    <input
+                      type="text"
+                      placeholder="@staff_username"
+                      value={settingsData.staff_telegram_username || ''}
+                      onChange={(e) => setSettingsData({ ...settingsData, staff_telegram_username: e.target.value.trim() })}
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 font-mono font-bold text-slate-900 text-xs outline-none focus:border-sky-600"
+                    />
+                    <button
+                      type="button"
+                      disabled={testAlertLoading || !settingsData.staff_telegram_username}
+                      onClick={() => handleTestWhatsAppAlert('staff_tg')}
+                      className="w-full py-1.5 bg-white hover:bg-sky-100 disabled:opacity-50 text-sky-900 font-bold rounded-xl transition cursor-pointer border border-sky-300 text-[11px] flex items-center justify-center space-x-1"
+                    >
+                      {testAlertLoading && testTarget === 'staff_tg' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                      <span>Test Staff Telegram</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {testAlertStatus && (
