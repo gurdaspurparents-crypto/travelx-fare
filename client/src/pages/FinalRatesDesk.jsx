@@ -523,8 +523,7 @@ export default function FinalRatesDesk({ masterData = {}, setActiveTab, faresRef
           sortedDates.forEach(dStr => {
             const { minFare, vendorMap } = dateMinFareMap.get(dStr);
             const monthKey = dStr.slice(0, 7);
-            const vNames = Array.from(vendorMap.values()).map(x => (x.vendor_name || '').trim()).filter(Boolean).sort().join(', ');
-            const bKey = `${monthKey}_${minFare}_${vNames}`;
+            const bKey = `${monthKey}_${minFare}`;
             if (!bucketMap.has(bKey)) bucketMap.set(bKey, []);
             bucketMap.get(bKey).push({
               travel_date: dStr,

@@ -354,11 +354,14 @@ function groupFaresByDateRanges(faresList = []) {
 
       uniqueDates.sort((a, b) => a.travel_date.localeCompare(b.travel_date));
 
-      // Step C: Group into buckets by (Month + publish_fare + vendor_name)
+      // Step C: Group into buckets by (Month + publish_fare + cabin + baggage)
+      // Dates sharing the same publish fare within the same month group into clean ranges, regardless of vendor
       const bucketMap = new Map();
       for (const item of uniqueDates) {
         const mKey = item.travel_date.slice(0, 7);
-        const bKey = `${mKey}_${item.publish_fare}_${item.vendor_name}`;
+        const cabin = item.cabin || 'ECONOMY';
+        const baggage = item.baggage || '30kg';
+        const bKey = `${mKey}_${item.publish_fare}_${cabin}_${baggage}`;
         if (!bucketMap.has(bKey)) {
           bucketMap.set(bKey, []);
         }
@@ -389,7 +392,8 @@ function createConsolidatedItem(routeKey, streak) {
   ).sort((a, b) => a.localeCompare(b));
   const vendorName = vendorList.join(', ') || first.vendor_name || first['Vendor / Source'] || '';
 
-  const net = Number(first.net_fare) || 0;
+  const netValues = streak.map(s => Number(s.net_fare) || 0).filter(n => n > 0);
+  const net = netValues.length > 0 ? Math.min(...netValues) : (Number(first.net_fare) || 0);
   let margin = Number(first.margin_amount) || Number(first.calculated_margin) || 0;
   let pub = Number(first.publish_fare);
   if (!pub || pub <= net) {
@@ -411,6 +415,7 @@ function createConsolidatedItem(routeKey, streak) {
     airline_code: first.airline_code,
     airline_name: airName,
     vendor_name: vendorName,
+    vendor_list: vendorList,
     date_label: dateLabel,
     start_date: first.travel_date,
     end_date: last.travel_date,

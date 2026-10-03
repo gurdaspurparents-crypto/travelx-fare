@@ -915,8 +915,8 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                           </td>
 
                           {/* Vendor Column */}
-                          <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60">
-                            <span className="font-extrabold text-slate-900 text-xs px-2 py-0.5 rounded bg-white/70 border border-slate-300/70 shadow-2xs">
+                          <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60" title={streakItem.vendor_name || 'Direct'}>
+                            <span className="font-extrabold text-slate-900 text-xs px-2 py-0.5 rounded bg-white/70 border border-slate-300/70 shadow-2xs max-w-[220px] inline-block truncate align-middle">
                               🏢 {streakItem.vendor_name || 'Direct'}
                             </span>
                           </td>
