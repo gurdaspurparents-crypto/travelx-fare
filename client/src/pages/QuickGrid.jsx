@@ -405,7 +405,7 @@ export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
 
       const res = await api.saveQuickGrid(payload);
       if (res.success && res.saved_count > 0) {
-        const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} absent/sold-out dates removed)` : '';
+        const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} previous sector fares replaced)` : '';
         setStatus({
           type: 'success',
           text: `🎉 Direct Save Success! All ${res.saved_count} fares from "${excelSummary.fileName}" saved for vendor "${activeVendor.name}"!${delMsg}`
@@ -463,7 +463,7 @@ export default function QuickGrid({ masterData, onFaresSaved, setActiveTab }) {
 
       const res = await api.saveQuickGrid(payload);
       if (res.success && res.saved_count > 0) {
-        const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} absent/sold-out dates removed)` : '';
+        const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} previous sector fares replaced)` : '';
         setStatus({
           type: 'success',
           text: `🎉 Successfully saved ${res.saved_count} fares for vendor "${activeVendor.name}" (${activeAirline.name}: ${origin} → ${destination})!${delMsg} SQLite database updated.`

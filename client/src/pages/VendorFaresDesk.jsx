@@ -567,9 +567,10 @@ export default function VendorFaresDesk({ masterData = {}, onFaresSaved, setActi
 
       const res = await api.saveDateRange(payload);
       if (res.success) {
+        const delMsg = res.deleted_count > 0 ? ` (${res.deleted_count} previous sector fares replaced)` : '';
         setStatus({
           type: 'success',
-          text: `🎉 Successfully saved all ${res.saved_count} days (${rangeStart} to ${rangeEnd}) at ₹${Number(rangeFare).toLocaleString('en-IN')} in ${selectedVendor?.name}!`
+          text: `🎉 Successfully saved all ${res.saved_count} days (${rangeStart} to ${rangeEnd}) at ₹${Number(rangeFare).toLocaleString('en-IN')} in ${selectedVendor?.name}!${delMsg}`
         });
         loadActiveVendorFares(selectedVendorId);
         if (onFaresSaved) onFaresSaved();

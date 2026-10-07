@@ -326,44 +326,14 @@ exports.saveQuickGridFares = (req, res) => {
   const deletedDates = [];
 
   const saveTx = db.transaction(() => {
-    // If replace_missing_dates is requested, prune any existing dates for this sector not present in new entries
-    if (replace_missing_dates) {
-      const validDates = entries
-        .filter(e => e.travel_date && Number(e.net_fare) > 0)
-        .map(e => parseDateString(e.travel_date, currentYear) || String(e.travel_date).trim());
-
-      if (validDates.length > 0) {
-        const incomingDateSet = new Set(validDates);
-
-        // Fetch ALL existing fares for this vendor in this sector and cabin (no date boundary restriction)
-        const existingFares = db.prepare(`
-          SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number 
-          FROM fares
-          WHERE vendor_id = ?
-            AND UPPER(airline_code) = UPPER(?)
-            AND UPPER(origin) = UPPER(?)
-            AND UPPER(destination) = UPPER(?)
-            AND UPPER(COALESCE(cabin, 'ECONOMY')) = UPPER(?)
-        `).all(vendor_id, effectiveAirline, origin, destination, cabin || 'ECONOMY');
-
-        const deleteStmt = db.prepare('DELETE FROM fares WHERE id = ?');
-        const historyStmt = db.prepare(`
-          INSERT INTO fare_history (fare_id, vendor_id, airline_code, origin, destination, travel_date, flight_number, old_fare, new_fare, fare_diff, recorded_at, reason)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now', 'localtime'), 'Sold out / removed from vendor rate sheet')
-        `);
-
-        for (const ef of existingFares) {
-          if (!incomingDateSet.has(ef.travel_date)) {
-            try {
-              historyStmt.run(ef.id, vendor_id, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
-            } catch (hErr) {
-              console.warn('Could not record delete history:', hErr.message);
-            }
-            deleteStmt.run(ef.id);
-            deletedDates.push(ef.travel_date);
-          }
-        }
-      }
+    // Delete all previous fares for this vendor in this specific sector before saving new rates
+    const numDeleted = deletePreviousSectorFares(vendor_id, [{
+      origin,
+      destination,
+      airline_code: effectiveAirline
+    }]);
+    if (numDeleted > 0) {
+      deletedDates.push(`${numDeleted} previous fares`);
     }
 
     for (let i = 0; i < entries.length; i++) {
@@ -464,8 +434,16 @@ exports.saveDateRangeFares = (req, res) => {
 
   const results = [];
   const errors = [];
+  let deletedCount = 0;
 
   const rangeTx = db.transaction(() => {
+    // Delete all previous fares for this vendor in this specific sector before saving new date range
+    deletedCount = deletePreviousSectorFares(vendor_id, [{
+      origin,
+      destination,
+      airline_code
+    }]);
+
     for (let i = 0; i < dates.length; i++) {
       const dt = dates[i];
       try {
@@ -498,6 +476,7 @@ exports.saveDateRangeFares = (req, res) => {
       success: isSuccess,
       total_days: dates.length,
       saved_count: results.length,
+      deleted_count: deletedCount,
       start_date,
       end_date,
       net_fare: Number(net_fare),
@@ -550,6 +529,103 @@ exports.parseImageWithAI = async (req, res) => {
     return res.json(result);
   } catch (err) {
     console.error('AI Vision Parse Error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+function matchAirline(dbAir, dbFlt, targetAir) {
+  if (!targetAir) return true; // Match all airlines in sector if target airline is unspecified
+  const normTarget = normalizeAirlineCode(targetAir, '', '').toUpperCase();
+  const normDb = normalizeAirlineCode(dbAir, dbFlt, '').toUpperCase();
+  return normDb === normTarget;
+}
+
+/**
+ * Deletes previous fares of a vendor for specific sectors before updating new rates.
+ * Only deletes records for the specified vendor and the specific sectors being updated.
+ * All other sectors of this vendor and all other vendors remain untouched.
+ */
+function deletePreviousSectorFares(vendorId, sectors = []) {
+  if (!vendorId || !sectors || sectors.length === 0) return 0;
+
+  let effectiveVendorId = Number(vendorId);
+  const vCheck = db.prepare('SELECT id FROM vendors WHERE id = ?').get(effectiveVendorId);
+  if (!vCheck) {
+    const fallbackV = db.prepare('SELECT id FROM vendors WHERE is_active = 1 ORDER BY id ASC LIMIT 1').get() ||
+                      db.prepare('SELECT id FROM vendors ORDER BY id ASC LIMIT 1').get();
+    if (fallbackV) effectiveVendorId = fallbackV.id;
+    else return 0;
+  }
+
+  let totalDeleted = 0;
+  const historyStmt = db.prepare(`
+    INSERT INTO fare_history (fare_id, vendor_id, airline_code, origin, destination, travel_date, flight_number, old_fare, new_fare, fare_diff, recorded_at, reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now', 'localtime'), 'Sector rate update: previous sector fares cleared')
+  `);
+  const deleteStmt = db.prepare('DELETE FROM fares WHERE id = ?');
+
+  // Extract unique sectors
+  const sectorList = [];
+  const seen = new Set();
+  for (const s of sectors) {
+    const orig = (s.origin || '').trim().toUpperCase();
+    const dest = (s.destination || '').trim().toUpperCase();
+    const air = (s.airline_code || '').trim().toUpperCase();
+    if (!orig || !dest) continue;
+    const k = `${orig}_${dest}_${air}`;
+    if (!seen.has(k)) {
+      seen.add(k);
+      sectorList.push({ origin: orig, destination: dest, airline_code: air, flight_number: s.flight_number });
+    }
+  }
+
+  for (const sec of sectorList) {
+    const existingFares = db.prepare(`
+      SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number
+      FROM fares
+      WHERE vendor_id = ?
+        AND UPPER(origin) = ?
+        AND UPPER(destination) = ?
+    `).all(effectiveVendorId, sec.origin, sec.destination);
+
+    for (const ef of existingFares) {
+      const matches = !sec.airline_code || matchAirline(ef.airline_code, ef.flight_number, sec.airline_code);
+      if (matches) {
+        try {
+          historyStmt.run(
+            ef.id,
+            effectiveVendorId,
+            ef.airline_code,
+            ef.origin,
+            ef.destination,
+            ef.travel_date,
+            ef.flight_number || '',
+            ef.net_fare,
+            -ef.net_fare
+          );
+        } catch (_) {}
+        deleteStmt.run(ef.id);
+        totalDeleted++;
+      }
+    }
+  }
+
+  if (totalDeleted > 0) {
+    safeInvalidateFaresCache();
+  }
+  return totalDeleted;
+}
+
+exports.prepareVendorSectors = (req, res) => {
+  try {
+    const { vendor_id, sectors = [] } = req.body;
+    if (!vendor_id) {
+      return res.status(400).json({ success: false, error: 'vendor_id required' });
+    }
+    const deletedCount = deletePreviousSectorFares(vendor_id, sectors);
+    return res.json({ success: true, deleted_count: deletedCount });
+  } catch (err) {
+    console.error('Error preparing vendor sectors:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -620,41 +696,37 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
   } else {
     const sectorMap = new Map();
     for (const f of fares) {
-      if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
-      const airline = normalizeAirlineCode(f.airline_code, f.flight_number, 'AI').toUpperCase();
+      if (!f.travel_date || !f.origin || !f.destination) continue;
+      const airline = normalizeAirlineCode(f.airline_code || '', f.flight_number || '', '').toUpperCase();
       const origin = f.origin.trim().toUpperCase();
       const dest = f.destination.trim().toUpperCase();
-      const cabin = (f.cabin || 'ECONOMY').trim().toUpperCase();
       const cleanDate = parseDateString(f.travel_date, currentYear) || String(f.travel_date).trim();
-      const key = `${airline}_${origin}_${dest}_${cabin}`;
+      const key = `${airline}_${origin}_${dest}`;
 
       if (!sectorMap.has(key)) {
-        sectorMap.set(key, { airline_code: airline, origin, destination: dest, cabin, dates: new Set() });
+        sectorMap.set(key, { airline_code: airline, origin, destination: dest, dates: new Set() });
       }
       sectorMap.get(key).dates.add(cleanDate);
     }
 
     const existingStmt = db.prepare(`
-      SELECT id, travel_date, net_fare, airline_code, origin, destination, cabin, flight_number 
+      SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number 
       FROM fares
       WHERE vendor_id = ?
-        AND UPPER(airline_code) = ?
         AND UPPER(origin) = ?
         AND UPPER(destination) = ?
-        AND UPPER(COALESCE(cabin, 'ECONOMY')) = ?
     `);
 
     for (const sector of sectorMap.values()) {
       const existingFares = existingStmt.all(
         effectiveVendorId,
-        sector.airline_code,
         sector.origin,
-        sector.destination,
-        sector.cabin
+        sector.destination
       );
 
       for (const ef of existingFares) {
-        if (!sector.dates.has(ef.travel_date)) {
+        const matches = !sector.airline_code || matchAirline(ef.airline_code, ef.flight_number, sector.airline_code);
+        if (matches && !sector.dates.has(ef.travel_date)) {
           try {
             historyStmt.run(ef.id, effectiveVendorId, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
           } catch (hErr) {
@@ -707,6 +779,7 @@ exports.saveBulkParsedFares = (req, res) => {
     replace_missing_dates = false,
     replace_mode = 'sector',
     skip_inventory_sync = false,
+    clear_sectors_first = false,
     summary_only = false
   } = req.body;
   if (!vendor_id && !vendor_name) {
@@ -755,8 +828,11 @@ exports.saveBulkParsedFares = (req, res) => {
   }, { bulkMode: true }));
 
   const bulkTx = db.transaction(() => {
-    if (replace_missing_dates && !skip_inventory_sync) {
-      deletedRecords = runVendorInventorySync(vendor_id, fares, replace_mode);
+    if ((clear_sectors_first || (replace_missing_dates && !skip_inventory_sync)) && fares.length > 0) {
+      const numDel = deletePreviousSectorFares(effectiveVendorId, fares);
+      if (numDel > 0) {
+        deletedRecords = [{ count: numDel }];
+      }
     }
 
     for (let i = 0; i < fares.length; i++) {

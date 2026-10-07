@@ -113,6 +113,7 @@ app.post('/api/fares/parse-image-ai', fareController.parseImageWithAI);
 app.post('/api/fares/bulk-save', fareController.saveBulkParsedFares);
 app.post('/api/fares/extension-sync', fareController.extensionSyncFares);
 app.post('/api/fares/sync-inventory', fareController.syncVendorInventory);
+app.post('/api/fares/prepare-vendor-sectors', fareController.prepareVendorSectors);
 app.post('/api/fares/cleanup-past', fareController.cleanupPastFaresEndpoint);
 app.post('/api/fares/batch-update-margins', fareController.batchUpdateMargins);
 app.put('/api/fares/:id', fareController.updateFare);

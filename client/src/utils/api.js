@@ -196,6 +196,46 @@ export const api = {
 
     await waitForBackend(onProgress);
 
+    // Extract unique sectors to clear previous rates for these specific sectors before uploading
+    const uniqueSectors = [];
+    const seenSecKeys = new Set();
+    for (const f of fares) {
+      if (!f.origin || !f.destination) continue;
+      const o = String(f.origin).trim().toUpperCase();
+      const d = String(f.destination).trim().toUpperCase();
+      const a = String(f.airline_code || '').trim().toUpperCase();
+      const k = `${o}_${d}_${a}`;
+      if (!seenSecKeys.has(k)) {
+        seenSecKeys.add(k);
+        uniqueSectors.push({ origin: o, destination: d, airline_code: a });
+      }
+    }
+
+    let prepDeletedCount = 0;
+    if (replace_missing_dates && uniqueSectors.length > 0) {
+      if (onProgress) {
+        onProgress({
+          phase: 'prepare',
+          label: `Clearing previous rates for updated sector(s)…`
+        });
+      }
+      try {
+        const prepRes = await safeFetch('/api/fares/prepare-vendor-sectors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vendor_id,
+            sectors: uniqueSectors
+          })
+        }, 2, 20000, false);
+        if (prepRes?.success) {
+          prepDeletedCount = prepRes.deleted_count || 0;
+        }
+      } catch (prepErr) {
+        console.warn('Prepare vendor sectors error:', prepErr);
+      }
+    }
+
     const postRows = (rows) =>
       safeFetch('/api/fares/bulk-save', {
         method: 'POST',
@@ -296,16 +336,25 @@ export const api = {
       }
     }
 
+    const totalDel = (deletedCount || prepDeletedCount);
     return {
       success: savedTotal > 0,
       saved_count: savedTotal,
       created_count: createdTotal,
       updated_count: updatedTotal,
-      deleted_count: deletedCount,
+      deleted_count: totalDel,
       deleted_dates: deletedDates,
       replace_missing_dates,
-      message: `Saved ${savedTotal} fares${deletedCount > 0 ? ` (${deletedCount} sold-out/old dates removed)` : ''}`
+      message: `Saved ${savedTotal} fares${totalDel > 0 ? ` (${totalDel} previous sector fares replaced)` : ''}`
     };
+  },
+
+  prepareVendorSectors: async (vendor_id, sectors) => {
+    return safeFetch('/api/fares/prepare-vendor-sectors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_id, sectors })
+    });
   },
 
   cleanupPastFares: async () => {
