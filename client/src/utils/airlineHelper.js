@@ -150,10 +150,12 @@ export const KNOWN_FLIGHT_TIMINGS = {
   // Amritsar (ATQ) ➔ Dubai (DXB)
   'IX 191': { dep: '00:15', arr: '02:55', origin: 'ATQ', dest: 'DXB', duration: '4h 10m', aircraft: 'Boeing 737-800' },
   'IX191': { dep: '00:15', arr: '02:55', origin: 'ATQ', dest: 'DXB', duration: '4h 10m', aircraft: 'Boeing 737-800' },
-  'SG 59': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
-  'SG59': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
-  'SG 5155': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
-  'SG5155': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
+  'SG 59': { dep: '19:30', arr: '21:50', origin: 'ATQ', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 737 MAX 8' },
+  'SG59': { dep: '19:30', arr: '21:50', origin: 'ATQ', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 737 MAX 8' },
+  'SG 5155': { dep: '19:30', arr: '21:50', origin: 'ATQ', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 737 MAX 8' },
+  'SG5155': { dep: '19:30', arr: '21:50', origin: 'ATQ', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 737 MAX 8' },
+  'SG 55': { dep: '19:30', arr: '21:50', origin: 'ATQ', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 737 MAX 8' },
+  'SG55': { dep: '19:30', arr: '21:50', origin: 'ATQ', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 737 MAX 8' },
 
   // Dubai (DXB) ➔ Amritsar (ATQ) Return
   'IX 192': { dep: '03:55', arr: '08:45', origin: 'DXB', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737-800' },
