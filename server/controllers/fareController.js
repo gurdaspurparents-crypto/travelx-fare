@@ -3,6 +3,7 @@ const { calculateMargin } = require('../services/marginCalculator');
 const { evaluateVendorAdjustment } = require('../services/vendorPricingEngine');
 const { parseWhatsAppFareText, parseDateString, normalizeAirlineCode } = require('../services/whatsappParser');
 const { parseImageWithOpenAI, parseImageWithGemini } = require('../services/aiVisionService');
+const flightScheduleService = require('../services/flightScheduleService');
 
 function safeInvalidateFaresCache() {
   try {
@@ -168,6 +169,19 @@ function saveOrUpdateFareRecord(data, options = {}) {
   // Calculate margin and publish fare
   const marginCalc = calculateMargin(effectiveFare, effectiveAirline, origin, destination, custom_margin);
 
+  // Auto-normalize flight number and resolve flight timings if missing or blank
+  const cleanFlightNumber = flightScheduleService.normalizeFlightNumber(flight_number, effectiveAirline);
+  let effectiveDepTime = departure_time;
+  let effectiveArrTime = arrival_time;
+
+  if (!effectiveDepTime || !effectiveArrTime) {
+    const timing = flightScheduleService.resolveFlightTiming(cleanFlightNumber, origin, destination, cleanTravelDate);
+    if (timing) {
+      if (!effectiveDepTime && timing.departure_time) effectiveDepTime = timing.departure_time;
+      if (!effectiveArrTime && timing.arrival_time) effectiveArrTime = timing.arrival_time;
+    }
+  }
+
   // Check for existing matching active fare for this vendor
   const existing = STMT_GET_EXISTING_FARE.get(
     effectiveVendorId,
@@ -183,9 +197,9 @@ function saveOrUpdateFareRecord(data, options = {}) {
     // Case 1: Exact same fare
     if (Math.abs(existing.net_fare - effectiveFare) < 0.01) {
       STMT_AFFIRM_DUPLICATE.run(
-        flight_number,
-        departure_time,
-        arrival_time,
+        cleanFlightNumber,
+        effectiveDepTime,
+        effectiveArrTime,
         baggage,
         is_refundable,
         effectiveRemarks || existing.remarks,
@@ -210,7 +224,7 @@ function saveOrUpdateFareRecord(data, options = {}) {
       origin.toUpperCase(),
       destination.toUpperCase(),
       cleanTravelDate,
-      flight_number,
+      cleanFlightNumber,
       existing.net_fare,
       effectiveFare,
       fareDiff,
@@ -221,9 +235,9 @@ function saveOrUpdateFareRecord(data, options = {}) {
       effectiveFare,
       marginCalc.marginAmount,
       marginCalc.publishFare,
-      flight_number,
-      departure_time,
-      arrival_time,
+      cleanFlightNumber,
+      effectiveDepTime,
+      effectiveArrTime,
       baggage,
       is_refundable,
       effectiveRemarks,
@@ -250,9 +264,9 @@ function saveOrUpdateFareRecord(data, options = {}) {
     origin.toUpperCase(),
     destination.toUpperCase(),
     cleanTravelDate,
-    flight_number,
-    departure_time,
-    arrival_time,
+    cleanFlightNumber,
+    effectiveDepTime,
+    effectiveArrTime,
     effectiveFare,
     currency,
     cabin,

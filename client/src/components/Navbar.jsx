@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plane, LayoutDashboard, Zap, Table, MessageSquare, 
   GitCompare, Send, History, Database, Download, Building2, Layers, Trash2, Plus,
-  FileSpreadsheet, Smartphone, Inbox, ShieldAlert, ShieldCheck, Sliders
+  FileSpreadsheet, Smartphone, Inbox, ShieldAlert, ShieldCheck, Sliders, Clock
 } from 'lucide-react';
 import ClearRatesModal from './ClearRatesModal';
 import { api } from '../utils/api';
@@ -77,6 +77,7 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
     { id: 'quick-grid', label: 'Quick Grid', icon: Table },
     { id: 'fast-entry', label: 'Fast Entry', icon: Zap },
     { id: 'bulk-paste', label: 'WhatsApp Paste', icon: MessageSquare },
+    { id: 'flight-schedules', label: 'Flight Timings', icon: Clock, badgeText: 'LIVE' },
     { id: 'margins', label: 'Fare Rules', icon: Sliders },
     { id: 'history', label: 'Fare History', icon: History },
     { id: 'masters', label: 'Master Data', icon: Database },

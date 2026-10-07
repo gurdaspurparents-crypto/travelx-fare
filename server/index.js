@@ -15,6 +15,7 @@ const publicAgentController = require('./controllers/publicAgentController');
 const bookingController = require('./controllers/bookingController');
 const authController = require('./controllers/authController');
 const settingsController = require('./controllers/settingsController');
+const flightScheduleController = require('./controllers/flightScheduleController');
 const { requireAdmin } = require('./middleware/adminAuth');
 
 process.on('uncaughtException', (err) => {
@@ -157,6 +158,15 @@ app.get('/api/masters/routes', masterController.getAllRoutes);
 app.post('/api/masters/routes', masterController.createRoute);
 app.put('/api/masters/routes/:id', masterController.updateRoute);
 app.delete('/api/masters/routes/:id', masterController.deleteRoute);
+
+// Live Flight Timings & Airline Schedule APIs
+app.get('/api/flight-schedules', flightScheduleController.getSchedules);
+app.post('/api/flight-schedules', flightScheduleController.upsertSchedule);
+app.delete('/api/flight-schedules/:id', flightScheduleController.deleteSchedule);
+app.post('/api/flight-schedules/parse-paste', flightScheduleController.parseScheduleText);
+app.post('/api/flight-schedules/bulk-save', flightScheduleController.bulkSaveSchedules);
+app.post('/api/flight-schedules/sync-live', flightScheduleController.syncLiveAirlines);
+app.post('/api/flight-schedules/apply-to-fares', flightScheduleController.applyToFares);
 
 // Publishing, WhatsApp & Excel APIs
 app.post('/api/export/toggle-publish', exportController.togglePublishFares);

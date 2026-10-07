@@ -147,25 +147,57 @@ export function getAirlineName(codeOrName, airlinesList = []) {
  * Known Standard Flight Timings / Schedules for quick lookup
  */
 export const KNOWN_FLIGHT_TIMINGS = {
-  // SpiceJet Amritsar to Dubai
-  'SG 5155': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m' },
-  'SG5155': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m' },
-  'SG-5155': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m' },
+  // Amritsar (ATQ) ➔ Dubai (DXB)
+  'IX 191': { dep: '00:15', arr: '02:55', origin: 'ATQ', dest: 'DXB', duration: '4h 10m', aircraft: 'Boeing 737-800' },
+  'IX191': { dep: '00:15', arr: '02:55', origin: 'ATQ', dest: 'DXB', duration: '4h 10m', aircraft: 'Boeing 737-800' },
+  'SG 59': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
+  'SG59': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
+  'SG 5155': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
+  'SG5155': { dep: '08:40', arr: '11:25', origin: 'ATQ', dest: 'DXB', duration: '4h 15m', aircraft: 'Boeing 737 MAX 8' },
 
-  // Air India Express Amritsar to Dubai
-  'IX 191': { dep: '00:15', arr: '02:55', origin: 'ATQ', dest: 'DXB', duration: '4h 10m' },
-  'IX191': { dep: '00:15', arr: '02:55', origin: 'ATQ', dest: 'DXB', duration: '4h 10m' },
-  'IX-191': { dep: '00:15', arr: '02:55', origin: 'ATQ', dest: 'DXB', duration: '4h 10m' },
+  // Dubai (DXB) ➔ Amritsar (ATQ) Return
+  'IX 192': { dep: '03:55', arr: '08:45', origin: 'DXB', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737-800' },
+  'IX192': { dep: '03:55', arr: '08:45', origin: 'DXB', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737-800' },
+  'SG 60': { dep: '12:25', arr: '17:15', origin: 'DXB', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737 MAX 8' },
+  'SG60': { dep: '12:25', arr: '17:15', origin: 'DXB', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737 MAX 8' },
+  'SG 5156': { dep: '12:25', arr: '17:15', origin: 'DXB', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737 MAX 8' },
+  'SG5156': { dep: '12:25', arr: '17:15', origin: 'DXB', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737 MAX 8' },
 
-  // Air India Express Amritsar to Sharjah
-  'IX 137': { dep: '13:15', arr: '16:05', origin: 'ATQ', dest: 'SHJ', duration: '4h 20m' },
-  'IX137': { dep: '13:15', arr: '16:05', origin: 'ATQ', dest: 'SHJ', duration: '4h 20m' },
-  'IX-137': { dep: '13:15', arr: '16:05', origin: 'ATQ', dest: 'SHJ', duration: '4h 20m' },
+  // Amritsar (ATQ) ➔ Sharjah (SHJ)
+  'IX 137': { dep: '13:15', arr: '16:05', origin: 'ATQ', dest: 'SHJ', duration: '4h 20m', aircraft: 'Boeing 737-800' },
+  'IX137': { dep: '13:15', arr: '16:05', origin: 'ATQ', dest: 'SHJ', duration: '4h 20m', aircraft: 'Boeing 737-800' },
+  '6E 1427': { dep: '12:15', arr: '14:40', origin: 'ATQ', dest: 'SHJ', duration: '3h 55m', aircraft: 'Airbus A320neo' },
+  '6E1427': { dep: '12:15', arr: '14:40', origin: 'ATQ', dest: 'SHJ', duration: '3h 55m', aircraft: 'Airbus A320neo' },
 
-  // IndiGo Amritsar to Sharjah
-  '6E 1427': { dep: '12:15', arr: '14:40', origin: 'ATQ', dest: 'SHJ', duration: '3h 55m' },
-  '6E1427': { dep: '12:15', arr: '14:40', origin: 'ATQ', dest: 'SHJ', duration: '3h 55m' },
-  '6E-1427': { dep: '12:15', arr: '14:40', origin: 'ATQ', dest: 'SHJ', duration: '3h 55m' },
+  // Sharjah (SHJ) ➔ Amritsar (ATQ) Return
+  'IX 138': { dep: '17:05', arr: '21:55', origin: 'SHJ', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737-800' },
+  'IX138': { dep: '17:05', arr: '21:55', origin: 'SHJ', dest: 'ATQ', duration: '3h 20m', aircraft: 'Boeing 737-800' },
+  '6E 1428': { dep: '15:40', arr: '20:30', origin: 'SHJ', dest: 'ATQ', duration: '3h 20m', aircraft: 'Airbus A320neo' },
+  '6E1428': { dep: '15:40', arr: '20:30', origin: 'SHJ', dest: 'ATQ', duration: '3h 20m', aircraft: 'Airbus A320neo' },
+
+  // Chandigarh (IXC) ➔ Abu Dhabi (AUH)
+  '6E 1418': { dep: '15:10', arr: '17:30', origin: 'IXC', dest: 'AUH', duration: '3h 50m', aircraft: 'Airbus A320neo' },
+  '6E1418': { dep: '15:10', arr: '17:30', origin: 'IXC', dest: 'AUH', duration: '3h 50m', aircraft: 'Airbus A320neo' },
+  '6E 1411': { dep: '15:10', arr: '17:30', origin: 'IXC', dest: 'AUH', duration: '3h 50m', aircraft: 'Airbus A320neo' },
+  '6E1411': { dep: '15:10', arr: '17:30', origin: 'IXC', dest: 'AUH', duration: '3h 50m', aircraft: 'Airbus A320neo' },
+  '6E 1419': { dep: '18:30', arr: '23:25', origin: 'AUH', dest: 'IXC', duration: '3h 25m', aircraft: 'Airbus A320neo' },
+  '6E1419': { dep: '18:30', arr: '23:25', origin: 'AUH', dest: 'IXC', duration: '3h 25m', aircraft: 'Airbus A320neo' },
+
+  // Delhi (DEL) ➔ Dubai (DXB)
+  'AI 4309': { dep: '10:15', arr: '12:35', origin: 'DEL', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 787-8 Dreamliner' },
+  'AI4309': { dep: '10:15', arr: '12:35', origin: 'DEL', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 787-8 Dreamliner' },
+  'AI 995': { dep: '20:20', arr: '22:45', origin: 'DEL', dest: 'DXB', duration: '3h 55m', aircraft: 'Boeing 787-8 Dreamliner' },
+  'AI995': { dep: '20:20', arr: '22:45', origin: 'DEL', dest: 'DXB', duration: '3h 55m', aircraft: 'Boeing 787-8 Dreamliner' },
+
+  // Delhi (DEL) ➔ Sharjah (SHJ)
+  'G9 464': { dep: '04:40', arr: '07:05', origin: 'DEL', dest: 'SHJ', duration: '3h 55m', aircraft: 'Airbus A320' },
+  'G9464': { dep: '04:40', arr: '07:05', origin: 'DEL', dest: 'SHJ', duration: '3h 55m', aircraft: 'Airbus A320' },
+  'G9 466': { dep: '21:55', arr: '00:20', origin: 'DEL', dest: 'SHJ', duration: '3h 55m', aircraft: 'Airbus A320' },
+  'G9466': { dep: '21:55', arr: '00:20', origin: 'DEL', dest: 'SHJ', duration: '3h 55m', aircraft: 'Airbus A320' },
+
+  // Amritsar (ATQ) ➔ Melbourne (MEL)
+  'TR 751/58': { dep: '20:00', arr: '17:05', origin: 'ATQ', dest: 'MEL', duration: '16h 35m', aircraft: 'Boeing 787-8 / A320' },
+  'TR 751': { dep: '20:00', arr: '04:20', origin: 'ATQ', dest: 'SIN', duration: '5h 50m', aircraft: 'Boeing 787-8 Dreamliner' }
 };
 
 /**
@@ -182,5 +214,15 @@ export function getFlightTiming(flightNumber, origin = '', destination = '') {
       return val;
     }
   }
+
+  // Sensible fallback by sector if flight timing is entirely missing
+  const sKey = `${String(origin || '').trim().toUpperCase()}-${String(destination || '').trim().toUpperCase()}`;
+  if (sKey === 'ATQ-DXB') return { dep: '00:15', arr: '02:55', duration: '4h 10m' };
+  if (sKey === 'ATQ-SHJ') return { dep: '12:15', arr: '14:40', duration: '3h 55m' };
+  if (sKey === 'IXC-AUH') return { dep: '15:10', arr: '17:30', duration: '3h 50m' };
+  if (sKey === 'DEL-DXB') return { dep: '10:15', arr: '12:35', duration: '3h 50m' };
+  if (sKey === 'DEL-SHJ') return { dep: '04:40', arr: '07:05', duration: '3h 55m' };
+  if (sKey === 'ATQ-MEL') return { dep: '20:00', arr: '17:05', duration: '16h 35m' };
+
   return null;
 }

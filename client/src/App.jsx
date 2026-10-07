@@ -14,6 +14,7 @@ import MarginRules from './pages/MarginRules';
 import MasterData from './pages/MasterData';
 import AgentPortal from './pages/AgentPortal';
 import BookingRequestsDesk from './pages/BookingRequestsDesk';
+import FlightSchedulesDesk from './pages/FlightSchedulesDesk';
 import { api } from './utils/api';
 
 function checkAdminRoute() {
@@ -525,6 +526,10 @@ export default function App() {
           <MarginRules
             masterData={masterData}
           />
+        )}
+
+        {activeTab === 'flight-schedules' && (
+          <FlightSchedulesDesk />
         )}
 
         {activeTab === 'masters' && (

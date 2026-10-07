@@ -264,6 +264,36 @@ function initSchema() {
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
 
+    CREATE TABLE IF NOT EXISTS flight_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      flight_number TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      destination TEXT NOT NULL,
+      airline_code TEXT,
+      airline_name TEXT,
+      departure_time TEXT NOT NULL,
+      arrival_time TEXT NOT NULL,
+      duration TEXT,
+      origin_terminal TEXT DEFAULT 'T1',
+      destination_terminal TEXT DEFAULT 'T2',
+      aircraft TEXT DEFAULT 'Boeing 737-800',
+      stops TEXT DEFAULT 'Non Stop',
+      day_of_week INTEGER,
+      travel_date TEXT,
+      valid_from TEXT,
+      valid_to TEXT,
+      remarks TEXT,
+      source TEXT DEFAULT 'AIRLINE_SCHEDULE',
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_flight_sched_route 
+      ON flight_schedules (origin, destination, flight_number, is_active);
+    CREATE INDEX IF NOT EXISTS idx_flight_sched_date 
+      ON flight_schedules (travel_date);
+
     CREATE INDEX IF NOT EXISTS idx_bookings_status ON booking_requests (status);
     CREATE INDEX IF NOT EXISTS idx_bookings_date ON booking_requests (created_at);
     CREATE INDEX IF NOT EXISTS idx_bookings_mobile ON booking_requests (agent_mobile);
@@ -699,6 +729,12 @@ function seedMasterData() {
 }
 
 initSchema();
+try {
+  const flightScheduleService = require('../services/flightScheduleService');
+  flightScheduleService.seedInitialSchedulesIfEmpty();
+} catch (e) {
+  console.warn('Flight schedule initial seed notice:', e.message);
+}
 seedFaresIfEmpty();
 maybeDailyAutoBackup();
 

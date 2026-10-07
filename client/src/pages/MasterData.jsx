@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Plane, Users, MapPin, Plus, Star, Check, Trash2, Edit2 } from 'lucide-react';
+import { Database, Plane, Users, MapPin, Plus, Star, Check, Trash2, Edit2, Clock } from 'lucide-react';
+import FlightSchedulesDesk from './FlightSchedulesDesk';
 import { api } from '../utils/api';
 
 export default function MasterData({ onMasterDataChanged }) {
@@ -179,6 +180,18 @@ export default function MasterData({ onMasterDataChanged }) {
         >
           <MapPin className="w-4 h-4" />
           <span>Routes & Favorites ({routes.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('flight-schedules')}
+          className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold border-b-2 transition ${
+            activeSubTab === 'flight-schedules'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Clock className="w-4 h-4 text-blue-600" />
+          <span>Flight Timings & Schedules</span>
         </button>
       </div>
 
@@ -475,6 +488,11 @@ export default function MasterData({ onMasterDataChanged }) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Tab Content 4: Flight Timings & Schedules */}
+      {activeSubTab === 'flight-schedules' && (
+        <FlightSchedulesDesk />
       )}
     </div>
   );

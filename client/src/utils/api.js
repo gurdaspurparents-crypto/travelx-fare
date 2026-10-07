@@ -792,5 +792,47 @@ export const api = {
       method: 'POST',
       body: formData
     });
+  },
+
+  // Flight Schedules & Live Airline Sync APIs
+  getFlightSchedules: async (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return safeFetch(`/api/flight-schedules${qs ? '?' + qs : ''}`);
+  },
+  upsertFlightSchedule: async (data) => {
+    return safeFetch('/api/flight-schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+  deleteFlightSchedule: async (id) => {
+    return safeFetch(`/api/flight-schedules/${id}`, {
+      method: 'DELETE'
+    });
+  },
+  parseScheduleText: async (text) => {
+    return safeFetch('/api/flight-schedules/parse-paste', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+  },
+  bulkSaveFlightSchedules: async (schedules) => {
+    return safeFetch('/api/flight-schedules/bulk-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schedules })
+    });
+  },
+  syncLiveAirlineSchedules: async () => {
+    return safeFetch('/api/flight-schedules/sync-live', {
+      method: 'POST'
+    });
+  },
+  applySchedulesToFares: async () => {
+    return safeFetch('/api/flight-schedules/apply-to-fares', {
+      method: 'POST'
+    });
   }
 };

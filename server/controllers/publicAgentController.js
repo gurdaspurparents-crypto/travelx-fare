@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const { calculateMargin } = require('../services/marginCalculator');
+const flightScheduleService = require('../services/flightScheduleService');
 
 function getPublicAgencyFromSettings() {
   const defaults = {
@@ -275,7 +276,7 @@ function computeMasterPublicFares() {
       // 3. Group by Flight Number
       const flightMap = new Map();
       airItems.forEach(f => {
-        let fltKey = String(f.flight_number || '').trim();
+        let fltKey = flightScheduleService.normalizeFlightNumber(f.flight_number, f.airline_code);
 
         // Auto-normalize flight number if truncated or missing
         if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107' || fltKey === 'IX 115') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === 'IX') {
@@ -338,9 +339,9 @@ function computeMasterPublicFares() {
           const dateLabel = formatStreakLabel(repStreak);
           const finalRate = getFinalRate(first);
 
-          const knownTiming = FLIGHT_TIMINGS[first.flight_number] || {};
-          const depTime = first.departure_time || knownTiming.dep || '';
-          const arrTime = first.arrival_time || knownTiming.arr || '';
+          const sched = flightScheduleService.resolveFlightTiming(fltKey, first.origin, first.destination, first.travel_date);
+          const depTime = first.departure_time || sched.departure_time || '';
+          const arrTime = first.arrival_time || sched.arrival_time || '';
 
           const originCity = CITY_NAMES[first.origin] || first.origin;
           const destCity = CITY_NAMES[first.destination] || first.destination;
@@ -413,7 +414,7 @@ function computeMasterPublicFares() {
     const dStr = String(f.travel_date || '').slice(0, 10);
     if (!dStr) return;
 
-    let fltKey = String(f.flight_number || '').trim();
+    let fltKey = flightScheduleService.normalizeFlightNumber(f.flight_number, f.airline_code);
     if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 107' || fltKey === 'IX 115') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === 'IX') {
       fltKey = 'IX 137';
     } else if ((!fltKey || fltKey === '6E' || fltKey === '6E 1') && f.origin === 'ATQ' && f.destination === 'SHJ' && f.airline_code === '6E') {
@@ -427,23 +428,24 @@ function computeMasterPublicFares() {
     }
 
     const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;
-    const uniqueDayKey = `${dStr}_${sKey}_${f.airline_code}`;
+    const uniqueDayKey = `${dStr}_${sKey}_${f.airline_code}_${fltKey}`;
     const finalRate = getFinalRate(f);
 
     if (!dailyKeyMap.has(uniqueDayKey) || finalRate < dailyKeyMap.get(uniqueDayKey).final_rate) {
-      const timingInfo = FLIGHT_TIMINGS[fltKey] || {};
+      const timingInfo = flightScheduleService.resolveFlightTiming(fltKey, f.origin, f.destination, dStr);
       let depTime = f.departure_time;
       let arrTime = f.arrival_time;
-      if (!depTime && timingInfo.dep) depTime = timingInfo.dep;
-      if (!arrTime && timingInfo.arr) arrTime = timingInfo.arr;
+      if (!depTime && timingInfo.departure_time) depTime = timingInfo.departure_time;
+      if (!arrTime && timingInfo.arrival_time) arrTime = timingInfo.arrival_time;
 
       const originCity = CITY_NAMES[f.origin] || f.origin;
       const destCity = CITY_NAMES[f.destination] || f.destination;
 
-      let duration = timingInfo.dur || (sKey === 'ATQ-DXB' ? '4h 10m' : sKey === 'ATQ-SHJ' ? '4h 20m' : '3h 50m');
-      const origTerminal = timingInfo.origT || (f.origin === 'ATQ' ? 'T1' : 'Intl');
-      const destTerminal = timingInfo.destT || (f.destination === 'DXB' ? 'T2' : f.destination === 'AUH' ? 'Terminal A' : 'Main');
+      let duration = timingInfo.duration || (sKey === 'ATQ-DXB' ? '4h 10m' : sKey === 'ATQ-SHJ' ? '4h 20m' : '3h 50m');
+      const origTerminal = timingInfo.origin_terminal || (f.origin === 'ATQ' ? 'T1' : 'Intl');
+      const destTerminal = timingInfo.destination_terminal || (f.destination === 'DXB' ? 'T2' : f.destination === 'AUH' ? 'Terminal A' : 'Main');
       const aircraft = timingInfo.aircraft || (f.airline_code === '6E' ? 'Airbus A320neo' : 'Boeing 737-800');
+      const stops = timingInfo.stops || 'Non Stop';
 
       const dObj = parseDateParts(dStr);
       const dayName = DAY_NAMES[dObj.getDay()];
@@ -474,10 +476,10 @@ function computeMasterPublicFares() {
         formatted_date: formattedDate,
         day_name: dayName,
         day_label: dayLabel,
-        departure_time: depTime || '00:15',
-        arrival_time: arrTime || '02:55',
+        departure_time: depTime || '12:00',
+        arrival_time: arrTime || '14:30',
         duration,
-        stops: 'Non Stop',
+        stops,
         final_rate: finalRate,
         baggage: normalizeBaggage(f.baggage),
         is_refundable: 'Non Refundable',
