@@ -16,7 +16,14 @@ const bookingController = require('./controllers/bookingController');
 const authController = require('./controllers/authController');
 const settingsController = require('./controllers/settingsController');
 const flightScheduleController = require('./controllers/flightScheduleController');
+const flightScheduleService = require('./services/flightScheduleService');
 const { requireAdmin } = require('./middleware/adminAuth');
+
+try {
+  flightScheduleService.seedInitialSchedulesIfEmpty();
+} catch (e) {
+  console.warn('Initial flight schedule seed notice:', e.message);
+}
 
 process.on('uncaughtException', (err) => {
   console.error('CRITICAL UNCAUGHT EXCEPTION:', err);

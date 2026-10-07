@@ -433,15 +433,13 @@ function computeMasterPublicFares() {
 
     if (!dailyKeyMap.has(uniqueDayKey) || finalRate < dailyKeyMap.get(uniqueDayKey).final_rate) {
       const timingInfo = flightScheduleService.resolveFlightTiming(fltKey, f.origin, f.destination, dStr);
-      let depTime = f.departure_time;
-      let arrTime = f.arrival_time;
-      if (!depTime && timingInfo.departure_time) depTime = timingInfo.departure_time;
-      if (!arrTime && timingInfo.arrival_time) arrTime = timingInfo.arrival_time;
+      const depTime = timingInfo.departure_time || f.departure_time || '12:00';
+      const arrTime = timingInfo.arrival_time || f.arrival_time || '14:30';
 
       const originCity = CITY_NAMES[f.origin] || f.origin;
       const destCity = CITY_NAMES[f.destination] || f.destination;
 
-      let duration = timingInfo.duration || (sKey === 'ATQ-DXB' ? '4h 10m' : sKey === 'ATQ-SHJ' ? '4h 20m' : '3h 50m');
+      let duration = timingInfo.duration || (depTime && arrTime ? flightScheduleService.calculateDuration(depTime, arrTime, f.origin, f.destination) : '') || (sKey === 'ATQ-DXB' ? '4h 10m' : sKey === 'ATQ-SHJ' ? '4h 20m' : '3h 50m');
       const origTerminal = timingInfo.origin_terminal || (f.origin === 'ATQ' ? 'T1' : 'Intl');
       const destTerminal = timingInfo.destination_terminal || (f.destination === 'DXB' ? 'T2' : f.destination === 'AUH' ? 'Terminal A' : 'Main');
       const aircraft = timingInfo.aircraft || (f.airline_code === '6E' ? 'Airbus A320neo' : 'Boeing 737-800');

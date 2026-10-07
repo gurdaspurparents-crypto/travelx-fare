@@ -1,4 +1,10 @@
-const db = require('../config/database');
+let _db = null;
+function getDb() {
+  if (!_db || typeof _db.prepare !== 'function') {
+    _db = require('../config/database');
+  }
+  return _db;
+}
 
 // Timezone offsets in minutes from UTC
 const AIRPORT_TZ_OFFSETS = {
@@ -402,7 +408,7 @@ function resolveFlightTiming(flightNumber, origin = '', destination = '', travel
   try {
     // 1. Check exact travel date override
     if (exactDateStr) {
-      const dateStmt = db.prepare(`
+      const dateStmt = getDb().prepare(`
         SELECT * FROM flight_schedules 
         WHERE (UPPER(flight_number) = ? OR REPLACE(flight_number, ' ', '') = ?)
           AND UPPER(origin) = ? AND UPPER(destination) = ?
@@ -416,7 +422,7 @@ function resolveFlightTiming(flightNumber, origin = '', destination = '', travel
 
     // 2. Check day-of-week schedule
     if (dayOfWeek !== null) {
-      const dowStmt = db.prepare(`
+      const dowStmt = getDb().prepare(`
         SELECT * FROM flight_schedules 
         WHERE (UPPER(flight_number) = ? OR REPLACE(flight_number, ' ', '') = ?)
           AND UPPER(origin) = ? AND UPPER(destination) = ?
@@ -430,7 +436,7 @@ function resolveFlightTiming(flightNumber, origin = '', destination = '', travel
     }
 
     // 3. Check general recurring route schedule
-    const genStmt = db.prepare(`
+    const genStmt = getDb().prepare(`
       SELECT * FROM flight_schedules 
       WHERE (UPPER(flight_number) = ? OR REPLACE(flight_number, ' ', '') = ?)
         AND UPPER(origin) = ? AND UPPER(destination) = ?
@@ -444,7 +450,7 @@ function resolveFlightTiming(flightNumber, origin = '', destination = '', travel
 
     // 4. Check by flight number alone (if origin/destination omitted)
     if (cleanFlt) {
-      const fltOnlyStmt = db.prepare(`
+      const fltOnlyStmt = getDb().prepare(`
         SELECT * FROM flight_schedules 
         WHERE (UPPER(flight_number) = ? OR REPLACE(flight_number, ' ', '') = ?)
           AND is_active = 1
@@ -556,10 +562,10 @@ function getAllSchedules(filter = {}) {
   }
 
   query += ' ORDER BY origin ASC, destination ASC, flight_number ASC, travel_date ASC';
-  const schedules = db.prepare(query).all(...params);
+  const schedules = getDb().prepare(query).all(...params);
 
   // Discover distinct flights currently operating in upcoming fares
-  const operatingStmt = db.prepare(`
+  const operatingStmt = getDb().prepare(`
     SELECT DISTINCT 
       origin, destination, airline_code, flight_number,
       COUNT(*) AS fare_count,
@@ -622,7 +628,7 @@ function upsertSchedule(data) {
   const isActive = data.is_active !== undefined ? (data.is_active ? 1 : 0) : 1;
 
   if (data.id) {
-    const updateStmt = db.prepare(`
+    const updateStmt = getDb().prepare(`
       UPDATE flight_schedules 
       SET flight_number = ?, origin = ?, destination = ?, airline_code = ?, airline_name = ?,
           departure_time = ?, arrival_time = ?, duration = ?, origin_terminal = ?, destination_terminal = ?,
@@ -638,17 +644,18 @@ function upsertSchedule(data) {
     );
   } else {
     // Check if duplicate exists for the same criteria
-    const findStmt = db.prepare(`
+    const findStmt = getDb().prepare(`
       SELECT id FROM flight_schedules 
-      WHERE flight_number = ? AND origin = ? AND destination = ?
-        AND (travel_date = ? OR (travel_date IS NULL AND ? IS NULL))
-        AND (day_of_week = ? OR (day_of_week IS NULL AND ? IS NULL))
+      WHERE (UPPER(flight_number) = ? OR REPLACE(flight_number, ' ', '') = ?)
+        AND UPPER(origin) = ? AND UPPER(destination) = ?
+        AND travel_date IS ?
+        AND day_of_week IS ?
       LIMIT 1
     `);
-    const existing = findStmt.get(flightNumber, origin, destination, travelDate, travelDate, dayOfWeek, dayOfWeek);
+    const existing = findStmt.get(flightNumber, flightNumber.replace(/\s+/g, ''), origin, destination, travelDate, dayOfWeek);
 
     if (existing) {
-      const updateStmt = db.prepare(`
+      const updateStmt = getDb().prepare(`
         UPDATE flight_schedules 
         SET departure_time = ?, arrival_time = ?, duration = ?, origin_terminal = ?, destination_terminal = ?,
             aircraft = ?, stops = ?, remarks = ?, source = ?, is_active = ?, updated_at = datetime('now', 'localtime')
@@ -656,7 +663,7 @@ function upsertSchedule(data) {
       `);
       updateStmt.run(depTime, arrTime, duration, origTerminal, destTerminal, aircraft, stops, remarks, source, isActive, existing.id);
     } else {
-      const insertStmt = db.prepare(`
+      const insertStmt = getDb().prepare(`
         INSERT INTO flight_schedules (
           flight_number, origin, destination, airline_code, airline_name,
           departure_time, arrival_time, duration, origin_terminal, destination_terminal,
@@ -678,18 +685,24 @@ function upsertSchedule(data) {
     let updateFaresQuery = `
       UPDATE fares 
       SET departure_time = ?, arrival_time = ?, updated_at = datetime('now', 'localtime')
-      WHERE (flight_number = ? OR flight_number = ? OR REPLACE(flight_number, ' ', '') = ?)
+      WHERE (UPPER(flight_number) = ? OR REPLACE(flight_number, ' ', '') = ? OR REPLACE(flight_number, ' ', '') = ?)
         AND UPPER(origin) = ? AND UPPER(destination) = ?
         AND travel_date >= date('now', 'localtime')
     `;
-    const params = [depTime, arrTime, flightNumber, flightNumber.replace(/\s+/g, ''), flightNumber.replace(/[^A-Z0-9]/g, ''), origin, destination];
+    const params = [
+      depTime, arrTime,
+      flightNumber.toUpperCase(),
+      flightNumber.replace(/\s+/g, '').toUpperCase(),
+      flightNumber.replace(/[^A-Z0-9]/g, '').toUpperCase(),
+      origin, destination
+    ];
 
     if (travelDate) {
       updateFaresQuery += ' AND travel_date = ?';
       params.push(travelDate);
     }
 
-    db.prepare(updateFaresQuery).run(...params);
+    getDb().prepare(updateFaresQuery).run(...params);
   } catch (err) {
     console.warn('Syncing schedule to fares table notice:', err.message);
   }
@@ -701,7 +714,7 @@ function upsertSchedule(data) {
  * Deletes a schedule entry
  */
 function deleteSchedule(id) {
-  const stmt = db.prepare('DELETE FROM flight_schedules WHERE id = ?');
+  const stmt = getDb().prepare('DELETE FROM flight_schedules WHERE id = ?');
   const res = stmt.run(id);
   return { success: res.changes > 0 };
 }
@@ -822,7 +835,7 @@ function parseAirlineScheduleText(text) {
  */
 function seedInitialSchedulesIfEmpty() {
   try {
-    const count = db.prepare('SELECT COUNT(*) as c FROM flight_schedules').get().c;
+    const count = getDb().prepare('SELECT COUNT(*) as c FROM flight_schedules').get().c;
     if (count === 0) {
       console.log('Seeding initial verified airline flight schedules...');
       DEFAULT_VERIFIED_SCHEDULES.forEach(s => {
@@ -873,13 +886,13 @@ function syncWithLiveAirlines() {
 function applySchedulesToFares() {
   let updatedCount = 0;
   try {
-    const upcomingFares = db.prepare(`
+    const upcomingFares = getDb().prepare(`
       SELECT id, origin, destination, airline_code, flight_number, travel_date, departure_time, arrival_time 
       FROM fares
       WHERE travel_date >= date('now', 'localtime')
     `).all();
 
-    const updateStmt = db.prepare(`
+    const updateStmt = getDb().prepare(`
       UPDATE fares 
       SET departure_time = ?, arrival_time = ?, updated_at = datetime('now', 'localtime')
       WHERE id = ?

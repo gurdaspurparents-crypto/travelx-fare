@@ -729,12 +729,6 @@ function seedMasterData() {
 }
 
 initSchema();
-try {
-  const flightScheduleService = require('../services/flightScheduleService');
-  flightScheduleService.seedInitialSchedulesIfEmpty();
-} catch (e) {
-  console.warn('Flight schedule initial seed notice:', e.message);
-}
 seedFaresIfEmpty();
 maybeDailyAutoBackup();
 
