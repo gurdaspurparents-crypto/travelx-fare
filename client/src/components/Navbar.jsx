@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  LayoutDashboard, Zap, Table, MessageSquare, 
-  GitCompare, Send, History, Database, Download, Building2, Layers, Trash2, Plus,
-  FileSpreadsheet, Smartphone, Inbox, ShieldAlert, ShieldCheck, Sliders, Clock,
-  ChevronDown
+  LayoutDashboard, Zap, 
+  GitCompare, Send, Database, Download, Building2, Trash2, Plus,
+  FileSpreadsheet, Smartphone, Inbox, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import ClearRatesModal from './ClearRatesModal';
 import { api } from '../utils/api';
@@ -14,25 +13,7 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
   const [maintenanceActive, setMaintenanceActive] = useState(false);
   const [togglingMaint, setTogglingMaint] = useState(false);
 
-  // Dropdown states
-  const [showEntryMenu, setShowEntryMenu] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const entryMenuRef = useRef(null);
-  const moreMenuRef = useRef(null);
 
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (entryMenuRef.current && !entryMenuRef.current.contains(event.target)) {
-        setShowEntryMenu(false);
-      }
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
-        setShowMoreMenu(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Poll booking stats for live badges (Pending, Declined, Passports Ready) & check maintenance state
   useEffect(() => {
@@ -81,34 +62,17 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
     }
   };
 
-  // 1. Primary Operating Desks (Always visible in 1 click)
-  const coreDesks = [
+  // Primary Operating Desks (Clean, short, essential desks only)
+  const navItems = [
     { id: 'enquiries', label: 'Bookings', icon: Inbox, isBooking: true },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'vendor-heads', label: 'Vendor Rates', icon: Building2 },
     { id: 'final-rates', label: 'Final Rates', icon: FileSpreadsheet, badgeText: 'EXCEL' },
-    { id: 'flight-schedules', label: 'Flight Timings', icon: Clock, badgeText: 'LIVE' },
+    { id: 'compare', label: 'Compare Fares', icon: GitCompare },
+    { id: 'fast-entry', label: 'Fast Entry', icon: Zap },
     { id: 'publish', label: 'Broadcast', icon: Send },
+    { id: 'masters', label: 'Master Data', icon: Database },
   ];
-
-  // 2. Input Modes (Grouped into "Rate Entry ▾" dropdown)
-  const inputModes = [
-    { id: 'fast-entry', label: 'Fast Entry', icon: Zap, desc: 'Quick 1-by-1 rate entry form' },
-    { id: 'quick-grid', label: 'Quick Grid', icon: Table, desc: 'Excel spreadsheet rate editor' },
-    { id: 'bulk-paste', label: 'WhatsApp Paste', icon: MessageSquare, desc: 'Paste raw WhatsApp rate broadcast' },
-  ];
-
-  // 3. Additional Tools & Setup (Grouped into "More ▾" dropdown)
-  const moreTools = [
-    { id: 'all-rates', label: 'All Rates Desk', icon: Layers, badge: 'LIVE', desc: 'Master combined rate inventory table' },
-    { id: 'compare', label: 'Compare Fares', icon: GitCompare, desc: 'Side-by-side vendor rate comparison' },
-    { id: 'margins', label: 'Fare Rules & Margins', icon: Sliders, desc: 'Pricing rules & markups' },
-    { id: 'history', label: 'Fare History & Logs', icon: History, desc: 'Audit log of price changes' },
-    { id: 'masters', label: 'Master Data', icon: Database, desc: 'Airlines, Vendors & Sectors' },
-  ];
-
-  const activeInputMode = inputModes.find(m => m.id === activeTab);
-  const activeMoreTool = moreTools.find(m => m.id === activeTab);
 
   return (
     <>
@@ -215,201 +179,60 @@ export default function Navbar({ activeTab, setActiveTab, vendors = [], onRatesC
           </div>
         </div>
 
-        {/* Navigation Bar (Compact, 100% Fit, Zero Overflow) */}
+        {/* Navigation Bar (Clean, Streamlined 8 Core Desks, Zero Clutter) */}
         <div className="bg-slate-950/95 border-t border-slate-800/80">
           <div className="max-w-[1700px] mx-auto px-3 sm:px-4">
-            <nav className="flex items-center justify-between py-1 gap-2">
-              {/* Primary Desks */}
-              <div className="flex items-center space-x-1 flex-wrap">
-                {coreDesks.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                        isActive
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                      }`}
-                    >
-                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                      <span>{item.label}</span>
-                      
-                      {/* Booking Counter Badge */}
-                      {item.isBooking && (
-                        <div className="flex items-center space-x-1 ml-1">
-                          {bookingStats.pending > 0 && (
-                            <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-amber-500 text-white animate-pulse" title={`${bookingStats.pending} Pending Inquiries`}>
-                              {bookingStats.pending}
-                            </span>
-                          )}
-                          {bookingStats.declined > 0 && (
-                            <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-rose-600 text-white shadow-xs" title={`${bookingStats.declined} Agent Declined Requests`}>
-                              ❌ {bookingStats.declined}
-                            </span>
-                          )}
-                          {bookingStats.docs_submitted > 0 && (
-                            <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-teal-500 text-white shadow-xs" title={`${bookingStats.docs_submitted} Passports Ready`}>
-                              📄 {bookingStats.docs_submitted}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Status Badges */}
-                      {item.badgeText && (
-                        <span className={`ml-1 px-1.5 py-0.2 text-[9px] rounded font-black border tracking-tight ${
-                          item.badgeText === 'EXCEL'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : 'bg-amber-400/20 text-amber-300 border-amber-400/30'
-                        }`}>
-                          {item.badgeText}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Dropdowns on Right (Rate Entry & More Tools) */}
-              <div className="flex items-center space-x-1.5 shrink-0">
-                <div className="h-4 w-px bg-slate-800 mx-1"></div>
-
-                {/* 1. Rate Entry Dropdown */}
-                <div className="relative" ref={entryMenuRef}>
+            <nav className="flex items-center space-x-1 py-1 overflow-x-auto">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
                   <button
-                    type="button"
-                    onClick={() => {
-                      setShowEntryMenu(!showEntryMenu);
-                      setShowMoreMenu(false);
-                    }}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer border ${
-                      activeInputMode
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
-                        : showEntryMenu
-                        ? 'bg-slate-800 text-white border-slate-700'
-                        : 'bg-slate-900/90 hover:bg-slate-800 text-blue-300 border-blue-500/30'
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
                     }`}
-                    title="Choose input mode: Fast Entry, Quick Grid, or WhatsApp Paste"
                   >
-                    {activeInputMode ? (
-                      <activeInputMode.icon className="w-3.5 h-3.5" />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5 text-blue-400" />
-                    )}
-                    <span>{activeInputMode ? activeInputMode.label : 'Rate Entry'}</span>
-                    <ChevronDown className={`w-3 h-3 transition-transform ${showEntryMenu ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {/* Entry Modes Popup */}
-                  {showEntryMenu && (
-                    <div className="absolute right-0 mt-1.5 w-56 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2.5 py-1 border-b border-slate-800 mb-1">
-                        Rate Input Modes
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span>{item.label}</span>
+                    
+                    {/* Booking Counter Badge */}
+                    {item.isBooking && (
+                      <div className="flex items-center space-x-1 ml-1">
+                        {bookingStats.pending > 0 && (
+                          <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-amber-500 text-white animate-pulse" title={`${bookingStats.pending} Pending Inquiries`}>
+                            {bookingStats.pending}
+                          </span>
+                        )}
+                        {bookingStats.declined > 0 && (
+                          <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-rose-600 text-white shadow-xs" title={`${bookingStats.declined} Agent Declined Requests`}>
+                            ❌ {bookingStats.declined}
+                          </span>
+                        )}
+                        {bookingStats.docs_submitted > 0 && (
+                          <span className="px-1.5 py-0.2 text-[10px] rounded-full font-black bg-teal-500 text-white shadow-xs" title={`${bookingStats.docs_submitted} Passports Ready`}>
+                            📄 {bookingStats.docs_submitted}
+                          </span>
+                        )}
                       </div>
-                      {inputModes.map((mode) => {
-                        const Icon = mode.icon;
-                        const isCurrent = activeTab === mode.id;
-                        return (
-                          <button
-                            key={mode.id}
-                            type="button"
-                            onClick={() => {
-                              setActiveTab(mode.id);
-                              setShowEntryMenu(false);
-                            }}
-                            className={`w-full text-left flex items-start space-x-2.5 px-2.5 py-2 rounded-lg text-xs transition cursor-pointer ${
-                              isCurrent
-                                ? 'bg-blue-600 text-white font-bold'
-                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                            }`}
-                          >
-                            <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${isCurrent ? 'text-white' : 'text-blue-400'}`} />
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-bold text-xs">{mode.label}</span>
-                              <span className={`text-[10px] truncate ${isCurrent ? 'text-blue-100' : 'text-slate-400'}`}>
-                                {mode.desc}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. More Tools & Setup Dropdown */}
-                <div className="relative" ref={moreMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMoreMenu(!showMoreMenu);
-                      setShowEntryMenu(false);
-                    }}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer border ${
-                      activeMoreTool
-                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
-                        : showMoreMenu
-                        ? 'bg-slate-800 text-white border-slate-700'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60 border-slate-800'
-                    }`}
-                    title="Secondary desks, comparison, fare rules, and system master data"
-                  >
-                    {activeMoreTool ? (
-                      <activeMoreTool.icon className="w-3.5 h-3.5" />
-                    ) : (
-                      <Sliders className="w-3.5 h-3.5 text-slate-400" />
                     )}
-                    <span>{activeMoreTool ? activeMoreTool.label : 'More Tools'}</span>
-                    <ChevronDown className={`w-3 h-3 transition-transform ${showMoreMenu ? 'rotate-180' : ''}`} />
-                  </button>
 
-                  {/* More Tools Popup */}
-                  {showMoreMenu && (
-                    <div className="absolute right-0 mt-1.5 w-64 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2.5 py-1 border-b border-slate-800 mb-1">
-                        Desks & System Setup
-                      </div>
-                      {moreTools.map((tool) => {
-                        const Icon = tool.icon;
-                        const isCurrent = activeTab === tool.id;
-                        return (
-                          <button
-                            key={tool.id}
-                            type="button"
-                            onClick={() => {
-                              setActiveTab(tool.id);
-                              setShowMoreMenu(false);
-                            }}
-                            className={`w-full text-left flex items-start space-x-2.5 px-2.5 py-2 rounded-lg text-xs transition cursor-pointer ${
-                              isCurrent
-                                ? 'bg-blue-600 text-white font-bold'
-                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                            }`}
-                          >
-                            <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${isCurrent ? 'text-white' : 'text-indigo-400'}`} />
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-xs">{tool.label}</span>
-                                {tool.badge && (
-                                  <span className="text-[9px] px-1 py-0.2 rounded font-black bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                                    {tool.badge}
-                                  </span>
-                                )}
-                              </div>
-                              <span className={`text-[10px] truncate ${isCurrent ? 'text-blue-100' : 'text-slate-400'}`}>
-                                {tool.desc}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
+                    {/* Status Badges */}
+                    {item.badgeText && (
+                      <span className={`ml-1 px-1.5 py-0.2 text-[9px] rounded font-black border tracking-tight ${
+                        item.badgeText === 'EXCEL'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-400/20 text-amber-300 border-amber-400/30'
+                      }`}>
+                        {item.badgeText}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </nav>
           </div>
         </div>
