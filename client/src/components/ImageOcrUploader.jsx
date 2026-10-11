@@ -212,7 +212,7 @@ export default function ImageOcrUploader({
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
-        const maxW = 1400;
+        const maxW = 1100;
         const scale = img.width > maxW ? maxW / img.width : 1;
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -220,7 +220,7 @@ export default function ImageOcrUploader({
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
@@ -371,12 +371,12 @@ export default function ImageOcrUploader({
     setImagePreview(newPreviews[0].url);
 
     setScanning(true);
-    setScanProgress(8);
+    setScanProgress(15);
     setStatus(null);
     setExtractError('');
     const progressTimer = setInterval(() => {
-      setScanProgress((p) => (p < 88 ? p + 2 : p));
-    }, 1200);
+      setScanProgress((p) => (p < 88 ? p + 4 : p));
+    }, 400);
 
     const defaults = {
       defaultOrigin,
