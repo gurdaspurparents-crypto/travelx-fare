@@ -594,6 +594,7 @@ function seedMasterData() {
       ['DEL', 'SHJ', 'Delhi', 'Sharjah', 1],
       ['DEL', 'AUH', 'Delhi', 'Abu Dhabi', 1],
       ['IXC', 'AUH', 'Chandigarh', 'Abu Dhabi', 1],
+      ['IXC', 'SHJ', 'Chandigarh', 'Sharjah', 1],
       ['DEL', 'LHR', 'Delhi', 'London Heathrow', 1],
       ['DEL', 'BKK', 'Delhi', 'Bangkok', 1],
       ['BOM', 'DXB', 'Mumbai', 'Dubai', 1],
@@ -610,6 +611,7 @@ function seedMasterData() {
     { origin: 'ATQ', destination: 'DXB' },
     { origin: 'ATQ', destination: 'SHJ' },
     { origin: 'IXC', destination: 'AUH' },
+    { origin: 'IXC', destination: 'SHJ' },
     { origin: 'DEL', destination: 'DXB' },
     { origin: 'DEL', destination: 'SHJ' },
     { origin: 'DEL', destination: 'AUH' }
@@ -686,46 +688,10 @@ function seedMasterData() {
     `).run();
   } catch (_) {}
 
-  // Seed vendor pricing rules if table is empty (Bipasha Europe discounts only)
-  const vRuleCount = db.prepare('SELECT COUNT(*) as count FROM vendor_pricing_rules').get().count;
-  if (vRuleCount === 0) {
-    const insertVRule = db.prepare(`
-      INSERT INTO vendor_pricing_rules (
-        vendor_id, vendor_name, airline_code, origin, destination, 
-        min_fare, max_fare, adjustment_type, adjustment_amount, priority, is_active, description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    `);
-
-    // 1. Bipasha Rules (Less Karna Hai)
-    const bipasha = db.prepare("SELECT id FROM vendors WHERE name LIKE '%Bipasha%'").get();
-    const bipashaId = bipasha ? bipasha.id : 17;
-    const bipashaRules = [
-      // Air India
-      ['AI', 'DEL', 'MXP', 2500, 'Air India Del TO Millan: Less 2500'],
-      ['AI', 'MXP', 'DEL', 2500, 'Air India Millan to Del: Less 2500'],
-      ['AI', 'DEL', 'MIL', 2500, 'Air India Del TO Millan: Less 2500'],
-      ['AI', 'MIL', 'DEL', 2500, 'Air India Millan to Del: Less 2500'],
-      ['AI', 'DEL', 'FCO', 3000, 'Air India Del to Rome: Less 3000'],
-      ['AI', 'FCO', 'DEL', 2500, 'Air India Rome to Del: Less 2500'],
-      ['AI', 'DEL', 'ROM', 3000, 'Air India Del to Rome: Less 3000'],
-      ['AI', 'ROM', 'DEL', 2500, 'Air India Rome to Del: Less 2500'],
-      // ITA Airline
-      ['AZ', 'DEL', 'MXP', 3500, 'ITA Airline Del TO Millan: Less 3500'],
-      ['AZ', 'MXP', 'DEL', 3000, 'ITA Airline Millan to Del: Less 3000'],
-      ['AZ', 'DEL', 'MIL', 3500, 'ITA Airline Del TO Millan: Less 3500'],
-      ['AZ', 'MIL', 'DEL', 3000, 'ITA Airline Millan to Del: Less 3000'],
-      ['AZ', 'DEL', 'FCO', 3500, 'ITA Airline Del to Rome: Less 3500'],
-      ['AZ', 'FCO', 'DEL', 3000, 'ITA Airline Rome to Del: Less 3000'],
-      ['AZ', 'DEL', 'ROM', 3500, 'ITA Airline Del to Rome: Less 3500'],
-      ['AZ', 'ROM', 'DEL', 3000, 'ITA Airline Rome to Del: Less 3000'],
-      ['AZ', 'DEL', 'YYZ', 3000, 'ITA Airline Del to YYZ: Less 3000'],
-      ['AZ', 'YYZ', 'DEL', 3000, 'ITA Airline YYZ to Del: Less 3000']
-    ];
-
-    for (const br of bipashaRules) {
-      insertVRule.run(bipashaId, 'Bipasha', br[0], br[1], br[2], 0, 99999999, 'LESS', br[3], 30, br[4]);
-    }
-  }
+  // Ensure unwanted vendor pricing rules are purged (User request: All Active Vendor Rules nahi chahiye)
+  try {
+    db.prepare('DELETE FROM vendor_pricing_rules').run();
+  } catch (_) {}
 }
 
 initSchema();

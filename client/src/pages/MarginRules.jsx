@@ -44,6 +44,7 @@ export default function MarginRules({ masterData = {} }) {
     { name: 'ATQ → DXB Gulf Slabs', airline_code: '', origin: 'ATQ', destination: 'DXB', margin_amount: 300, priority: 10 },
     { name: 'ATQ → SHJ Gulf Slabs', airline_code: '', origin: 'ATQ', destination: 'SHJ', margin_amount: 300, priority: 10 },
     { name: 'IXC → AUH Gulf Slabs', airline_code: '', origin: 'IXC', destination: 'AUH', margin_amount: 300, priority: 10 },
+    { name: 'IXC → SHJ Gulf Slabs', airline_code: '', origin: 'IXC', destination: 'SHJ', margin_amount: 300, priority: 10 },
     { name: 'DEL → DXB Gulf Slabs', airline_code: '', origin: 'DEL', destination: 'DXB', margin_amount: 300, priority: 10 },
     { name: 'DEL → SHJ Gulf Slabs', airline_code: '', origin: 'DEL', destination: 'SHJ', margin_amount: 300, priority: 10 },
     { name: 'DEL → AUH Gulf Slabs', airline_code: '', origin: 'DEL', destination: 'AUH', margin_amount: 300, priority: 10 }
@@ -404,7 +405,7 @@ export default function MarginRules({ masterData = {} }) {
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-slate-900">Gulf Sector Margin Rules</h3>
-                    <p className="text-[11px] font-bold text-emerald-700">ATQ➔DXB/SHJ | IXC➔AUH | DEL➔DXB/SHJ/AUH</p>
+                    <p className="text-[11px] font-bold text-emerald-700">ATQ➔DXB/SHJ | IXC➔AUH/SHJ | DEL➔DXB/SHJ/AUH</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-1">
@@ -421,7 +422,7 @@ export default function MarginRules({ masterData = {} }) {
                     Active Sectors:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {['ATQ ➔ DXB', 'ATQ ➔ SHJ', 'IXC ➔ AUH', 'DEL ➔ DXB', 'DEL ➔ SHJ', 'DEL ➔ AUH'].map(s => (
+                    {['ATQ ➔ DXB', 'ATQ ➔ SHJ', 'IXC ➔ AUH', 'IXC ➔ SHJ', 'DEL ➔ DXB', 'DEL ➔ SHJ', 'DEL ➔ AUH'].map(s => (
                       <span key={s} className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-black rounded-lg">
                         {s}
                       </span>
@@ -592,59 +593,67 @@ export default function MarginRules({ masterData = {} }) {
               </form>
             )}
 
-            {/* Table */}
-            <div className="overflow-x-auto max-h-96 overflow-y-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 sticky top-0">
-                  <tr>
-                    <th className="py-2.5 px-4">Vendor</th>
-                    <th className="py-2.5 px-4">Airline</th>
-                    <th className="py-2.5 px-4">Sector</th>
-                    <th className="py-2.5 px-4">Fare Range</th>
-                    <th className="py-2.5 px-4">Action</th>
-                    <th className="py-2.5 px-4">Amount</th>
-                    <th className="py-2.5 px-4">Description</th>
-                    <th className="py-2.5 px-4 text-right">Delete</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredVendorRules.map(r => (
-                    <tr key={r.id} className="hover:bg-slate-50">
-                      <td className="py-2 px-4 font-bold text-slate-900">{r.vendor_name || 'All'}</td>
-                      <td className="py-2 px-4 font-mono font-bold text-blue-700">{r.airline_code || 'Any'}</td>
-                      <td className="py-2 px-4 font-bold text-slate-800">
-                        {r.origin && r.destination ? `${r.origin} ➔ ${r.destination}` : 'All Routes'}
-                      </td>
-                      <td className="py-2 px-4 font-mono text-[11px] text-slate-600">
-                        {r.max_fare > 50000000 ? `₹${r.min_fare}+` : `₹${r.min_fare} - ₹${r.max_fare}`}
-                      </td>
-                      <td className="py-2 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                          r.adjustment_type === 'LESS' 
-                            ? 'bg-rose-100 text-rose-800' 
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}>
-                          {r.adjustment_type}
-                        </span>
-                      </td>
-                      <td className="py-2 px-4 font-mono font-black text-slate-900">
-                        {r.adjustment_type === 'LESS' ? `- ₹${r.adjustment_amount}` : `+ ₹${r.adjustment_amount}`}
-                      </td>
-                      <td className="py-2 px-4 text-slate-500 text-[11px]">{r.description}</td>
-                      <td className="py-2 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteVendorRule(r.id)}
-                          className="text-slate-400 hover:text-rose-600 p-1 rounded transition cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
+            {/* Table or Empty State */}
+            {filteredVendorRules.length > 0 ? (
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="py-2.5 px-4">Vendor</th>
+                      <th className="py-2.5 px-4">Airline</th>
+                      <th className="py-2.5 px-4">Sector</th>
+                      <th className="py-2.5 px-4">Fare Range</th>
+                      <th className="py-2.5 px-4">Action</th>
+                      <th className="py-2.5 px-4">Amount</th>
+                      <th className="py-2.5 px-4">Description</th>
+                      <th className="py-2.5 px-4 text-right">Delete</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredVendorRules.map(r => (
+                      <tr key={r.id} className="hover:bg-slate-50">
+                        <td className="py-2 px-4 font-bold text-slate-900">{r.vendor_name || 'All'}</td>
+                        <td className="py-2 px-4 font-mono font-bold text-blue-700">{r.airline_code || 'Any'}</td>
+                        <td className="py-2 px-4 font-bold text-slate-800">
+                          {r.origin && r.destination ? `${r.origin} ➔ ${r.destination}` : 'All Routes'}
+                        </td>
+                        <td className="py-2 px-4 font-mono text-[11px] text-slate-600">
+                          {r.max_fare > 50000000 ? `₹${r.min_fare}+` : `₹${r.min_fare} - ₹${r.max_fare}`}
+                        </td>
+                        <td className="py-2 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                            r.adjustment_type === 'LESS' 
+                              ? 'bg-rose-100 text-rose-800' 
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {r.adjustment_type}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4 font-mono font-black text-slate-900">
+                          {r.adjustment_type === 'LESS' ? `- ₹${r.adjustment_amount}` : `+ ₹${r.adjustment_amount}`}
+                        </td>
+                        <td className="py-2 px-4 text-slate-500 text-[11px]">{r.description}</td>
+                        <td className="py-2 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteVendorRule(r.id)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-8 text-center bg-slate-50 border-t border-slate-100">
+                <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-600">Koi active vendor discount rule nahi hai.</p>
+                <p className="text-[11px] text-slate-400 mt-1">Sabhi vendor rates bina kisi auto-deduction ke standard calculate ho rahe hain.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

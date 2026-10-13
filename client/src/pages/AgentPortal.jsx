@@ -51,12 +51,13 @@ const INDIAN_STATES = [
   'Tamil Nadu', 'Kerala', 'Bihar', 'Madhya Pradesh', 'Other'
 ];
 
-const ALLOWED_B2B_SECTOR_KEYS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH'];
+const ALLOWED_B2B_SECTOR_KEYS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH', 'IXC-SHJ'];
 
 const DEFAULT_SECTOR_OPTIONS = [
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'DXB', destCity: 'Dubai', label: '(ATQ) Amritsar ➔ (DXB) Dubai' },
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'SHJ', destCity: 'Sharjah', label: '(ATQ) Amritsar ➔ (SHJ) Sharjah' },
-  { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' }
+  { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' },
+  { origin: 'IXC', originCity: 'Chandigarh', dest: 'SHJ', destCity: 'Sharjah', label: '(IXC) Chandigarh ➔ (SHJ) Sharjah' }
 ];
 
 const DEFAULT_ORIGINS = [
@@ -70,7 +71,8 @@ const DEFAULT_DESTINATIONS = {
     { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' }
   ],
   'IXC': [
-    { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' }
+    { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' },
+    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' }
   ]
 };
 
@@ -732,7 +734,7 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
     return Number(basePrice) || 0;
   };
 
-  // Helper: Cycle through allowed B2B sectors (ATQ-DXB -> ATQ-SHJ -> IXC-AUH)
+  // Helper: Cycle through allowed B2B sectors (ATQ-DXB -> ATQ-SHJ -> IXC-AUH -> IXC-SHJ)
   const handleSwapAirports = () => {
     const key = `${origin}-${destination}`;
     if (key === 'ATQ-DXB') {
@@ -741,6 +743,9 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
     } else if (key === 'ATQ-SHJ') {
       setOrigin('IXC');
       setDestination('AUH');
+    } else if (key === 'IXC-AUH') {
+      setOrigin('IXC');
+      setDestination('SHJ');
     } else {
       setOrigin('ATQ');
       setDestination('DXB');
