@@ -212,7 +212,7 @@ export default function ImageOcrUploader({
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
-        const maxW = 1100;
+        const maxW = 960;
         const scale = img.width > maxW ? maxW / img.width : 1;
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -220,7 +220,7 @@ export default function ImageOcrUploader({
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.78));
+        resolve(canvas.toDataURL('image/jpeg', 0.74));
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
@@ -394,54 +394,70 @@ export default function ImageOcrUploader({
     const failedFlyers = [];
 
     try {
-      for (let i = 0; i < totalCount; i++) {
-        const file = validFiles[i];
-        const previewItem = newPreviews[i];
-        const flyerNum = prevCount + i + 1;
-        const fileName = previewItem?.name || `Screenshot #${flyerNum}`;
-        const flyerId = previewItem?.id || `flyer_${flyerNum}`;
+      let completedCount = 0;
+      const tasks = validFiles.map((file, i) => ({
+        file,
+        previewItem: newPreviews[i],
+        index: i,
+        flyerNum: prevCount + i + 1,
+        fileName: newPreviews[i]?.name || `Screenshot #${prevCount + i + 1}`,
+        flyerId: newPreviews[i]?.id || `flyer_${prevCount + i + 1}`
+      }));
 
-        setBatchStatus({
-          current: i + 1,
-          total: totalCount,
-          currentName: fileName
-        });
+      // Worker pool of concurrency 2 for ultra-fast parallel extraction without exceeding free-tier rate limits
+      const concurrency = totalCount === 1 ? 1 : Math.min(2, totalCount);
 
-        // Calculate progress percentage
-        const baseProgress = Math.round(((i + 0.15) / totalCount) * 100);
-        setScanProgress((p) => Math.max(p, baseProgress));
+      const worker = async () => {
+        while (tasks.length > 0) {
+          const item = tasks.shift();
+          if (!item) break;
 
-        try {
-          const result = await processSingleFile(file, engineToUse, defaults);
+          setBatchStatus({
+            current: Math.min(completedCount + 1, totalCount),
+            total: totalCount,
+            currentName: item.fileName
+          });
 
-          if (result && result.success && Array.isArray(result.records)) {
-            successfulCount++;
-            // Tag each record with its source flyer name & id for review clarity
-            const taggedRecords = result.records.map(r => ({
-              ...r,
-              source_flyer_id: flyerId,
-              source_file: fileName
-            }));
-            newRecords.push(...taggedRecords);
+          // Set baseline progress for current batch
+          const baseProgress = Math.round(((completedCount + 0.2) / totalCount) * 100);
+          setScanProgress((p) => Math.max(p, baseProgress));
 
-            if (result.rawText) {
-              allRawTexts.push(`=== FLYER ${flyerNum}: ${fileName} ===\n${result.rawText}`);
+          try {
+            const result = await processSingleFile(item.file, engineToUse, defaults);
+
+            if (result && result.success && Array.isArray(result.records)) {
+              successfulCount++;
+              // Tag each record with its source flyer name & id for review clarity
+              const taggedRecords = result.records.map(r => ({
+                ...r,
+                source_flyer_id: item.flyerId,
+                source_file: item.fileName
+              }));
+              newRecords.push(...taggedRecords);
+
+              if (result.rawText) {
+                allRawTexts.push(`=== FLYER ${item.flyerNum}: ${item.fileName} ===\n${result.rawText}`);
+              }
+            } else {
+              failedFlyers.push(`${item.fileName}${result?.error ? `: ${result.error}` : ''}`);
             }
-          } else {
-            failedFlyers.push(`${fileName}${result?.error ? `: ${result.error}` : ''}`);
+          } catch (itemErr) {
+            console.error(`Error processing flyer ${item.flyerNum} (${item.fileName}):`, itemErr);
+            failedFlyers.push(`${item.fileName}: ${itemErr.message || 'scan failed'}`);
           }
-        } catch (itemErr) {
-          console.error(`Error processing flyer ${flyerNum} (${fileName}):`, itemErr);
-          failedFlyers.push(`${fileName}: ${itemErr.message || 'scan failed'}`);
-        }
 
-        setScanProgress(Math.round(((i + 1) / totalCount) * 100));
-
-        // Polite delay between batch requests to respect free-tier rate limits
-        if (i < totalCount - 1 && engineToUse === 'gemini') {
-          await new Promise(r => setTimeout(r, 600));
+          completedCount++;
+          setScanProgress(Math.round((completedCount / totalCount) * 100));
         }
+      };
+
+      const workers = [];
+      for (let w = 0; w < concurrency; w++) {
+        // Stagger workers by 250ms to prevent burst conflicts
+        if (w > 0) await new Promise(r => setTimeout(r, 250));
+        workers.push(worker());
       }
+      await Promise.all(workers);
 
       // Merge newly extracted records with existing records
       const mergedRecords = [...existingRecords];

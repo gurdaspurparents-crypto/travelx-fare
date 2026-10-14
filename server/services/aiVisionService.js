@@ -556,25 +556,36 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
   };
 }
 
+// In-memory cache for discovered Gemini models and last working model
+let cachedGeminiModels = null;
+let cachedGeminiModelsKey = '';
+let cachedGeminiModelsTime = 0;
+let lastWorkingGeminiModel = null;
+
 /**
  * Dynamically find the best active Gemini model for the user's API Key
  */
 async function getGeminiCandidateModels(apiKey) {
   const fallbackModels = [
-    'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-flash-8b',
     'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-2.0-flash-lite',
     'gemini-1.5-pro'
   ];
 
   if (!apiKey) return fallbackModels;
 
+  const trimmedKey = apiKey.trim();
+  // Return cached models if available (cache valid for 1 hour to prevent redundant API calls per flyer)
+  if (cachedGeminiModels && cachedGeminiModelsKey === trimmedKey && (Date.now() - cachedGeminiModelsTime < 3600000)) {
+    return cachedGeminiModels;
+  }
+
   try {
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 6000);
-    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`, {
+    const timer = setTimeout(() => abort.abort(), 4000);
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${trimmedKey}`, {
       signal: abort.signal
     });
     clearTimeout(timer);
@@ -599,24 +610,26 @@ async function getGeminiCandidateModels(apiKey) {
 
         // Rank vision-capable models: high-speed Flash models first
         const score = (name) => {
-          if (name === 'gemini-2.5-flash') return 240;
-          if (name === 'gemini-2.0-flash') return 230;
-          if (name === 'gemini-2.0-flash-lite' || name.includes('flash-lite')) return 220;
-          if (name.includes('2.5-flash')) return 210;
+          if (name === 'gemini-2.0-flash') return 240;
+          if (name === 'gemini-1.5-flash') return 230;
+          if (name === 'gemini-1.5-flash-8b') return 220;
+          if (name === 'gemini-2.0-flash-lite' || name.includes('flash-lite')) return 210;
           if (name.includes('2.0-flash')) return 200;
-          if (name === 'gemini-1.5-flash-8b') return 180;
-          if (name === 'gemini-1.5-flash' || name === 'gemini-1.5-flash-latest') return 170;
-          if (name.includes('flash') && !name.includes('preview') && !name.includes('exp')) return 160;
-          if (name.includes('flash')) return 150;
-          if (name === 'gemini-2.5-pro') return 100;
-          if (name === 'gemini-1.5-pro') return 90;
+          if (name.includes('1.5-flash')) return 190;
+          if (name.includes('flash') && !name.includes('preview') && !name.includes('exp')) return 180;
+          if (name.includes('flash')) return 170;
+          if (name === 'gemini-1.5-pro') return 100;
+          if (name.includes('pro')) return 80;
           return 50;
         };
 
         const ranked = available.sort((a, b) => score(b) - score(a));
 
         if (ranked.length > 0) {
-          console.log(`📡 Dynamically discovered ${ranked.length} Gemini models for user key:`, ranked.slice(0, 6).join(', '));
+          console.log(`📡 Dynamically discovered ${ranked.length} Gemini models for user key:`, ranked.slice(0, 5).join(', '));
+          cachedGeminiModels = ranked;
+          cachedGeminiModelsKey = trimmedKey;
+          cachedGeminiModelsTime = Date.now();
           return ranked;
         }
       }
@@ -625,6 +638,10 @@ async function getGeminiCandidateModels(apiKey) {
     console.warn('Could not auto-fetch Gemini models list:', e.message);
   }
 
+  // Cache fallback models so next flyers do not block on network retry
+  cachedGeminiModels = fallbackModels;
+  cachedGeminiModelsKey = trimmedKey;
+  cachedGeminiModelsTime = Date.now();
   return fallbackModels;
 }
 
@@ -661,17 +678,22 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
     ? imageBase64.slice(5, imageBase64.indexOf(';'))
     : 'image/jpeg';
 
-  const models = await getGeminiCandidateModels(apiKey);
+  const rawModels = await getGeminiCandidateModels(apiKey);
+  // Prioritize last working model so subsequent flyers hit it on the very first try in ~1-2s!
+  let models = [...rawModels];
+  if (lastWorkingGeminiModel && models.includes(lastWorkingGeminiModel)) {
+    models = [lastWorkingGeminiModel, ...models.filter(m => m !== lastWorkingGeminiModel)];
+  }
 
   let lastError = null;
   const startedAt = Date.now();
 
   for (const model of models) {
-    if (Date.now() - startedAt > 45000) break;
+    if (Date.now() - startedAt > 40000) break;
     const plain = String(model).endsWith('#plain');
     const modelId = plain ? String(model).slice(0, -6) : model;
     const abort = new AbortController();
-    const abortTimer = setTimeout(() => abort.abort(), 16000);
+    const abortTimer = setTimeout(() => abort.abort(), 12000);
     try {
       console.log(`🚀 Scanning flyer with Gemini model: ${modelId}...`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
@@ -743,6 +765,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
       }
 
       console.log(`✅ Successfully extracted ${records.length} records using Gemini model: ${model}`);
+      lastWorkingGeminiModel = model; // Cache working model for fast 1-shot scan on subsequent flyers
 
       return {
         success: true,
