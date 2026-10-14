@@ -196,18 +196,17 @@ export const api = {
 
     await waitForBackend(onProgress);
 
-    // Extract unique sectors to clear previous rates for these specific sectors before uploading
+    // Extract unique sectors (Origin -> Destination) to clear previous rates for these specific sectors before uploading
     const uniqueSectors = [];
     const seenSecKeys = new Set();
     for (const f of fares) {
       if (!f.origin || !f.destination) continue;
       const o = String(f.origin).trim().toUpperCase();
       const d = String(f.destination).trim().toUpperCase();
-      const a = String(f.airline_code || '').trim().toUpperCase();
-      const k = `${o}_${d}_${a}`;
+      const k = `${o}_${d}`;
       if (!seenSecKeys.has(k)) {
         seenSecKeys.add(k);
-        uniqueSectors.push({ origin: o, destination: d, airline_code: a });
+        uniqueSectors.push({ origin: o, destination: d });
       }
     }
 
@@ -236,7 +235,7 @@ export const api = {
       }
     }
 
-    const postRows = (rows) =>
+    const postRows = (rows, isFirstChunk = false) =>
       safeFetch('/api/fares/bulk-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -247,6 +246,7 @@ export const api = {
           replace_missing_dates: false,
           replace_mode,
           skip_inventory_sync: true,
+          clear_sectors_first: isFirstChunk && replace_missing_dates,
           summary_only: true
         })
       }, 2, 20000, false);
@@ -267,7 +267,7 @@ export const api = {
           label: `Saving ${Math.min(savedRows + chunk.length, fares.length)} of ${fares.length}…`
         });
       }
-      let res = await postRows(chunk);
+      let res = await postRows(chunk, i === 0);
       if (!res?.success && chunk.length > 1) {
         res = { success: true, saved_count: 0, created_count: 0, updated_count: 0 };
         for (let r = 0; r < chunk.length; r++) {
@@ -279,7 +279,7 @@ export const api = {
               label: `Saving ${savedRows + r + 1} of ${fares.length}…`
             });
           }
-          const one = await postRows([chunk[r]]);
+          const one = await postRows([chunk[r]], i === 0 && r === 0);
           if (!one?.success) {
             const savedNote = savedTotal > 0 ? ` ${savedTotal} fares pehle save ho chuke hain.` : '';
             return {

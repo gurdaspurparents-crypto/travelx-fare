@@ -547,6 +547,14 @@ exports.parseImageWithAI = async (req, res) => {
   }
 };
 
+function canonicalAirport(code) {
+  const c = String(code || '').trim().toUpperCase();
+  if (c === 'MIL') return 'MXP';
+  if (c === 'FCO') return 'ROM';
+  if (c === 'TRTO') return 'YYZ';
+  return c;
+}
+
 function matchAirline(dbAir, dbFlt, targetAir) {
   if (!targetAir) return true; // Match all airlines in sector if target airline is unspecified
   const normTarget = normalizeAirlineCode(targetAir, '', '').toUpperCase();
@@ -556,10 +564,11 @@ function matchAirline(dbAir, dbFlt, targetAir) {
 
 /**
  * Deletes previous fares of a vendor for specific sectors before updating new rates.
- * Only deletes records for the specified vendor and the specific sectors being updated.
+ * Rule: "Jab bhi same vendor ke same sector ke new fare aaye, purane wale delete ho jaye"
+ * Automatically clears all previous fares for the given vendor in the updated sector(s) (Origin -> Destination).
  * All other sectors of this vendor and all other vendors remain untouched.
  */
-function deletePreviousSectorFares(vendorId, sectors = []) {
+function deletePreviousSectorFares(vendorId, sectors = [], options = {}) {
   if (!vendorId || !sectors || sectors.length === 0) return 0;
 
   let effectiveVendorId = Number(vendorId);
@@ -578,49 +587,62 @@ function deletePreviousSectorFares(vendorId, sectors = []) {
   `);
   const deleteStmt = db.prepare('DELETE FROM fares WHERE id = ?');
 
-  // Extract unique sectors
+  // Extract unique sectors (Origin -> Destination)
   const sectorList = [];
   const seen = new Set();
   for (const s of sectors) {
-    const orig = (s.origin || '').trim().toUpperCase();
-    const dest = (s.destination || '').trim().toUpperCase();
-    const air = (s.airline_code || '').trim().toUpperCase();
+    const orig = canonicalAirport(s.origin || '');
+    const dest = canonicalAirport(s.destination || '');
     if (!orig || !dest) continue;
-    const k = `${orig}_${dest}_${air}`;
+    const k = `${orig}_${dest}`;
     if (!seen.has(k)) {
       seen.add(k);
-      sectorList.push({ origin: orig, destination: dest, airline_code: air, flight_number: s.flight_number });
+      sectorList.push({ origin: orig, destination: dest, airline_code: s.airline_code });
     }
   }
 
+  const existingStmt = db.prepare(`
+    SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number
+    FROM fares
+    WHERE vendor_id = ?
+      AND (
+        (UPPER(origin) = ? AND UPPER(destination) = ?)
+        OR (UPPER(origin) = 'MIL' AND ? = 'MXP' AND UPPER(destination) = ?)
+        OR (UPPER(origin) = 'FCO' AND ? = 'ROM' AND UPPER(destination) = ?)
+        OR (UPPER(destination) = 'MIL' AND ? = 'MXP' AND UPPER(origin) = ?)
+        OR (UPPER(destination) = 'FCO' AND ? = 'ROM' AND UPPER(origin) = ?)
+      )
+  `);
+
   for (const sec of sectorList) {
-    const existingFares = db.prepare(`
-      SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number
-      FROM fares
-      WHERE vendor_id = ?
-        AND UPPER(origin) = ?
-        AND UPPER(destination) = ?
-    `).all(effectiveVendorId, sec.origin, sec.destination);
+    const existingFares = existingStmt.all(
+      effectiveVendorId,
+      sec.origin, sec.destination,
+      sec.origin, sec.destination,
+      sec.origin, sec.destination,
+      sec.destination, sec.origin,
+      sec.destination, sec.origin
+    );
 
     for (const ef of existingFares) {
-      const matches = !sec.airline_code || matchAirline(ef.airline_code, ef.flight_number, sec.airline_code);
-      if (matches) {
-        try {
-          historyStmt.run(
-            ef.id,
-            effectiveVendorId,
-            ef.airline_code,
-            ef.origin,
-            ef.destination,
-            ef.travel_date,
-            ef.flight_number || '',
-            ef.net_fare,
-            -ef.net_fare
-          );
-        } catch (_) {}
-        deleteStmt.run(ef.id);
-        totalDeleted++;
+      if (options.strictAirline && sec.airline_code && !matchAirline(ef.airline_code, ef.flight_number, sec.airline_code)) {
+        continue;
       }
+      try {
+        historyStmt.run(
+          ef.id,
+          effectiveVendorId,
+          ef.airline_code,
+          ef.origin,
+          ef.destination,
+          ef.travel_date,
+          ef.flight_number || '',
+          ef.net_fare,
+          -ef.net_fare
+        );
+      } catch (_) {}
+      deleteStmt.run(ef.id);
+      totalDeleted++;
     }
   }
 
@@ -711,14 +733,13 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
     const sectorMap = new Map();
     for (const f of fares) {
       if (!f.travel_date || !f.origin || !f.destination) continue;
-      const airline = normalizeAirlineCode(f.airline_code || '', f.flight_number || '', '').toUpperCase();
-      const origin = f.origin.trim().toUpperCase();
-      const dest = f.destination.trim().toUpperCase();
+      const origin = canonicalAirport(f.origin.trim().toUpperCase());
+      const dest = canonicalAirport(f.destination.trim().toUpperCase());
       const cleanDate = parseDateString(f.travel_date, currentYear) || String(f.travel_date).trim();
-      const key = `${airline}_${origin}_${dest}`;
+      const key = `${origin}_${dest}`;
 
       if (!sectorMap.has(key)) {
-        sectorMap.set(key, { airline_code: airline, origin, destination: dest, dates: new Set() });
+        sectorMap.set(key, { origin, destination: dest, dates: new Set() });
       }
       sectorMap.get(key).dates.add(cleanDate);
     }
@@ -727,20 +748,27 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
       SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number 
       FROM fares
       WHERE vendor_id = ?
-        AND UPPER(origin) = ?
-        AND UPPER(destination) = ?
+        AND (
+          (UPPER(origin) = ? AND UPPER(destination) = ?)
+          OR (UPPER(origin) = 'MIL' AND ? = 'MXP' AND UPPER(destination) = ?)
+          OR (UPPER(origin) = 'FCO' AND ? = 'ROM' AND UPPER(destination) = ?)
+          OR (UPPER(destination) = 'MIL' AND ? = 'MXP' AND UPPER(origin) = ?)
+          OR (UPPER(destination) = 'FCO' AND ? = 'ROM' AND UPPER(origin) = ?)
+        )
     `);
 
     for (const sector of sectorMap.values()) {
       const existingFares = existingStmt.all(
         effectiveVendorId,
-        sector.origin,
-        sector.destination
+        sector.origin, sector.destination,
+        sector.origin, sector.destination,
+        sector.origin, sector.destination,
+        sector.destination, sector.origin,
+        sector.destination, sector.origin
       );
 
       for (const ef of existingFares) {
-        const matches = !sector.airline_code || matchAirline(ef.airline_code, ef.flight_number, sector.airline_code);
-        if (matches && !sector.dates.has(ef.travel_date)) {
+        if (!sector.dates.has(ef.travel_date)) {
           try {
             historyStmt.run(ef.id, effectiveVendorId, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
           } catch (hErr) {

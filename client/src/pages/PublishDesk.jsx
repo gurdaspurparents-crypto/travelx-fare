@@ -281,10 +281,12 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
     }
   }, [displayedFares, title, footer, whatsappMode]);
 
-  // Remove an entire consolidated streak from final sheet
+  // Remove an entire consolidated streak from final sheet & database
   const handleRemoveConsolidatedStreak = async (streakItem) => {
     try {
-      await api.togglePublish(streakItem.fare_ids, 0);
+      if (Array.isArray(streakItem.fare_ids)) {
+        await Promise.all(streakItem.fare_ids.map(id => api.deleteFare(id)));
+      }
       const targetIds = new Set(streakItem.fare_ids);
       setFares(prev => {
         const updated = prev.filter(f => !targetIds.has(f.id));
@@ -372,7 +374,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
 
   const handleRemoveRow = async (fareId) => {
     try {
-      await api.togglePublish([fareId], 0);
+      await api.deleteFare(fareId);
       setFares(prev => {
         const updated = prev.filter(f => f.id !== fareId);
         generateBroadcast(updated);
