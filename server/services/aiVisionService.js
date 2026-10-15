@@ -3,6 +3,7 @@
  */
 
 const { parseDateString, normalizeAirlineCode, parseWhatsAppFareText } = require('./whatsappParser');
+const db = require('../config/database');
 
 const AIRLINE_CODE_MAP = {
   'air india express': 'IX',
@@ -556,6 +557,29 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
   };
 }
 
+// Database persistent helpers for working Gemini models across server restarts
+function getPersistedWorkingModel() {
+  try {
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'last_working_gemini_model'").get();
+    if (row && row.value && typeof row.value === 'string' && row.value.trim()) {
+      return row.value.trim();
+    }
+  } catch (_) {}
+  return null;
+}
+
+function setPersistedWorkingModel(model) {
+  if (!model) return;
+  try {
+    const clean = String(model).replace(/#plain$/, '').trim();
+    db.prepare(`
+      INSERT INTO app_settings (key, value, updated_at) 
+      VALUES ('last_working_gemini_model', ?, datetime('now', 'localtime'))
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `).run(clean);
+  } catch (_) {}
+}
+
 // In-memory cache for discovered Gemini models and last working model
 let cachedGeminiModels = null;
 let cachedGeminiModelsKey = '';
@@ -567,11 +591,12 @@ let lastWorkingGeminiModel = null;
  */
 async function getGeminiCandidateModels(apiKey) {
   const fallbackModels = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-pro'
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash'
   ];
 
   if (!apiKey) return fallbackModels;
@@ -584,7 +609,7 @@ async function getGeminiCandidateModels(apiKey) {
 
   try {
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 4000);
+    const timer = setTimeout(() => abort.abort(), 3500);
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${trimmedKey}`, {
       signal: abort.signal
     });
@@ -605,20 +630,26 @@ async function getGeminiCandidateModels(apiKey) {
             !m.includes('audio') &&
             !m.includes('speech') &&
             !m.includes('realtime') &&
-            !m.includes('live')
+            !m.includes('live') &&
+            !m.includes('1.5') // 1.5 family completely shut down by Google in 2025
           );
 
         // Rank vision-capable models: high-speed Flash models first
         const score = (name) => {
-          if (name === 'gemini-2.0-flash') return 240;
-          if (name === 'gemini-1.5-flash') return 230;
-          if (name === 'gemini-1.5-flash-8b') return 220;
-          if (name === 'gemini-2.0-flash-lite' || name.includes('flash-lite')) return 210;
-          if (name.includes('2.0-flash')) return 200;
-          if (name.includes('1.5-flash')) return 190;
+          if (name === 'gemini-3.8-flash') return 300;
+          if (name === 'gemini-3.6-flash') return 290;
+          if (name === 'gemini-3.5-flash') return 280;
+          if (name.includes('3.8-flash')) return 270;
+          if (name.includes('3.6-flash')) return 260;
+          if (name.includes('3.5-flash')) return 250;
+          if (name === 'gemini-2.5-flash') return 240;
+          if (name.includes('2.5-flash')) return 230;
+          if (name === 'gemini-3.1-flash-lite' || name.includes('3.1-flash-lite')) return 220;
+          if (name.includes('flash-lite')) return 210;
+          if (name === 'gemini-2.0-flash') return 200;
+          if (name.includes('2.0-flash')) return 190;
           if (name.includes('flash') && !name.includes('preview') && !name.includes('exp')) return 180;
           if (name.includes('flash')) return 170;
-          if (name === 'gemini-1.5-pro') return 100;
           if (name.includes('pro')) return 80;
           return 50;
         };
@@ -668,7 +699,7 @@ function queueSuggestedModel(models, current, message) {
 /**
  * Parse Image using Google Gemini Vision (Auto-discovers active models and falls back seamlessly)
  */
-async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
+async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferredModel = null) {
   if (!apiKey) {
     throw new Error('Google Gemini API Key is required. Please enter your Gemini API Key in the settings.');
   }
@@ -679,21 +710,26 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
     : 'image/jpeg';
 
   const rawModels = await getGeminiCandidateModels(apiKey);
-  // Prioritize last working model so subsequent flyers hit it on the very first try in ~1-2s!
+  const dbModel = getPersistedWorkingModel();
+  const topPriority = preferredModel || lastWorkingGeminiModel || dbModel;
+
   let models = [...rawModels];
-  if (lastWorkingGeminiModel && models.includes(lastWorkingGeminiModel)) {
-    models = [lastWorkingGeminiModel, ...models.filter(m => m !== lastWorkingGeminiModel)];
+  if (topPriority) {
+    const cleanPriority = String(topPriority).replace(/#plain$/, '');
+    models = [cleanPriority, ...models.filter(m => m !== cleanPriority)];
   }
 
   let lastError = null;
   const startedAt = Date.now();
 
   for (const model of models) {
-    if (Date.now() - startedAt > 40000) break;
+    if (Date.now() - startedAt > 30000) break;
     const plain = String(model).endsWith('#plain');
     const modelId = plain ? String(model).slice(0, -6) : model;
     const abort = new AbortController();
-    const abortTimer = setTimeout(() => abort.abort(), 12000);
+    // Fast failover: Healthy Flash models respond in 1-2.5s.
+    // Abort hung or rate-limited models after 6s instead of 12s so user never waits.
+    const abortTimer = setTimeout(() => abort.abort(), 6000);
     try {
       console.log(`🚀 Scanning flyer with Gemini model: ${modelId}...`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
@@ -704,8 +740,13 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
         maxOutputTokens: 8192
       };
 
-      if (!plain && (modelId.includes('thinking') || modelId.includes('3.6'))) {
-        genConfig.thinkingConfig = { thinkingLevel: 'MINIMAL' };
+      // Turn off / minimize thinking tokens to ensure sub-2-second OCR response
+      if (!plain) {
+        if (modelId.includes('2.5')) {
+          genConfig.thinkingConfig = { thinkingBudget: 0 };
+        } else if (modelId.includes('3.') || modelId.includes('thinking')) {
+          genConfig.thinkingConfig = { thinkingLevel: 'MINIMAL' };
+        }
       }
 
       const response = await fetch(url, {
@@ -765,7 +806,8 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}) {
       }
 
       console.log(`✅ Successfully extracted ${records.length} records using Gemini model: ${model}`);
-      lastWorkingGeminiModel = model; // Cache working model for fast 1-shot scan on subsequent flyers
+      lastWorkingGeminiModel = model; // In-memory cache
+      setPersistedWorkingModel(model); // SQLite persistent storage across server restarts
 
       return {
         success: true,

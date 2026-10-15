@@ -212,8 +212,10 @@ export default function ImageOcrUploader({
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
-        const maxW = 960;
-        const scale = img.width > maxW ? maxW / img.width : 1;
+        // Constrain max dimension to 1200px so both wide and ultra-tall flyers are compressed properly
+        const maxDim = 1200;
+        const maxSide = Math.max(img.width, img.height);
+        const scale = maxSide > maxDim ? maxDim / maxSide : 1;
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(img.width * scale));
         canvas.height = Math.max(1, Math.round(img.height * scale));
@@ -252,6 +254,7 @@ export default function ImageOcrUploader({
       if (!effectiveKey) {
         throw new Error('KEY_REQUIRED_GEMINI');
       }
+      const preferredModel = localStorage.getItem('travelx_last_working_gemini_model') || null;
       const base64Data = await compressImageForScan(file);
       let geminiResult = null;
       let geminiErrorMsg = '';
@@ -260,9 +263,13 @@ export default function ImageOcrUploader({
           imageBase64: base64Data,
           provider: 'gemini',
           apiKey: effectiveKey,
-          defaults
+          defaults,
+          preferredModel
         });
         if (geminiResult?.success && Array.isArray(geminiResult.records) && geminiResult.records.length > 0) {
+          if (geminiResult.model) {
+            localStorage.setItem('travelx_last_working_gemini_model', String(geminiResult.model).replace(/#plain$/, ''));
+          }
           return geminiResult;
         }
         if (geminiResult?.error) {

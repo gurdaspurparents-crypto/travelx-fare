@@ -173,11 +173,11 @@ export const api = {
     });
   },
 
-  parseImageWithAI: async ({ imageBase64, provider = 'openai', apiKey, defaults = {} }) => {
+  parseImageWithAI: async ({ imageBase64, provider = 'openai', apiKey, defaults = {}, preferredModel }) => {
     return safeFetch('/api/fares/parse-image-ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, provider, apiKey, defaults })
+      body: JSON.stringify({ imageBase64, provider, apiKey, defaults, preferredModel })
     }, 1, 90000, false);
   },
 

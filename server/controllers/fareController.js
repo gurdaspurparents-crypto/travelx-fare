@@ -527,14 +527,14 @@ exports.parseWhatsAppText = (req, res) => {
  */
 exports.parseImageWithAI = async (req, res) => {
   try {
-    const { imageBase64, provider = 'openai', apiKey, defaults = {} } = req.body;
+    const { imageBase64, provider = 'openai', apiKey, defaults = {}, preferredModel } = req.body;
     if (!imageBase64) {
       return res.status(400).json({ success: false, error: 'Image base64 data is required' });
     }
 
     let result;
     if (provider === 'gemini') {
-      result = await parseImageWithGemini(imageBase64, apiKey || process.env.GEMINI_API_KEY, defaults);
+      result = await parseImageWithGemini(imageBase64, apiKey || process.env.GEMINI_API_KEY, defaults, preferredModel);
     } else {
       // Default: OpenAI (ChatGPT)
       result = await parseImageWithOpenAI(imageBase64, apiKey || process.env.OPENAI_API_KEY, defaults);
