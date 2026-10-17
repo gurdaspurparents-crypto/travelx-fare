@@ -584,6 +584,7 @@ function seedMasterData() {
     const initialRoutes = [
       ['ATQ', 'DXB', 'Amritsar', 'Dubai', 1],
       ['ATQ', 'SHJ', 'Amritsar', 'Sharjah', 1],
+      ['ATQ', 'AUH', 'Amritsar', 'Abu Dhabi', 1],
       ['ATQ', 'DOH', 'Amritsar', 'Doha', 1],
       ['ATQ', 'KWI', 'Amritsar', 'Kuwait', 1],
       ['ATQ', 'SIN', 'Amritsar', 'Singapore', 1],
@@ -610,6 +611,7 @@ function seedMasterData() {
   const gulfMarginSectors = [
     { origin: 'ATQ', destination: 'DXB' },
     { origin: 'ATQ', destination: 'SHJ' },
+    { origin: 'ATQ', destination: 'AUH' },
     { origin: 'IXC', destination: 'AUH' },
     { origin: 'IXC', destination: 'SHJ' },
     { origin: 'DEL', destination: 'DXB' },

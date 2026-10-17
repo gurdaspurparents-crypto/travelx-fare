@@ -51,11 +51,12 @@ const INDIAN_STATES = [
   'Tamil Nadu', 'Kerala', 'Bihar', 'Madhya Pradesh', 'Other'
 ];
 
-const ALLOWED_B2B_SECTOR_KEYS = ['ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH', 'IXC-SHJ'];
+const ALLOWED_B2B_SECTOR_KEYS = ['ATQ-DXB', 'ATQ-SHJ', 'ATQ-AUH', 'IXC-AUH', 'IXC-SHJ'];
 
 const DEFAULT_SECTOR_OPTIONS = [
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'DXB', destCity: 'Dubai', label: '(ATQ) Amritsar ➔ (DXB) Dubai' },
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'SHJ', destCity: 'Sharjah', label: '(ATQ) Amritsar ➔ (SHJ) Sharjah' },
+  { origin: 'ATQ', originCity: 'Amritsar', dest: 'AUH', destCity: 'Abu Dhabi', label: '(ATQ) Amritsar ➔ (AUH) Abu Dhabi' },
   { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' },
   { origin: 'IXC', originCity: 'Chandigarh', dest: 'SHJ', destCity: 'Sharjah', label: '(IXC) Chandigarh ➔ (SHJ) Sharjah' }
 ];
@@ -68,7 +69,8 @@ const DEFAULT_ORIGINS = [
 const DEFAULT_DESTINATIONS = {
   'ATQ': [
     { code: 'DXB', city: 'Dubai', label: '(DXB) Dubai' },
-    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' }
+    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' },
+    { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' }
   ],
   'IXC': [
     { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' },
@@ -734,13 +736,16 @@ export default function AgentPortal({ onSwitchToAdmin, onSwitchToStaff, isStaffE
     return Number(basePrice) || 0;
   };
 
-  // Helper: Cycle through allowed B2B sectors (ATQ-DXB -> ATQ-SHJ -> IXC-AUH -> IXC-SHJ)
+  // Helper: Cycle through allowed B2B sectors (ATQ-DXB -> ATQ-SHJ -> ATQ-AUH -> IXC-AUH -> IXC-SHJ)
   const handleSwapAirports = () => {
     const key = `${origin}-${destination}`;
     if (key === 'ATQ-DXB') {
       setOrigin('ATQ');
       setDestination('SHJ');
     } else if (key === 'ATQ-SHJ') {
+      setOrigin('ATQ');
+      setDestination('AUH');
+    } else if (key === 'ATQ-AUH') {
       setOrigin('IXC');
       setDestination('AUH');
     } else if (key === 'IXC-AUH') {

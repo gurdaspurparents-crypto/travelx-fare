@@ -140,6 +140,10 @@ const FLIGHT_TIMINGS = {
   '6E 1418': { dep: '15:10', arr: '17:30', dur: '3h 50m', origT: 'International', destT: 'Terminal A', aircraft: 'Airbus A320neo' },
   '6E 1411': { dep: '15:10', arr: '17:30', dur: '3h 50m', origT: 'International', destT: 'Terminal A', aircraft: 'Airbus A320neo' },
 
+  // Amritsar (ATQ) ➔ Abu Dhabi (AUH)
+  'IX 101': { dep: '23:10', arr: '02:15', dur: '4h 35m', origT: 'T1', destT: 'Terminal A', aircraft: 'Boeing 737-800' },
+  'IX 102': { dep: '03:15', arr: '08:15', dur: '3h 30m', origT: 'Terminal A', destT: 'T1', aircraft: 'Boeing 737-800' },
+
   // Chandigarh (IXC) ➔ Sharjah (SHJ)
   'IX 187': { dep: '19:15', arr: '21:40', dur: '3h 55m', origT: 'International', destT: 'Main', aircraft: 'Boeing 737-800' },
   'IX 188': { dep: '22:40', arr: '03:40', dur: '3h 30m', origT: 'Main', destT: 'International', aircraft: 'Boeing 737-800' },
@@ -187,7 +191,7 @@ const CITY_NAMES = {
 
 // Exclusively allowed sectors for B2B Agent portal
 const B2B_EXCLUSIVE_SECTORS = [
-  'ATQ-DXB', 'ATQ-SHJ', 'IXC-AUH', 'IXC-SHJ',
+  'ATQ-DXB', 'ATQ-SHJ', 'ATQ-AUH', 'IXC-AUH', 'IXC-SHJ',
   'DEL-DXB', 'DEL-SHJ', 'DEL-AUH',
   'ATQ-MEL'
 ];
@@ -227,6 +231,7 @@ function computeMasterPublicFares() {
       AND (
         (f.origin = 'ATQ' AND f.destination = 'DXB') OR
         (f.origin = 'ATQ' AND f.destination = 'SHJ') OR
+        (f.origin = 'ATQ' AND f.destination = 'AUH') OR
         (f.origin = 'IXC' AND f.destination = 'AUH') OR
         (f.origin = 'IXC' AND f.destination = 'SHJ') OR
         (f.origin = 'DEL' AND f.destination = 'DXB') OR
@@ -296,6 +301,8 @@ function computeMasterPublicFares() {
           fltKey = '6E 1418';
         } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 187') && f.origin === 'IXC' && f.destination === 'SHJ' && f.airline_code === 'IX') {
           fltKey = 'IX 187';
+        } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 101') && f.origin === 'ATQ' && f.destination === 'AUH' && f.airline_code === 'IX') {
+          fltKey = 'IX 101';
         }
 
         if (!flightMap.has(fltKey)) flightMap.set(fltKey, []);
@@ -434,6 +441,8 @@ function computeMasterPublicFares() {
       fltKey = '6E 1418';
     } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 187') && f.origin === 'IXC' && f.destination === 'SHJ' && f.airline_code === 'IX') {
       fltKey = 'IX 187';
+    } else if ((!fltKey || fltKey === 'IX' || fltKey === 'IX 1' || fltKey === 'IX 101') && f.origin === 'ATQ' && f.destination === 'AUH' && f.airline_code === 'IX') {
+      fltKey = 'IX 101';
     }
 
     const sKey = `${(f.origin || '').toUpperCase()}-${(f.destination || '').toUpperCase()}`;

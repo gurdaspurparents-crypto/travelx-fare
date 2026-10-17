@@ -191,6 +191,12 @@ export const KNOWN_FLIGHT_TIMINGS = {
   'IX 188': { dep: '22:40', arr: '03:40', origin: 'SHJ', dest: 'IXC', duration: '3h 30m', aircraft: 'Boeing 737-800' },
   'IX188': { dep: '22:40', arr: '03:40', origin: 'SHJ', dest: 'IXC', duration: '3h 30m', aircraft: 'Boeing 737-800' },
 
+  // Amritsar (ATQ) ➔ Abu Dhabi (AUH)
+  'IX 101': { dep: '23:10', arr: '02:15', origin: 'ATQ', dest: 'AUH', duration: '4h 35m', aircraft: 'Boeing 737-800' },
+  'IX101': { dep: '23:10', arr: '02:15', origin: 'ATQ', dest: 'AUH', duration: '4h 35m', aircraft: 'Boeing 737-800' },
+  'IX 102': { dep: '03:15', arr: '08:15', origin: 'AUH', dest: 'ATQ', duration: '3h 30m', aircraft: 'Boeing 737-800' },
+  'IX102': { dep: '03:15', arr: '08:15', origin: 'AUH', dest: 'ATQ', duration: '3h 30m', aircraft: 'Boeing 737-800' },
+
   // Delhi (DEL) ➔ Dubai (DXB)
   'AI 4309': { dep: '10:15', arr: '12:35', origin: 'DEL', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 787-8 Dreamliner' },
   'AI4309': { dep: '10:15', arr: '12:35', origin: 'DEL', dest: 'DXB', duration: '3h 50m', aircraft: 'Boeing 787-8 Dreamliner' },
@@ -227,6 +233,7 @@ export function getFlightTiming(flightNumber, origin = '', destination = '') {
   const sKey = `${String(origin || '').trim().toUpperCase()}-${String(destination || '').trim().toUpperCase()}`;
   if (sKey === 'ATQ-DXB') return { dep: '00:15', arr: '02:55', duration: '4h 10m' };
   if (sKey === 'ATQ-SHJ') return { dep: '12:15', arr: '14:40', duration: '3h 55m' };
+  if (sKey === 'ATQ-AUH') return { dep: '23:10', arr: '02:15', duration: '4h 35m' };
   if (sKey === 'IXC-AUH') return { dep: '15:10', arr: '17:30', duration: '3h 50m' };
   if (sKey === 'IXC-SHJ') return { dep: '19:15', arr: '21:40', duration: '3h 55m' };
   if (sKey === 'DEL-DXB') return { dep: '10:15', arr: '12:35', duration: '3h 50m' };

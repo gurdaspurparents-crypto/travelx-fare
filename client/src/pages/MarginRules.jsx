@@ -43,6 +43,7 @@ export default function MarginRules({ masterData = {} }) {
   const standardPresets = [
     { name: 'ATQ → DXB Gulf Slabs', airline_code: '', origin: 'ATQ', destination: 'DXB', margin_amount: 300, priority: 10 },
     { name: 'ATQ → SHJ Gulf Slabs', airline_code: '', origin: 'ATQ', destination: 'SHJ', margin_amount: 300, priority: 10 },
+    { name: 'ATQ → AUH Gulf Slabs', airline_code: '', origin: 'ATQ', destination: 'AUH', margin_amount: 300, priority: 10 },
     { name: 'IXC → AUH Gulf Slabs', airline_code: '', origin: 'IXC', destination: 'AUH', margin_amount: 300, priority: 10 },
     { name: 'IXC → SHJ Gulf Slabs', airline_code: '', origin: 'IXC', destination: 'SHJ', margin_amount: 300, priority: 10 },
     { name: 'DEL → DXB Gulf Slabs', airline_code: '', origin: 'DEL', destination: 'DXB', margin_amount: 300, priority: 10 },
@@ -405,7 +406,7 @@ export default function MarginRules({ masterData = {} }) {
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-slate-900">Gulf Sector Margin Rules</h3>
-                    <p className="text-[11px] font-bold text-emerald-700">ATQ➔DXB/SHJ | IXC➔AUH/SHJ | DEL➔DXB/SHJ/AUH</p>
+                    <p className="text-[11px] font-bold text-emerald-700">ATQ➔DXB/SHJ/AUH | IXC➔AUH/SHJ | DEL➔DXB/SHJ/AUH</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-1">
@@ -422,7 +423,7 @@ export default function MarginRules({ masterData = {} }) {
                     Active Sectors:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {['ATQ ➔ DXB', 'ATQ ➔ SHJ', 'IXC ➔ AUH', 'IXC ➔ SHJ', 'DEL ➔ DXB', 'DEL ➔ SHJ', 'DEL ➔ AUH'].map(s => (
+                    {['ATQ ➔ DXB', 'ATQ ➔ SHJ', 'ATQ ➔ AUH', 'IXC ➔ AUH', 'IXC ➔ SHJ', 'DEL ➔ DXB', 'DEL ➔ SHJ', 'DEL ➔ AUH'].map(s => (
                       <span key={s} className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-black rounded-lg">
                         {s}
                       </span>
