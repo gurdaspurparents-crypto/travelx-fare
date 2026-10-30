@@ -709,14 +709,26 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferre
     ? imageBase64.slice(5, imageBase64.indexOf(';'))
     : 'image/jpeg';
 
-  const rawModels = await getGeminiCandidateModels(apiKey);
   const dbModel = getPersistedWorkingModel();
   const topPriority = preferredModel || lastWorkingGeminiModel || dbModel;
 
-  let models = [...rawModels];
+  // Ultra-fast prioritized models: start with topPriority or fast flash models directly without blocking on GET /models
+  const defaultModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite'
+  ];
+
+  let models;
   if (topPriority) {
     const cleanPriority = String(topPriority).replace(/#plain$/, '');
-    models = [cleanPriority, ...models.filter(m => m !== cleanPriority)];
+    models = [cleanPriority, ...defaultModels.filter(m => m !== cleanPriority)];
+  } else if (cachedGeminiModels && cachedGeminiModels.length > 0) {
+    models = [...cachedGeminiModels];
+  } else {
+    models = [...defaultModels];
   }
 
   let lastError = null;
@@ -737,7 +749,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferre
       const genConfig = {
         responseMimeType: 'application/json',
         temperature: 0.1,
-        maxOutputTokens: 8192
+        maxOutputTokens: 4096
       };
 
       // Turn off / minimize thinking tokens to ensure sub-2-second OCR response

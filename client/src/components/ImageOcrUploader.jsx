@@ -140,6 +140,15 @@ export default function ImageOcrUploader({
   const fileInputRef = useRef(null);
   const addMoreFileInputRef = useRef(null);
 
+  // Continuous Background Queue & Streaming Refs
+  const queueRef = useRef([]);
+  const activeWorkersRef = useRef(0);
+  const flyerCounterRef = useRef(0);
+  const recordsByFlyerRef = useRef(new Map());
+  const rawTextsByFlyerRef = useRef(new Map());
+  const filePreviewsRef = useRef([]);
+  const uploadedFilesRef = useRef([]);
+
   // Auto-sort on load or when new records arrive
   useEffect(() => {
     if (scanResult && scanResult.records && scanResult.records.length > 0) {
@@ -174,12 +183,16 @@ export default function ImageOcrUploader({
   // Clipboard Paste Listener (Ctrl + V anywhere)
   useEffect(() => {
     const handlePaste = (e) => {
+      // Don't intercept if user is typing in an input or textarea
+      const targetTag = e.target?.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea') return;
+
       const items = e.clipboardData?.items;
       if (!items) return;
 
       const pastedFiles = [];
       for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
+        if (items[i].type && items[i].type.indexOf('image') !== -1) {
           const blob = items[i].getAsFile();
           if (blob) {
             pastedFiles.push(blob);
@@ -188,15 +201,14 @@ export default function ImageOcrUploader({
       }
 
       if (pastedFiles.length > 0) {
-        // If we already have files or scan results, and appendMode is active -> append!
-        const shouldAppend = appendMode && (uploadedFiles.length > 0 || (scanResult?.records?.length || 0) > 0);
-        handleProcessFiles(pastedFiles, null, shouldAppend);
+        e.preventDefault();
+        enqueueFiles(pastedFiles);
       }
     };
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [uploadedFiles, appendMode, scanResult, defaultOrigin, defaultDestination, defaultAirline, defaultBaggage, defaultRefundable, selectedEngine, openAiKey, geminiKey]);
+  }, [selectedEngine, openAiKey, geminiKey, defaultOrigin, defaultDestination, defaultAirline, defaultBaggage, defaultRefundable]);
 
   const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -212,8 +224,8 @@ export default function ImageOcrUploader({
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
-        // Constrain max dimension to 1200px so both wide and ultra-tall flyers are compressed properly
-        const maxDim = 1200;
+        // Constrain max dimension to 1100px so flyer is fast to upload & process
+        const maxDim = 1100;
         const maxSide = Math.max(img.width, img.height);
         const scale = maxSide > maxDim ? maxDim / maxSide : 1;
         const canvas = document.createElement('canvas');
@@ -222,7 +234,7 @@ export default function ImageOcrUploader({
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.74));
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
@@ -310,25 +322,143 @@ export default function ImageOcrUploader({
   };
 
   /**
-   * Main Queue / Batch Processor for One or Multiple Files
-   * Supports both fresh scan and sequential append (pasting multiple flyers one after another)
+   * Continuous Queue & Streaming Architecture
+   * Any pasted or uploaded flyers are immediately accepted and queued.
+   * Background workers (concurrency 2) process flyers in parallel and stream
+   * extracted rates into the table in real-time as each flyer finishes.
    */
-  const handleProcessFiles = async (files, forcedEngine = null, isAppend = false) => {
+  const updateFlyerStatusInUI = (flyerId, status, recordCount = 0, error = null) => {
+    filePreviewsRef.current = filePreviewsRef.current.map(p => {
+      if (p.id === flyerId) {
+        return { ...p, status, recordCount, error };
+      }
+      return p;
+    });
+    setFilePreviews([...filePreviewsRef.current]);
+  };
+
+  const publishCombinedRecords = (isFinal = false) => {
+    const allRecords = [];
+    for (const list of recordsByFlyerRef.current.values()) {
+      if (Array.isArray(list)) {
+        allRecords.push(...list);
+      }
+    }
+
+    // Deduplicate / merge duplicate sector + date if applicable
+    const merged = [];
+    for (const nr of allRecords) {
+      const existingIdx = merged.findIndex(er => 
+        er.travel_date === nr.travel_date &&
+        er.origin?.toUpperCase() === nr.origin?.toUpperCase() &&
+        er.destination?.toUpperCase() === nr.destination?.toUpperCase() &&
+        er.airline_code?.toUpperCase() === nr.airline_code?.toUpperCase() &&
+        (er.cabin || 'ECONOMY').toUpperCase() === (nr.cabin || 'ECONOMY').toUpperCase()
+      );
+
+      if (existingIdx !== -1) {
+        merged[existingIdx] = nr;
+      } else {
+        merged.push(nr);
+      }
+    }
+
+    const sorted = sortRecordsByRouteAndDate(merged);
+    const combinedRaw = Array.from(rawTextsByFlyerRef.current.values()).join('\n\n');
+
+    if (sorted.length > 0) {
+      setScanResult({
+        success: true,
+        records: sorted,
+        rawText: combinedRaw,
+        confidence: 99
+      });
+      setRawTextEdit(combinedRaw);
+    }
+
+    if (isFinal) {
+      if (sorted.length > 0) {
+        setStatus({
+          type: 'success',
+          text: `🎉 Scanned! Extracted ${sorted.length} total fares across ${filePreviewsRef.current.length} screenshot(s).`
+        });
+      } else {
+        const failText = 'Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.';
+        setExtractError(failText);
+        setStatus({ type: 'error', text: failText });
+      }
+    }
+  };
+
+  const runWorkerLoop = async () => {
+    while (queueRef.current.length > 0) {
+      const task = queueRef.current.shift();
+      if (!task) break;
+
+      updateFlyerStatusInUI(task.flyerId, 'scanning');
+      setBatchStatus({
+        currentName: task.fileName,
+        remainingInQueue: queueRef.current.length,
+        activeScanning: activeWorkersRef.current
+      });
+
+      try {
+        const result = await processSingleFile(task.file, task.engineToUse, task.defaults);
+
+        if (result && result.success && Array.isArray(result.records) && result.records.length > 0) {
+          const tagged = result.records.map(r => ({
+            ...r,
+            source_flyer_id: task.flyerId,
+            source_file: task.fileName
+          }));
+
+          recordsByFlyerRef.current.set(task.flyerId, tagged);
+          if (result.rawText) {
+            rawTextsByFlyerRef.current.set(task.flyerId, `=== FLYER ${task.flyerNum}: ${task.fileName} ===\n${result.rawText}`);
+          }
+
+          updateFlyerStatusInUI(task.flyerId, 'done', tagged.length);
+          publishCombinedRecords(false); // Live stream into table immediately!
+
+          setStatus({
+            type: 'success',
+            text: `⚡ Extracted ${tagged.length} fares from ${task.fileName}! ${queueRef.current.length > 0 ? `(${queueRef.current.length} waiting in queue...)` : ''}`
+          });
+        } else {
+          const errMsg = result?.error || 'No dates or fares found in flyer';
+          updateFlyerStatusInUI(task.flyerId, 'error', 0, errMsg);
+          setStatus({
+            type: 'error',
+            text: `⚠️ ${task.fileName}: ${errMsg}`
+          });
+        }
+      } catch (err) {
+        console.error(`Flyer scan error (${task.fileName}):`, err);
+        const errMsg = err?.message || 'Scan failed';
+        updateFlyerStatusInUI(task.flyerId, 'error', 0, errMsg);
+        setStatus({
+          type: 'error',
+          text: `⚠️ ${task.fileName}: ${errMsg}`
+        });
+      }
+    }
+
+    activeWorkersRef.current = Math.max(0, activeWorkersRef.current - 1);
+    if (activeWorkersRef.current === 0 && queueRef.current.length === 0) {
+      setScanning(false);
+      setBatchStatus(null);
+      publishCombinedRecords(true);
+    }
+  };
+
+  const enqueueFiles = (files, forcedEngine = null) => {
     const rawFilesList = Array.isArray(files) ? files : [files];
     const validFiles = rawFilesList.filter(f => f && (f.type?.startsWith('image/') || f instanceof Blob));
     if (validFiles.length === 0) return;
 
-    if (scanning) {
-      setStatus({
-        type: 'info',
-        text: 'Flyer scanning is already in progress. Please wait a moment.'
-      });
-      return;
-    }
-
     const engineToUse = forcedEngine || selectedEngine;
 
-    // Check API Keys before starting batch
+    // Check API Keys before enqueuing
     if (engineToUse === 'openai') {
       const effectiveKey = openAiKey || localStorage.getItem('travelx_openai_api_key') || '';
       if (!effectiveKey) {
@@ -351,41 +481,7 @@ export default function ImageOcrUploader({
       }
     }
 
-    const prevCount = isAppend ? uploadedFiles.length : 0;
-
-    // Generate preview URLs with clear labels
-    const newPreviews = validFiles.map((f, i) => {
-      const flyerNum = prevCount + i + 1;
-      const isGenericName = !f.name || f.name === 'image.png' || f.name.startsWith('blob');
-      const displayName = isGenericName ? `Screenshot #${flyerNum}` : f.name;
-      const flyerId = `flyer_${Date.now()}_${flyerNum}_${Math.random().toString(36).slice(2, 6)}`;
-      return {
-        id: flyerId,
-        file: f,
-        name: displayName,
-        label: `Flyer #${flyerNum}`,
-        url: URL.createObjectURL(f)
-      };
-    });
-
-    const combinedFiles = isAppend ? [...uploadedFiles, ...validFiles] : validFiles;
-    const combinedPreviews = isAppend ? [...filePreviews, ...newPreviews] : newPreviews;
-
-    setUploadedFiles(combinedFiles);
-    setFilePreviews(combinedPreviews);
-    setActivePreviewIndex(isAppend ? combinedPreviews.length - 1 : 0);
-    setImageFile(validFiles[0]);
-    setImagePreview(newPreviews[0].url);
-
-    setScanning(true);
-    setScanProgress(15);
-    setStatus(null);
-    setExtractError('');
-    const progressTimer = setInterval(() => {
-      setScanProgress((p) => (p < 88 ? p + 4 : p));
-    }, 400);
-
-    const defaults = {
+    const currentDefaults = {
       defaultOrigin,
       defaultDestination,
       defaultAirline,
@@ -393,166 +489,102 @@ export default function ImageOcrUploader({
       defaultRefundable
     };
 
-    const existingRecords = isAppend && scanResult?.records ? [...scanResult.records] : [];
-    const newRecords = [];
-    const allRawTexts = isAppend && scanResult?.rawText ? [scanResult.rawText] : [];
-    const totalCount = validFiles.length;
-    let successfulCount = 0;
-    const failedFlyers = [];
+    const newPreviewItems = [];
+    const newTasks = [];
 
-    try {
-      let completedCount = 0;
-      const tasks = validFiles.map((file, i) => ({
-        file,
-        previewItem: newPreviews[i],
-        index: i,
-        flyerNum: prevCount + i + 1,
-        fileName: newPreviews[i]?.name || `Screenshot #${prevCount + i + 1}`,
-        flyerId: newPreviews[i]?.id || `flyer_${prevCount + i + 1}`
-      }));
+    for (let i = 0; i < validFiles.length; i++) {
+      const f = validFiles[i];
+      flyerCounterRef.current += 1;
+      const flyerNum = flyerCounterRef.current;
+      const flyerId = `flyer_${Date.now()}_${flyerNum}_${Math.random().toString(36).slice(2, 6)}`;
+      const isGenericName = !f.name || f.name === 'image.png' || f.name.startsWith('blob');
+      const displayName = isGenericName ? `Screenshot #${flyerNum}` : f.name;
+      const previewUrl = URL.createObjectURL(f);
 
-      // Worker pool of concurrency 2 for ultra-fast parallel extraction without exceeding free-tier rate limits
-      const concurrency = totalCount === 1 ? 1 : Math.min(2, totalCount);
-
-      const worker = async () => {
-        while (tasks.length > 0) {
-          const item = tasks.shift();
-          if (!item) break;
-
-          setBatchStatus({
-            current: Math.min(completedCount + 1, totalCount),
-            total: totalCount,
-            currentName: item.fileName
-          });
-
-          // Set baseline progress for current batch
-          const baseProgress = Math.round(((completedCount + 0.2) / totalCount) * 100);
-          setScanProgress((p) => Math.max(p, baseProgress));
-
-          try {
-            const result = await processSingleFile(item.file, engineToUse, defaults);
-
-            if (result && result.success && Array.isArray(result.records)) {
-              successfulCount++;
-              // Tag each record with its source flyer name & id for review clarity
-              const taggedRecords = result.records.map(r => ({
-                ...r,
-                source_flyer_id: item.flyerId,
-                source_file: item.fileName
-              }));
-              newRecords.push(...taggedRecords);
-
-              if (result.rawText) {
-                allRawTexts.push(`=== FLYER ${item.flyerNum}: ${item.fileName} ===\n${result.rawText}`);
-              }
-            } else {
-              failedFlyers.push(`${item.fileName}${result?.error ? `: ${result.error}` : ''}`);
-            }
-          } catch (itemErr) {
-            console.error(`Error processing flyer ${item.flyerNum} (${item.fileName}):`, itemErr);
-            failedFlyers.push(`${item.fileName}: ${itemErr.message || 'scan failed'}`);
-          }
-
-          completedCount++;
-          setScanProgress(Math.round((completedCount / totalCount) * 100));
-        }
+      const previewItem = {
+        id: flyerId,
+        file: f,
+        name: displayName,
+        label: `Flyer #${flyerNum}`,
+        url: previewUrl,
+        status: 'queued',
+        recordCount: 0,
+        error: null
       };
 
-      const workers = [];
-      for (let w = 0; w < concurrency; w++) {
-        // Stagger workers by 250ms to prevent burst conflicts
-        if (w > 0) await new Promise(r => setTimeout(r, 250));
-        workers.push(worker());
-      }
-      await Promise.all(workers);
-
-      // Merge newly extracted records with existing records
-      const mergedRecords = [...existingRecords];
-      for (const nr of newRecords) {
-        const existingIdx = mergedRecords.findIndex(er => 
-          er.travel_date === nr.travel_date &&
-          er.origin?.toUpperCase() === nr.origin?.toUpperCase() &&
-          er.destination?.toUpperCase() === nr.destination?.toUpperCase() &&
-          er.airline_code?.toUpperCase() === nr.airline_code?.toUpperCase() &&
-          (er.cabin || 'ECONOMY').toUpperCase() === (nr.cabin || 'ECONOMY').toUpperCase()
-        );
-
-        if (existingIdx !== -1) {
-          // Update existing rate with the newer flyer's rate
-          mergedRecords[existingIdx] = nr;
-        } else {
-          mergedRecords.push(nr);
-        }
-      }
-
-      if (mergedRecords.length > 0) {
-        const sorted = sortRecordsByRouteAndDate(mergedRecords);
-        const combinedRaw = allRawTexts.join('\n\n');
-
-        setScanResult({
-          success: true,
-          records: sorted,
-          rawText: combinedRaw,
-          confidence: 99
-        });
-        setRawTextEdit(combinedRaw);
-
-        let statusText = '';
-        if (isAppend) {
-          statusText = `🎉 Added ${newRecords.length} new fares from ${validFiles.length > 1 ? `${validFiles.length} flyers` : `Screenshot #${prevCount + 1}`}! Total: ${sorted.length} fares across ${combinedFiles.length} screenshots.`;
-        } else if (totalCount === 1) {
-          statusText = `🎉 ${engineToUse === 'openai' ? 'ChatGPT' : engineToUse === 'gemini' ? 'Google Gemini' : 'OCR'} successfully extracted ${sorted.length} dates & fares!`;
-        } else {
-          statusText = `🎉 Successfully scanned ${successfulCount} of ${totalCount} flyers! Extracted ${sorted.length} total dates & fares.`;
-        }
-
-        if (failedFlyers.length > 0) {
-          statusText += ` (⚠️ Note: ${failedFlyers.join(', ')} could not be read).`;
-        }
-
-        setStatus({
-          type: 'success',
-          text: statusText
-        });
-      } else {
-        const failText = failedFlyers.length
-          ? `Rates nahi nikle. ${failedFlyers.join(' | ')}`
-          : 'Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.';
-        setExtractError(failText);
-        setStatus({
-          type: 'error',
-          text: failText
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      let msg = err.message || 'Error processing images.';
-      if (msg.includes('no credits') || msg.includes('billing') || msg.includes('quota')) {
-        msg = '⚠️ OpenAI Account Notice: Aapke OpenAI account mein balance/credits nahi hai ($0 balance). Solution: Upar "✨ Google Gemini Vision" select karein (yeh 100% Free hai bina kisi payment ke!) ya "📋 Copy Prompt for chatgpt.com" use karein.';
-      }
-      setExtractError(msg);
-      setStatus({ type: 'error', text: msg });
-    } finally {
-      clearInterval(progressTimer);
-      setScanning(false);
-      setBatchStatus(null);
+      newPreviewItems.push(previewItem);
+      newTasks.push({
+        flyerId,
+        flyerNum,
+        fileName: displayName,
+        file: f,
+        engineToUse,
+        defaults: currentDefaults
+      });
     }
+
+    // Append to refs
+    uploadedFilesRef.current = [...uploadedFilesRef.current, ...validFiles];
+    filePreviewsRef.current = [...filePreviewsRef.current, ...newPreviewItems];
+
+    // Update state
+    setUploadedFiles([...uploadedFilesRef.current]);
+    setFilePreviews([...filePreviewsRef.current]);
+
+    // If initial image
+    if (!imageFile && newPreviewItems.length > 0) {
+      setImageFile(newPreviewItems[0].file);
+      setImagePreview(newPreviewItems[0].url);
+      setActivePreviewIndex(0);
+    }
+
+    // Add tasks to queue
+    queueRef.current.push(...newTasks);
+    setScanning(true);
+
+    if (activeWorkersRef.current > 0) {
+      setStatus({
+        type: 'info',
+        text: `📥 Queued ${newTasks.length} screenshot(s)! Background processing continuously...`
+      });
+    }
+
+    // Spawn workers up to concurrency 2
+    const maxConcurrency = 2;
+    while (activeWorkersRef.current < maxConcurrency && queueRef.current.length > 0) {
+      activeWorkersRef.current += 1;
+      runWorkerLoop();
+    }
+  };
+
+  const handleProcessFiles = (files, forcedEngine = null) => {
+    return enqueueFiles(files, forcedEngine);
   };
 
   /**
    * Remove an individual flyer from the batch and remove its corresponding extracted fares
    */
   const handleRemoveFlyer = (indexToRemove) => {
-    const flyerToRemove = filePreviews[indexToRemove];
+    const flyerToRemove = filePreviewsRef.current[indexToRemove];
     if (!flyerToRemove) return;
 
     if (flyerToRemove.url) {
       try { URL.revokeObjectURL(flyerToRemove.url); } catch (e) {}
     }
 
-    const updatedFiles = uploadedFiles.filter((_, i) => i !== indexToRemove);
-    const updatedPreviews = filePreviews.filter((_, i) => i !== indexToRemove);
+    // Remove from pending queue if still queued
+    queueRef.current = queueRef.current.filter(t => t.flyerId !== flyerToRemove.id);
 
+    // Remove from records and text maps
+    recordsByFlyerRef.current.delete(flyerToRemove.id);
+    rawTextsByFlyerRef.current.delete(flyerToRemove.id);
+
+    // Update refs and state
+    const updatedFiles = uploadedFilesRef.current.filter((_, i) => i !== indexToRemove);
+    const updatedPreviews = filePreviewsRef.current.filter((_, i) => i !== indexToRemove);
+
+    uploadedFilesRef.current = updatedFiles;
+    filePreviewsRef.current = updatedPreviews;
     setUploadedFiles(updatedFiles);
     setFilePreviews(updatedPreviews);
 
@@ -565,23 +597,12 @@ export default function ImageOcrUploader({
     if (updatedPreviews[nextPreviewIdx]) {
       setImageFile(updatedPreviews[nextPreviewIdx].file);
       setImagePreview(updatedPreviews[nextPreviewIdx].url);
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
     }
 
-    if (scanResult && scanResult.records) {
-      const targetId = flyerToRemove.id;
-      const flyerName = flyerToRemove.name;
-      const remainingRecords = scanResult.records.filter(r => 
-        targetId ? r.source_flyer_id !== targetId : r.source_file !== flyerName
-      );
-      setScanResult(prev => ({
-        ...prev,
-        records: remainingRecords
-      }));
-      setStatus({
-        type: 'info',
-        text: `🗑️ Removed ${flyerName}. Remaining: ${remainingRecords.length} fares from ${updatedFiles.length} screenshot(s).`
-      });
-    }
+    publishCombinedRecords(false);
 
     if (updatedFiles.length === 0) {
       handleReset();
@@ -589,13 +610,13 @@ export default function ImageOcrUploader({
   };
 
   const handleProcessImage = (file, fileName = file?.name || 'uploaded-image.png', forcedEngine = null) => {
-    return handleProcessFiles([file], forcedEngine);
+    return enqueueFiles([file], forcedEngine);
   };
 
   const handleFileInputChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      handleProcessFiles(files);
+      enqueueFiles(files);
     }
     if (e.target) e.target.value = '';
   };
@@ -808,9 +829,19 @@ Instructions:
   };
 
   const handleReset = () => {
-    filePreviews.forEach(p => {
-      if (p.url) URL.revokeObjectURL(p.url);
+    filePreviewsRef.current.forEach(p => {
+      if (p.url) {
+        try { URL.revokeObjectURL(p.url); } catch (e) {}
+      }
     });
+    queueRef.current = [];
+    recordsByFlyerRef.current.clear();
+    rawTextsByFlyerRef.current.clear();
+    filePreviewsRef.current = [];
+    uploadedFilesRef.current = [];
+    flyerCounterRef.current = 0;
+    activeWorkersRef.current = 0;
+
     setUploadedFiles([]);
     setFilePreviews([]);
     setActivePreviewIndex(0);
@@ -821,6 +852,7 @@ Instructions:
     setSaveFeedback(null);
     setScanProgress(0);
     setBatchStatus(null);
+    setScanning(false);
   };
 
   const handleLoadSampleFlyer = () => {
@@ -938,8 +970,7 @@ Instructions:
           <button
             type="button"
             onClick={() => addMoreFileInputRef.current?.click()}
-            disabled={scanning}
-            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-lg shadow-sm transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-lg shadow-sm transition flex items-center space-x-1.5 cursor-pointer active:scale-95"
             title="Upload multiple screenshots or press Ctrl + V anytime"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -949,8 +980,7 @@ Instructions:
           <button
             type="button"
             onClick={handleLoadSampleFlyer}
-            disabled={scanning}
-            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             title="Generate a sample rate flyer image and run OCR to see how it works"
           >
             <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
@@ -1315,8 +1345,7 @@ Instructions:
               <button
                 type="button"
                 onClick={() => addMoreFileInputRef.current?.click()}
-                disabled={scanning}
-                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-xs disabled:opacity-50"
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-xs active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>+ Add / Paste Next Flyer</span>
@@ -1369,14 +1398,37 @@ Instructions:
                         className={`group relative shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition cursor-pointer ${
                           activePreviewIndex === idx
                             ? 'border-indigo-600 ring-2 ring-indigo-400 scale-105 shadow-sm'
-                            : 'border-slate-200 hover:border-slate-400 opacity-75 hover:opacity-100'
+                            : 'border-slate-200 hover:border-slate-400 opacity-80 hover:opacity-100'
                         }`}
-                        title={`${p.name} - Click to preview`}
+                        title={`${p.name} - ${p.status === 'scanning' ? 'Scanning flyer...' : p.status === 'queued' ? 'Queued (waiting)...' : p.status === 'done' ? `✓ ${p.recordCount || 0} fares extracted` : p.status === 'error' ? (p.error || 'Scan error') : 'Ready'}`}
                       >
                         <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
                         <span className="absolute bottom-0 right-0 bg-slate-900/90 text-white text-[9px] font-mono font-bold px-1 rounded-tl">
                           #{idx + 1}
                         </span>
+
+                        {/* Status Badges */}
+                        {p.status === 'scanning' && (
+                          <span className="absolute inset-0 bg-slate-950/65 backdrop-blur-2xs flex items-center justify-center">
+                            <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" />
+                          </span>
+                        )}
+                        {p.status === 'queued' && (
+                          <span className="absolute top-0.5 left-0.5 bg-amber-500 text-white text-[7px] font-black px-1 rounded shadow-2xs">
+                            WAIT
+                          </span>
+                        )}
+                        {p.status === 'done' && (
+                          <span className="absolute top-0.5 left-0.5 bg-emerald-600 text-white text-[7px] font-black px-1 rounded shadow-2xs">
+                            ✓ {p.recordCount || ''}
+                          </span>
+                        )}
+                        {p.status === 'error' && (
+                          <span className="absolute top-0.5 left-0.5 bg-rose-600 text-white text-[8px] font-black px-1 rounded shadow-2xs" title={p.error}>
+                            !
+                          </span>
+                        )}
+
                         {/* Individual flyer delete button */}
                         <button
                           type="button"
@@ -1396,8 +1448,7 @@ Instructions:
                     <button
                       type="button"
                       onClick={() => addMoreFileInputRef.current?.click()}
-                      disabled={scanning}
-                      className="relative shrink-0 w-14 h-14 rounded-lg border-2 border-dashed border-emerald-400 hover:border-emerald-600 bg-emerald-50/60 hover:bg-emerald-100/90 flex flex-col items-center justify-center text-emerald-700 transition cursor-pointer disabled:opacity-50 group"
+                      className="relative shrink-0 w-14 h-14 rounded-lg border-2 border-dashed border-emerald-400 hover:border-emerald-600 bg-emerald-50/60 hover:bg-emerald-100/90 flex flex-col items-center justify-center text-emerald-700 transition cursor-pointer group active:scale-95"
                       title="Upload or paste another screenshot (Ctrl + V)"
                     >
                       <Plus className="w-4 h-4 group-hover:scale-110 transition" />
@@ -1414,39 +1465,28 @@ Instructions:
                 alt="Rate card preview"
                 className="w-full h-auto object-contain max-h-72"
               />
-              {scanning && (
-                <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4 space-y-3">
-                  <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
-                  <div className="text-center space-y-1">
-                    <p className="font-black text-xs">
-                      {batchStatus ? (
-                        `Scanning Flyer ${batchStatus.current} of ${batchStatus.total}...`
-                      ) : selectedEngine === 'openai' ? (
-                        'ChatGPT (GPT-4o Vision) analyzing flyer...'
-                      ) : selectedEngine === 'gemini' ? (
-                        'Google Gemini Vision reading flyer...'
-                      ) : (
-                        'Local OCR scanning...'
-                      )}
-                    </p>
-                    {batchStatus && (
-                      <p className="text-[10px] text-indigo-200 truncate max-w-[190px] font-mono mx-auto">
-                        {batchStatus.currentName}
-                      </p>
-                    )}
-                    <p className="text-[11px] text-emerald-300 font-mono font-bold">{scanProgress}%</p>
-                    {selectedEngine === 'gemini' && scanProgress < 90 && (
-                      <p className="text-[10px] text-slate-300 max-w-[220px] leading-snug">
-                        Screenshot compress ho rahi hai, phir Gemini dates nikalega. Excel isse tez hai.
-                      </p>
-                    )}
-                  </div>
-                  <div className="w-48 bg-slate-700 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-emerald-400 h-full transition-all duration-300" 
-                      style={{ width: `${scanProgress}%` }}
-                    ></div>
-                  </div>
+              {/* If active preview is currently scanning */}
+              {filePreviews[activePreviewIndex]?.status === 'scanning' && (
+                <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4 space-y-2 z-10">
+                  <RefreshCw className="w-7 h-7 text-emerald-400 animate-spin" />
+                  <p className="font-black text-xs">
+                    {selectedEngine === 'openai' ? 'ChatGPT (GPT-4o Vision) analyzing flyer...' : selectedEngine === 'gemini' ? 'Google Gemini Vision scanning flyer...' : 'Local OCR scanning...'}
+                  </p>
+                  <p className="text-[10px] text-slate-300 text-center">
+                    Aap agla screenshot bhi bina wait kiye <kbd className="px-1 py-0.5 bg-white/20 rounded font-mono font-bold text-white">Ctrl + V</kbd> se paste kar sakte hain!
+                  </p>
+                </div>
+              )}
+              {/* If active preview is queued */}
+              {filePreviews[activePreviewIndex]?.status === 'queued' && (
+                <div className="absolute top-2 left-2 bg-amber-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-10">
+                  ⏳ Waiting in queue...
+                </div>
+              )}
+              {/* If active preview is done */}
+              {filePreviews[activePreviewIndex]?.status === 'done' && (
+                <div className="absolute top-2 left-2 bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-10">
+                  ✓ Scanned ({filePreviews[activePreviewIndex]?.recordCount || 0} fares)
                 </div>
               )}
             </div>
