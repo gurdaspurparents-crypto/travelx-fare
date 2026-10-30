@@ -75,6 +75,8 @@ function isPublicApiPath(path) {
   if (path === '/api/health') return true;
   if (path === '/api/auth/admin/login') return true;
   if (path === '/api/fares/extension-sync') return true;
+  if (path === '/api/fares/parse-image-ai') return true;
+  if (path === '/api/fares/parse-whatsapp') return true;
   return path.startsWith('/api/public/');
 }
 

@@ -2,7 +2,9 @@ function isPublicApiUrl(url) {
   return (
     url === '/api/health' ||
     url.startsWith('/api/public/') ||
-    url === '/api/auth/admin/login'
+    url === '/api/auth/admin/login' ||
+    url === '/api/fares/parse-image-ai' ||
+    url === '/api/fares/parse-whatsapp'
   );
 }
 
