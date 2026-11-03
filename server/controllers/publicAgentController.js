@@ -192,7 +192,7 @@ const CITY_NAMES = {
 // Exclusively allowed sectors for B2B Agent portal
 const B2B_EXCLUSIVE_SECTORS = [
   'ATQ-DXB', 'ATQ-SHJ', 'ATQ-AUH', 'IXC-AUH', 'IXC-SHJ',
-  'DEL-DXB', 'DEL-SHJ', 'DEL-AUH',
+  'DEL-DXB', 'DEL-SHJ', 'DEL-AUH', 'DEL-KWI',
   'ATQ-MEL'
 ];
 const PRIORITY_PUBLIC_SECTORS = B2B_EXCLUSIVE_SECTORS;

@@ -3,7 +3,16 @@
  */
 
 const { parseDateString, normalizeAirlineCode, parseWhatsAppFareText } = require('./whatsappParser');
-const db = require('../config/database');
+
+let db = null;
+function getDb() {
+  if (!db) {
+    try {
+      db = require('../config/database');
+    } catch (_) {}
+  }
+  return db;
+}
 
 const AIRLINE_CODE_MAP = {
   'air india express': 'IX',
@@ -123,6 +132,7 @@ const CITY_IATA_MAP = {
   'bangkok': 'BKK',
   'bkk': 'BKK',
   'adampur': 'AIP',
+  'jalandhar': 'AIP',
   'aip': 'AIP',
   'nanded': 'NDC',
   'ndc': 'NDC',
@@ -139,25 +149,123 @@ const CITY_IATA_MAP = {
   'mopa': 'GOX',
   'gox': 'GOX',
   'amritsar': 'ATQ',
+  'atq': 'ATQ',
   'dubai': 'DXB',
+  'dxb': 'DXB',
   'sharjah': 'SHJ',
+  'shj': 'SHJ',
+  'abu dhabi': 'AUH',
+  'abudhabi': 'AUH',
+  'auh': 'AUH',
   'delhi': 'DEL',
+  'new delhi': 'DEL',
+  'del': 'DEL',
   'mumbai': 'BOM',
+  'bom': 'BOM',
   'bangalore': 'BLR',
+  'bengaluru': 'BLR',
+  'blr': 'BLR',
   'hyderabad': 'HYD',
+  'hyd': 'HYD',
   'chennai': 'MAA',
+  'maa': 'MAA',
   'kolkata': 'CCU',
+  'ccu': 'CCU',
+  'ahmedabad': 'AMD',
+  'amd': 'AMD',
+  'lucknow': 'LKO',
+  'lko': 'LKO',
+  'kochi': 'COK',
+  'cochin': 'COK',
+  'cok': 'COK',
+  'kozhikode': 'CCJ',
+  'calicut': 'CCJ',
+  'ccj': 'CCJ',
+  'thiruvananthapuram': 'TRV',
+  'trivandrum': 'TRV',
+  'trv': 'TRV',
+  'pune': 'PNQ',
+  'pnq': 'PNQ',
   'doha': 'DOH',
+  'doh': 'DOH',
   'kuwait': 'KWI',
+  'kuwait city': 'KWI',
+  'kwi': 'KWI',
+  'muscat': 'MCT',
+  'mct': 'MCT',
+  'bahrain': 'BAH',
+  'bah': 'BAH',
+  'dammam': 'DMM',
+  'dmm': 'DMM',
+  'jeddah': 'JED',
+  'jed': 'JED',
+  'riyadh': 'RUH',
+  'ruh': 'RUH',
   'milan': 'MXP',
   'millan': 'MXP',
   'malpensa': 'MXP',
+  'mxp': 'MXP',
   'rome': 'ROM',
   'fiumicino': 'ROM',
+  'rom': 'ROM',
+  'fco': 'ROM',
   'toronto': 'YYZ',
+  'yyz': 'YYZ',
   'kuala lumpur': 'KUL',
-  'singapore': 'SIN'
+  'kul': 'KUL',
+  'singapore': 'SIN',
+  'sin': 'SIN',
+  'colombo': 'CMB',
+  'cmb': 'CMB',
+  'kathmandu': 'KTM',
+  'ktm': 'KTM',
+  'dhaka': 'DAC',
+  'dac': 'DAC',
+  'london': 'LHR',
+  'lhr': 'LHR',
+  'gatwick': 'LGW',
+  'lgw': 'LGW'
 };
+
+const KNOWN_AIRPORTS = [
+  'ATQ', 'DXB', 'SHJ', 'DEL', 'BOM', 'KWI', 'AUH', 'DOH', 'MCT', 'BAH', 'DMM',
+  'JED', 'MED', 'RUH', 'IXC', 'AIP', 'NDC', 'HDO', 'KQH', 'JAI', 'GOI', 'GOX',
+  'BLR', 'MAA', 'HYD', 'CCU', 'AMD', 'LKO', 'COK', 'CCJ', 'TRV', 'PNQ',
+  'SIN', 'KUL', 'BKK', 'DMK', 'CMB', 'KTM', 'DAC', 'LHR', 'YYZ', 'MXP', 'ROM'
+];
+
+function extractCleanAirportCode(inputStr, defaultCode = 'ATQ') {
+  if (!inputStr) return defaultCode;
+  const raw = String(inputStr).trim();
+  const lower = raw.toLowerCase();
+
+  // 1. Direct match in CITY_IATA_MAP
+  if (CITY_IATA_MAP[lower]) return CITY_IATA_MAP[lower];
+
+  // 2. Bracketed 3-letter IATA code: e.g. "New Delhi (DEL)", "Kuwait City (KWI)"
+  const bracketMatch = raw.match(/\(([A-Za-z]{3})\)/);
+  if (bracketMatch) {
+    const code = bracketMatch[1].toUpperCase();
+    if (KNOWN_AIRPORTS.includes(code) || CITY_IATA_MAP[code.toLowerCase()]) return code;
+  }
+
+  // 3. Standalone 3-letter uppercase code in text
+  const words = raw.toUpperCase().match(/\b([A-Z]{3})\b/g);
+  if (words) {
+    for (const w of words) {
+      if (KNOWN_AIRPORTS.includes(w) || CITY_IATA_MAP[w.toLowerCase()]) return w;
+    }
+  }
+
+  // 4. Substring check in CITY_IATA_MAP
+  for (const [cityName, iata] of Object.entries(CITY_IATA_MAP)) {
+    if (cityName.length >= 3 && lower.includes(cityName)) {
+      return iata;
+    }
+  }
+
+  return raw.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || defaultCode;
+}
 
 /**
  * Standardize flight records returned by AI model
@@ -250,16 +358,12 @@ function standardizeAIRecords(rawRecords = [], defaults = {}) {
       routeOrigin = routePair[1];
       routeDest = routePair[2];
     }
-    let origin = (item.origin || routeOrigin || defaults.origin || defaults.defaultOrigin || 'ATQ').toUpperCase().trim();
-    let destination = (item.destination || routeDest || defaults.destination || defaults.defaultDestination || 'DXB').toUpperCase().trim();
+    let origin = extractCleanAirportCode(item.origin || routeOrigin || defaults.origin || defaults.defaultOrigin || 'ATQ', 'ATQ');
+    let destination = extractCleanAirportCode(item.destination || routeDest || defaults.destination || defaults.defaultDestination || 'DXB', 'DXB');
     
     // Clean airline code using normalizeAirlineCode (never slices raw string into invalid code like "IN")
     const rawAirline = item.airline_code || item.airline || '';
     const cleanAirline = normalizeAirlineCode(rawAirline, item.flight_number, defaults.airline || defaults.defaultAirline || 'AI');
-
-    // Map full names if returned
-    if (CITY_IATA_MAP[origin.toLowerCase()]) origin = CITY_IATA_MAP[origin.toLowerCase()];
-    if (CITY_IATA_MAP[destination.toLowerCase()]) destination = CITY_IATA_MAP[destination.toLowerCase()];
 
     // Unify airport aliases to canonical codes
     if (origin === 'MIL') origin = 'MXP';
@@ -378,83 +482,133 @@ function buildRecordsFromModelText(rawText, defaults = {}) {
 }
 
 const VISION_SYSTEM_PROMPT = `You are an expert AI flight data extractor for travel agents.
-Extract ALL flight fares from this airline rate card flyer image into clean, structured JSON.
+Extract ALL flight fares from this airline rate card flyer or online booking portal screenshot into clean, structured JSON.
 
 CRITICAL INSTRUCTIONS:
-1. MULTI-SECTOR & MULTI-AIRLINE DETECTION (DO NOT STOP AFTER ONE SECTOR):
+
+1. ONLINE BOOKING PORTAL & CALENDAR POPUP SCREENSHOTS (e.g. GhaiTravels | TravelX, Akbar, TBO, Jazeera Airways, MakeMyTrip, Cleartrip):
+   Many vendor rate screenshots are web portal searches with an interactive 2-month calendar picker:
+   * SECTOR / ROUTE EXTRACTION:
+     - Look at the top search bar:
+       * "DEPARTURE FROM": e.g. "New Delhi (DEL)", "Amritsar (ATQ)", "Chandigarh (IXC)", etc. -> extract 3-letter IATA code: Origin is "DEL".
+       * "GOING TO": e.g. "Kuwait City (KWI)", "Dubai (DXB)", "Sharjah (SHJ)", "Doha (DOH)", "Abu Dhabi (AUH)", etc. -> extract 3-letter IATA code: Destination is "KWI".
+     - Convert city names to standard 3-letter IATA codes (e.g. New Delhi = DEL, Kuwait City = KWI, Amritsar = ATQ, Dubai = DXB, Sharjah = SHJ, Abu Dhabi = AUH).
+     - Every date/fare extracted from this screenshot inherits this Origin and Destination (e.g. DEL -> KWI).
+   * CALENDAR MONTH & YEAR HEADERS:
+     - Often 2 months are shown side-by-side (e.g. "November 2026" on the left, "December 2026" on the right).
+     - Days in the left grid belong to the left month (e.g. "November 2026" -> Year: 2026, Month: 11).
+     - Days in the right grid belong to the right month (e.g. "December 2026" -> Year: 2026, Month: 12).
+   * CALENDAR DAY CELLS WITH FARES:
+     - Inside calendar day cells (under columns SU, MO, TU, WE, TH, FR, SA):
+       * The top number is the Day of month (e.g. "18", "25").
+       * Below the day number, look for printed fares (e.g. "₹17,600", "17600", "₹18,500", "14800").
+       * Extract every calendar day that has a fare amount printed:
+         - Day 18 in November 2026 with "₹17,600" -> travel_date: "2026-11-18", net_fare: 17600
+         - Day 25 in November 2026 with "₹17,600" -> travel_date: "2026-11-25", net_fare: 17600
+   * AIRLINE DETECTION IN PORTAL SCREENSHOTS:
+     - Look for the airline logo, name, or flight cards displayed on the screen (e.g. below the calendar):
+       * "Jazeera Airways" or "Jazeera" or Jazeera logo -> airline_code: "J9".
+       * "Air India Express" -> airline_code: "IX".
+       * "IndiGo" -> airline_code: "6E".
+       * "SpiceJet" -> airline_code: "SG".
+       * "Kuwait Airways" -> airline_code: "KU".
+       * "Air Arabia" -> airline_code: "G9".
+       * "Flydubai" -> airline_code: "FZ".
+       * "Akasa Air" -> airline_code: "QP".
+       * "Etihad Airways" -> airline_code: "EY".
+       * "Emirates" -> airline_code: "EK".
+       * "Qatar Airways" -> airline_code: "QR".
+       * "Oman Air" -> airline_code: "WY".
+       * "Gulf Air" -> airline_code: "GF".
+       * "SalamAir" -> airline_code: "OV".
+       * "Flynas" -> airline_code: "XY".
+       * "Flyadeal" -> airline_code: "F3".
+       * "Saudia" -> airline_code: "SV".
+     - In GhaiTravels / TravelX screenshots, look at the flight card below the calendar (e.g. "Wednesday 18 November", "Lowest fare", "Jazeera Airways") -> Airline is "J9".
+     - If a specific flight number is shown (e.g. "J9 406"), include it in flight_number.
+   * FLIGHT RESULT CARDS BELOW CALENDAR:
+     - If the portal shows detailed flight cards below the calendar for the selected date (e.g. "Wednesday 18 November", "Jazeera Airways", fare: 17600):
+       - Extract that date, airline, flight number, and fare!
+
+2. MULTI-SECTOR & MULTI-AIRLINE DETECTION (DO NOT STOP AFTER ONE SECTOR):
    - A single flyer often contains MULTIPLE SECTORS (e.g. BOTH "ATQ - DXB" AND "ATQ - SHJ", "IXC - DXB", etc.) or MULTIPLE AIRLINES (e.g. BOTH "Air India Express (IX)" AND "IndiGo (6E)", "SpiceJet (SG)").
    - You MUST extract flight records for ALL sectors and ALL airlines found on the image! Do NOT restrict yourself to only one sector or one airline.
    - Scan every single row, column, table, and flight card from left-to-right and top-to-bottom.
 
-2. GRID OF FLIGHT RATE CARDS / BOXES (30 to 100+ CARDS):
+3. GRID OF FLIGHT RATE CARDS / BOXES (30 to 100+ CARDS):
    - If the flyer consists of a grid of rectangular cards/boxes (e.g. multiple rows and columns of cards):
      * Read the Route on each card (e.g. some cards are "ATQ - SHJ", while other cards are "ATQ - DXB").
      * Read the Travel Date (e.g. "08/10/2026", "15 OCT", "22-10-2026").
      * Read the Net Fare (e.g. "16200", "Fare: 17500/-").
      * Read the Airline (e.g. "Air India Express" -> "IX", "IndiGo" -> "6E", "SpiceJet" -> "SG").
    - You MUST scan EVERY card row-by-row and column-by-column.
-   - Do NOT stop after 30 cards or after one sector! Extract ALL cards (even if there are 60, 70, or 80+ cards on the sheet). Every card with a date and fare MUST be included in the "records" array.
+   - Do NOT stop after 30 cards or after one sector! Extract ALL cards.
 
-3. SECTOR & ROUTE EXTRACTION:
+4. SECTOR & ROUTE EXTRACTION:
    - The flyer may contain ANY SECTOR (domestic or international).
-   - Look for route indicators such as "AIP - NDC", "ATQ → DXB", "ATQ - SHJ", "IXC -> DXB", "DEL - BOM", etc.
-   - For "AIP - NDC", Origin is "AIP" (Adampur) and Destination is "NDC" (Nanded).
-   - For "IXC - DXB", Origin is "IXC" (Chandigarh) and Destination is "DXB" (Dubai).
-   - For "SG ATQ → DXB", Airline is "SG" (SpiceJet), Origin is "ATQ", Destination is "DXB".
-   - CRITICAL: NEVER force, assume, or default the route to "ATQ - DXB" if the flyer shows a different route (such as AIP - NDC, IXC - DXB, etc.). ALWAYS extract the EXACT 3-letter origin and destination airport codes written on the flyer or calendar cell!
+   - Look for route indicators such as "AIP - NDC", "ATQ → DXB", "ATQ - SHJ", "IXC -> DXB", "DEL - BOM", "DEL - KWI", etc.
+   - CRITICAL: NEVER force, assume, or default the route to "ATQ - DXB" if the flyer or portal shows a different route (such as DEL - KWI, AIP - NDC, IXC - DXB, etc.). ALWAYS extract the EXACT 3-letter origin and destination airport codes!
 
-4. AIRLINE & FLIGHT NUMBER EXTRACTION:
+5. AIRLINE & FLIGHT NUMBER EXTRACTION:
    - Look for airline indicators such as:
-     * "XJ" or "XJ 230" or "XJ230" -> Airline is "XJ" (Thai AirAsia X), flight_number is "XJ 230".
-     * "FD" -> Thai AirAsia (FD).
-     * "S5" or "S5235/186" -> Airline is "S5" (Star Air), flight_number is "S5 235/186".
-     * "IX" or "IX 191" -> Airline is "IX" (Air India Express).
-     * "SG" -> SpiceJet (SG).
-     * "6E" -> IndiGo (6E).
-     * "AI" -> Air India (AI).
-     * "UK" -> Vistara (UK).
-     * "QP" -> Akasa Air (QP).
-     * "IC" -> Fly91 (IC).
-     * "G9" -> Air Arabia (G9).
-     * "FZ" -> Flydubai (FZ).
-     * "TG" -> Thai Airways (TG).
-     * "SL" -> Thai Lion Air (SL).
-   - CRITICAL: ALWAYS return ONLY the 2-letter uppercase IATA code for airline_code (e.g. "XJ", "6E", "IX", "SG", "AI", "UK", "QP", "G9", "FZ", "S5", "IC", "EK", "EY", "QR", "WY", "TG", "SL", "FD"). NEVER output full airline names like "IndiGo", "SpiceJet", or "IndiGo (6E)" in the airline_code field!
-   - NEVER overwrite or default XJ, FD, S5, SG, IX, 6E to AI. If a flyer or calendar shows XJ (e.g. "XJ 230"), airline_code MUST be "XJ", NEVER "AI"!
+     * "J9" or "Jazeera Airways" -> "J9"
+     * "XJ" or "XJ 230" -> "XJ" (Thai AirAsia X)
+     * "FD" -> "FD" (Thai AirAsia)
+     * "S5" or "S5235/186" -> "S5" (Star Air)
+     * "IX" or "IX 191" -> "IX" (Air India Express)
+     * "SG" -> "SG" (SpiceJet)
+     * "6E" -> "6E" (IndiGo)
+     * "AI" -> "AI" (Air India)
+     * "UK" -> "UK" (Vistara)
+     * "QP" -> "QP" (Akasa Air)
+     * "IC" -> "IC" (Fly91)
+     * "G9" -> "G9" (Air Arabia)
+     * "FZ" -> "FZ" (Flydubai)
+     * "KU" -> "KU" (Kuwait Airways)
+     * "TG" -> "TG" (Thai Airways)
+     * "SL" -> "SL" (Thai Lion Air)
+   - CRITICAL: ALWAYS return ONLY the 2-letter uppercase IATA code for airline_code. NEVER output full airline names like "IndiGo", "SpiceJet", or "Jazeera Airways" in the airline_code field!
+   - NEVER overwrite or default J9, XJ, FD, S5, SG, IX, 6E to AI.
 
-3. CALENDAR VIEW / MONTHLY GRID FLYERS:
-   - If the flyer is structured as a monthly calendar (e.g. header says "Sep 2026", "October 2026", etc.):
-     * Read the Month & Year header (e.g. "Sep 2026" means Year: 2026, Month: 09).
-     * Identify each active day cell (highlighted in red, blue, green, or bold text).
-     * Each active day box contains:
-       - The Day number of the month (e.g. 15, 18, 21, 22, 26, 27, 30) -> travel_date: "2026-09-15", "2026-09-18", etc.
-       - Route line (e.g. "AIP - NDC") -> origin: "AIP", destination: "NDC".
-       - Airline & Flight Number (e.g. "S5 S5235/186") -> airline_code: "S5", flight_number: "S5 235/186".
-       - Departure time (e.g. "13:20", "13:50", "12:30").
-       - Available seats (e.g. "AS - 1", "AS - 2").
-       - Fare amount (e.g. "Rs 9700.00" or "9700") -> net_fare: 9700.
-     * Output a distinct record for EVERY active highlighted day box in the calendar!
+6. CALENDAR VIEW / MONTHLY GRID FLYERS:
+   - If the flyer is structured as a monthly calendar (e.g. header says "Sep 2026", "October 2026", "November 2026", etc.):
+     * Read the Month & Year header.
+     * Identify each active day cell with a fare.
+     * Output a distinct record for EVERY active day box in the calendar with a fare!
 
-4. MULTI-DATE STREAKS & RANGES (FOR TEXT FLYERS):
+7. MULTI-DATE STREAKS & RANGES (FOR TEXT FLYERS):
    - For lines with multiple dates (e.g., "15 SEP & 16 SEP & 17 SEP & 18 SEP 20800"), generate a SEPARATE record for EVERY date with that net fare.
-   - For date ranges (e.g., "23 SEP TO 02 OCT (ALL DATES) 17800"), generate a SEPARATE record for EVERY individual calendar day from start date to end date with that net fare.
+   - For date ranges (e.g., "23 SEP TO 02 OCT (ALL DATES) 17800"), generate a SEPARATE record for EVERY individual calendar day with that net fare.
 
-5. IATA CODES CONVERSION:
+8. IATA CODES CONVERSION:
    - Convert city names to 3-letter IATA airport codes:
-     * Adampur / Jalandhar = AIP
-     * Nanded = NDC
+     * Delhi / New Delhi = DEL
+     * Kuwait / Kuwait City = KWI
      * Amritsar = ATQ
      * Dubai = DXB
      * Sharjah = SHJ
+     * Abu Dhabi = AUH
+     * Doha = DOH
+     * Muscat = MCT
+     * Bahrain = BAH
+     * Dammam = DMM
+     * Jeddah = JED
+     * Riyadh = RUH
      * Chandigarh = IXC
-     * Delhi = DEL
+     * Adampur / Jalandhar = AIP
+     * Nanded = NDC
      * Mumbai = BOM
+     * Bangalore / Bengaluru = BLR
+     * Chennai = MAA
+     * Hyderabad = HYD
+     * Kolkata = CCU
      * Hindon = HDO
      * Kishangarh = KQH
 
-6. CLEAN NET FARE:
-   - Extract clean numeric Net Fare (e.g. 9700 from "Rs 9700.00", 20800 from "₹20,800"). Ignore timing brackets like "(08.25 AM - 02.55 AM)" or seat labels like "AS - 1".
-7. Detect Baggage (e.g., "15kg", "30kg", "30 + 07 KG") and Refundability ("NON_REFUNDABLE" or "REFUNDABLE").
+9. CLEAN NET FARE:
+   - Extract clean numeric Net Fare (e.g. 17600 from "₹17,600", 9700 from "Rs 9700.00", 20800 from "₹20,800"). Ignore timing brackets like "(08.25 AM - 02.55 AM)" or seat labels like "AS - 1".
+
+10. Detect Baggage (e.g., "15kg", "30kg", "30 + 07 KG") and Refundability ("NON_REFUNDABLE" or "REFUNDABLE").
 
 Return ONLY a clean valid JSON object matching this schema:
 {
@@ -462,20 +616,20 @@ Return ONLY a clean valid JSON object matching this schema:
   "is_refundable": "NON_REFUNDABLE",
   "records": [
     {
-      "origin": "ATQ",
-      "destination": "DXB",
-      "airline_code": "IX",
-      "flight_number": "IX 191",
-      "date_text": "20 SEP & 21 SEP",
-      "net_fare": 17000
+      "origin": "DEL",
+      "destination": "KWI",
+      "airline_code": "J9",
+      "flight_number": "",
+      "travel_date": "2026-11-18",
+      "net_fare": 17600
     },
     {
-      "origin": "ATQ",
-      "destination": "DXB",
-      "airline_code": "IX",
+      "origin": "DEL",
+      "destination": "KWI",
+      "airline_code": "J9",
       "flight_number": "",
-      "travel_date": "2026-09-16",
-      "net_fare": 20800
+      "travel_date": "2026-11-25",
+      "net_fare": 17600
     }
   ]
 }
@@ -560,7 +714,9 @@ async function parseImageWithOpenAI(imageBase64, apiKey, defaults = {}) {
 // Database persistent helpers for working Gemini models across server restarts
 function getPersistedWorkingModel() {
   try {
-    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'last_working_gemini_model'").get();
+    const database = getDb();
+    if (!database) return null;
+    const row = database.prepare("SELECT value FROM app_settings WHERE key = 'last_working_gemini_model'").get();
     if (row && row.value && typeof row.value === 'string' && row.value.trim()) {
       return row.value.trim();
     }
@@ -571,8 +727,10 @@ function getPersistedWorkingModel() {
 function setPersistedWorkingModel(model) {
   if (!model) return;
   try {
+    const database = getDb();
+    if (!database) return;
     const clean = String(model).replace(/#plain$/, '').trim();
-    db.prepare(`
+    database.prepare(`
       INSERT INTO app_settings (key, value, updated_at) 
       VALUES ('last_working_gemini_model', ?, datetime('now', 'localtime'))
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at

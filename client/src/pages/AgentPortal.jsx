@@ -51,19 +51,21 @@ const INDIAN_STATES = [
   'Tamil Nadu', 'Kerala', 'Bihar', 'Madhya Pradesh', 'Other'
 ];
 
-const ALLOWED_B2B_SECTOR_KEYS = ['ATQ-DXB', 'ATQ-SHJ', 'ATQ-AUH', 'IXC-AUH', 'IXC-SHJ'];
+const ALLOWED_B2B_SECTOR_KEYS = ['ATQ-DXB', 'ATQ-SHJ', 'ATQ-AUH', 'IXC-AUH', 'IXC-SHJ', 'DEL-KWI'];
 
 const DEFAULT_SECTOR_OPTIONS = [
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'DXB', destCity: 'Dubai', label: '(ATQ) Amritsar ➔ (DXB) Dubai' },
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'SHJ', destCity: 'Sharjah', label: '(ATQ) Amritsar ➔ (SHJ) Sharjah' },
   { origin: 'ATQ', originCity: 'Amritsar', dest: 'AUH', destCity: 'Abu Dhabi', label: '(ATQ) Amritsar ➔ (AUH) Abu Dhabi' },
   { origin: 'IXC', originCity: 'Chandigarh', dest: 'AUH', destCity: 'Abu Dhabi', label: '(IXC) Chandigarh ➔ (AUH) Abu Dhabi' },
-  { origin: 'IXC', originCity: 'Chandigarh', dest: 'SHJ', destCity: 'Sharjah', label: '(IXC) Chandigarh ➔ (SHJ) Sharjah' }
+  { origin: 'IXC', originCity: 'Chandigarh', dest: 'SHJ', destCity: 'Sharjah', label: '(IXC) Chandigarh ➔ (SHJ) Sharjah' },
+  { origin: 'DEL', originCity: 'New Delhi', dest: 'KWI', destCity: 'Kuwait City', label: '(DEL) New Delhi ➔ (KWI) Kuwait City' }
 ];
 
 const DEFAULT_ORIGINS = [
   { code: 'ATQ', city: 'Amritsar', label: '(ATQ) Amritsar' },
-  { code: 'IXC', city: 'Chandigarh', label: '(IXC) Chandigarh' }
+  { code: 'IXC', city: 'Chandigarh', label: '(IXC) Chandigarh' },
+  { code: 'DEL', city: 'New Delhi', label: '(DEL) New Delhi' }
 ];
 
 const DEFAULT_DESTINATIONS = {
@@ -75,6 +77,12 @@ const DEFAULT_DESTINATIONS = {
   'IXC': [
     { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' },
     { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' }
+  ],
+  'DEL': [
+    { code: 'KWI', city: 'Kuwait City', label: '(KWI) Kuwait City' },
+    { code: 'DXB', city: 'Dubai', label: '(DXB) Dubai' },
+    { code: 'SHJ', city: 'Sharjah', label: '(SHJ) Sharjah' },
+    { code: 'AUH', city: 'Abu Dhabi', label: '(AUH) Abu Dhabi' }
   ]
 };
 

@@ -45,13 +45,19 @@ const CITY_TO_IATA = {
   dubai: 'DXB',
   sharjah: 'SHJ',
   delhi: 'DEL',
+  'new delhi': 'DEL',
+  del: 'DEL',
   mumbai: 'BOM',
+  bom: 'BOM',
   bangalore: 'BLR',
+  bengaluru: 'BLR',
   chennai: 'MAA',
   hyderabad: 'HYD',
   kolkata: 'CCU',
   doha: 'DOH',
   kuwait: 'KWI',
+  'kuwait city': 'KWI',
+  kwi: 'KWI',
   singapore: 'SIN',
   kuala: 'KUL',
   bangkok: 'BKK',
@@ -62,6 +68,8 @@ const CITY_TO_IATA = {
   dammam: 'DMM',
   muscat: 'MCT',
   abudhabi: 'AUH',
+  'abu dhabi': 'AUH',
+  bahrain: 'BAH',
   colombo: 'CMB',
   kathmandu: 'KTM',
   dhaka: 'DAC',
@@ -172,6 +180,9 @@ function isKnownOrDbAirline(code) {
 function parseDateString(rawDate, defaultYear = new Date().getFullYear()) {
   if (!rawDate) return null;
   let clean = String(rawDate).trim().replace(/\s+/g, ' ');
+
+  // Remove weekday prefix if present (e.g. "Wednesday 18 Nov", "Wed 18 Nov", "WED 18 Nov 2026")
+  clean = clean.replace(/^(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)[,\s]+/i, '');
 
   // Remove ordinal suffixes like 1st, 2nd, 3rd, 8th, 15th
   clean = clean.replace(/(\d{1,2})(st|nd|rd|th)/gi, '$1');
