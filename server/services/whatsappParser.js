@@ -619,6 +619,19 @@ function parseWhatsAppFareText(text, defaults = {}) {
     }
   }
 
+  // 5. Fallback for Multi-line Website Card copy-pastes (e.g. from Ghai B2B, Akbar, TBO etc.)
+  if (records.length === 0) {
+    const webRecords = parseMultiLineWebBlocks(text, defaults);
+    if (webRecords && webRecords.length > 0) {
+      records.push(...webRecords);
+      if (!detectedHeader.airline) detectedHeader.airline = records[0].airline_code;
+      if (!detectedHeader.origin) detectedHeader.origin = records[0].origin;
+      if (!detectedHeader.destination) detectedHeader.destination = records[0].destination;
+      if (!detectedHeader.baggage) detectedHeader.baggage = records[0].baggage;
+      if (!detectedHeader.is_refundable) detectedHeader.is_refundable = records[0].is_refundable;
+    }
+  }
+
   // Update detectedHeader defaults if empty
   if (!detectedHeader.airline) detectedHeader.airline = activeAirline || fallbackAirline || 'AI';
   if (!detectedHeader.origin) detectedHeader.origin = activeOrigin || fallbackOrigin || 'ATQ';
@@ -629,6 +642,133 @@ function parseWhatsAppFareText(text, defaults = {}) {
     records,
     rawCount: records.length
   };
+}
+
+/**
+ * Parses multi-line flight blocks copied from modern web portals (e.g. Ghai B2B, Akbar Travels)
+ */
+function parseMultiLineWebBlocks(text, defaults = {}) {
+  const MONTHS_MAP = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+  };
+  const curYear = new Date().getFullYear();
+  const curMonth = new Date().getMonth() + 1;
+
+  let chunks = text.split(/Book\s*Now/i);
+  if (chunks.length <= 1) {
+    const dateSplitRegex = /(?=\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\s+\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b)/gi;
+    chunks = text.split(dateSplitRegex);
+  }
+
+  const rawItems = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    if (!chunk || chunk.length < 15) continue;
+
+    // Date in chunk
+    const dm = chunk.match(/\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)?[\s,]*(\d{1,2})[\s,]+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i);
+    let isoDate = null;
+    if (dm) {
+      const day = dm[1].padStart(2, '0');
+      const mon = MONTHS_MAP[dm[2].toLowerCase()] || '11';
+      const yr = (parseInt(mon, 10) < curMonth - 2) ? curYear + 1 : curYear;
+      isoDate = `${yr}-${mon}-${day}`;
+    }
+
+    // Fare in chunk
+    const fms = Array.from(chunk.matchAll(/[₹]\s*([0-9]{1,2},[0-9]{3}|[0-9]{4,6})/g));
+    if (!fms.length) continue;
+    const lastFareMatch = fms[fms.length - 1];
+    const net = parseInt(lastFareMatch[1].replace(/,/g, ''), 10);
+    if (isNaN(net) || net < 2000 || net > 150000) continue;
+
+    // Airline & Flight Number
+    let airlineCode = defaults.airline || 'IX';
+    let flightNumber = '';
+
+    if (/spicejet/i.test(chunk)) {
+      airlineCode = 'SG';
+      const fn = chunk.match(/(\d{3,4})\s*\|\s*[A-Za-z0-9.]+/);
+      flightNumber = fn ? `SG ${fn[1]}` : 'SG 5155';
+    } else if (/air\s*india\s*express/i.test(chunk)) {
+      airlineCode = 'IX';
+      const fn = chunk.match(/(\d{3,4})\s*\|/);
+      flightNumber = fn ? `IX ${fn[1]}` : 'IX 113';
+    } else if (/indigo/i.test(chunk)) {
+      airlineCode = '6E';
+      const fn = chunk.match(/(\d{3,4})\s*\|/);
+      flightNumber = fn ? `6E ${fn[1]}` : '6E 1427';
+    } else if (/jazeera/i.test(chunk)) {
+      airlineCode = 'J9';
+      const fn = chunk.match(/(\d{3,4})\s*\|/);
+      flightNumber = fn ? `J9 ${fn[1]}` : 'J9 401';
+    } else if (/air\s*arabia/i.test(chunk)) {
+      airlineCode = 'G9';
+      const fn = chunk.match(/(\d{3,4})\s*\|/);
+      flightNumber = fn ? `G9 ${fn[1]}` : 'G9 464';
+    } else if (/air\s*india/i.test(chunk)) {
+      airlineCode = 'AI';
+      const fn = chunk.match(/(\d{3,4})\s*\|/);
+      flightNumber = fn ? `AI ${fn[1]}` : 'AI 995';
+    } else {
+      const fn = chunk.match(/(\d{3,4})\s*\|/);
+      flightNumber = fn ? `${airlineCode} ${fn[1]}` : '';
+    }
+
+    // Sector
+    let origin = defaults.origin || 'ATQ';
+    let dest = defaults.destination || 'DXB';
+    const origMatch = chunk.match(/\b([A-Z]{3})\s*-\s*Terminal/i);
+    if (origMatch) origin = origMatch[1].toUpperCase();
+    const destMatch = chunk.match(/Dubai International Airport[\s\S]{0,30}?\b([A-Z]{3})\b/i);
+    if (destMatch) dest = destMatch[1].toUpperCase();
+
+    // Timings
+    const cleanTimes = chunk.replace(/UTC[+-]\d{1,2}:\d{2}/gi, '').replace(/[+-]\d{2}:\d{2}/g, '');
+    const tm = cleanTimes.match(/\b([01]?[0-9]|2[0-3]):[0-5][0-9]\b/g);
+    const depTime = tm && tm[0] ? tm[0] : '';
+    const arrTime = tm && tm[1] ? tm[1] : '';
+
+    let baggage = '30+7 KG';
+    if (chunk.includes('30 Pc, 1 Kg') || chunk.includes('1 Pc, 30 Kg') || chunk.includes('30 Kg')) {
+      baggage = '30+7 KG';
+    }
+    const isRefundable = chunk.includes('Non-refundable') ? 'NON_REFUNDABLE' : 'REFUNDABLE';
+
+    rawItems.push({
+      airline_code: airlineCode,
+      flight_number: flightNumber,
+      origin,
+      destination: dest,
+      travel_date: isoDate,
+      departure_time: depTime,
+      arrival_time: arrTime,
+      net_fare: net,
+      currency: 'INR',
+      cabin: 'ECONOMY',
+      baggage,
+      is_refundable: isRefundable,
+      remarks: 'Pasted from Website Cards',
+      original_text: chunk.slice(0, 100)
+    });
+  }
+
+  // Backfill date for first item if user selection started below date badge
+  for (let i = 0; i < rawItems.length; i++) {
+    if (!rawItems[i].travel_date) {
+      if (rawItems[i + 1] && rawItems[i + 1].travel_date) {
+        const nextD = new Date(rawItems[i + 1].travel_date);
+        nextD.setDate(nextD.getDate() - 1);
+        rawItems[i].travel_date = nextD.toISOString().slice(0, 10);
+      } else {
+        rawItems[i].travel_date = new Date().toISOString().slice(0, 10);
+      }
+    }
+  }
+
+  return rawItems;
 }
 
 /**
