@@ -13,7 +13,7 @@ function withAdminAuthHeaders(url, options = {}) {
   if (
     typeof localStorage !== 'undefined' &&
     url.startsWith('/api/') &&
-    !isPublicApiUrl(url)
+    true /* send token whenever present */
   ) {
     const token = localStorage.getItem('travelx_admin_token');
     if (token) headers.Authorization = `Bearer ${token}`;
