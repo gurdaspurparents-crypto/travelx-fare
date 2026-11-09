@@ -530,6 +530,32 @@ CRITICAL INSTRUCTIONS:
      - If the portal shows detailed flight cards below the calendar for the selected date (e.g. "Wednesday 18 November", "Jazeera Airways", fare: 17600):
        - Extract that date, airline, flight number, and fare!
 
+   * GHAI TRAVELS B2B "SPECIAL FARES" CARD SCREENSHOTS (e.g. b2b.ghaitravels.in/app/special-fares/ATQ-DXB):
+     - ROUTE / SECTOR:
+       * Look at the top search bar: "FROM Amritsar (ATQ) ➔ TO Dubai (DXB)" or URL "/special-fares/ATQ-DXB" -> Origin is "ATQ", Destination is "DXB".
+     - INDIVIDUAL FLIGHT CARDS:
+       * Each horizontal white card on the page is an individual flight option.
+       * DATE: Look at the green rounded pill at the top of the card (e.g. "TUE 10 NOV", "WED 11 NOV", "THU 12 NOV", "SAT 14 NOV", "SUN 15 NOV"):
+         - "TUE 10 NOV" -> travel_date: "2026-11-10"
+         - "WED 11 NOV" -> travel_date: "2026-11-11"
+         - "THU 12 NOV" -> travel_date: "2026-11-12"
+         - "SAT 14 NOV" -> travel_date: "2026-11-14"
+         - "SUN 15 NOV" -> travel_date: "2026-11-15"
+       * AIRLINE & FLIGHT NUMBER:
+         - Look at the airline logo and text on the left of each card:
+           * "Spicejet" with "5155 | A320" -> airline_code: "SG", flight_number: "SG 5155".
+           * "Air India Express" with "113 | ." -> airline_code: "IX", flight_number: "IX 113".
+           * "Air India Express" with "107 | ." -> airline_code: "IX", flight_number: "IX 107".
+       * TIMINGS:
+         - Departure time (e.g. "19:35", "05:25", "05:50") -> departure_time.
+         - Arrival time (e.g. "22:20", "08:35", "08:55") -> arrival_time.
+       * FARE:
+         - The big bold price on the right (e.g. "₹16,000", "₹19,800", "₹21,200", "₹21,999") -> net_fare: 16000, 19800, 21200, 21999.
+       * BAGGAGE & REFUNDABLE:
+         - "1 Pc, 7 Kg" cabin + "30 Pc, 1 Kg" or "30 Kg" check-in -> baggage: "30+7 KG".
+         - "NON-REFUNDABLE" tag -> is_refundable: "NON_REFUNDABLE".
+       * Extract EVERY single card visible on the screenshot!
+
 2. MULTI-SECTOR & MULTI-AIRLINE DETECTION (DO NOT STOP AFTER ONE SECTOR):
    - A single flyer often contains MULTIPLE SECTORS (e.g. BOTH "ATQ - DXB" AND "ATQ - SHJ", "IXC - DXB", etc.) or MULTIPLE AIRLINES (e.g. BOTH "Air India Express (IX)" AND "IndiGo (6E)", "SpiceJet (SG)").
    - You MUST extract flight records for ALL sectors and ALL airlines found on the image! Do NOT restrict yourself to only one sector or one airline.
