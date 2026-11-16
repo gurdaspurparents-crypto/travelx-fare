@@ -68,7 +68,7 @@ function checkIsStaffRoute() {
 export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(checkAdminRoute);
   const [isStaffRoute, setIsStaffRoute] = useState(checkIsStaffRoute);
-  const [staffTab, setStaffTab] = useState('requests'); // 'requests' | 'portal'
+  const [staffTab, setStaffTab] = useState('requests'); // 'requests' | 'portal' | 'publish'
   const [userRole, setUserRole] = useState(() => {
     return (typeof localStorage !== 'undefined' && localStorage.getItem('travelx_user_role')) || 'admin';
   });
@@ -169,6 +169,7 @@ export default function App() {
           if (window.history.pushState) {
             window.history.pushState({}, '', '/staff');
           }
+          await loadMasters();
         }
       } else {
         setPinError(true);
@@ -192,22 +193,20 @@ export default function App() {
 
   const handleRatesChanged = () => {
     setFaresRefreshKey(k => k + 1);
-    if (!isCurrentStaff) {
-      loadMasters();
-    }
+    loadMasters();
   };
 
   const loadMasters = async () => {
     try {
       const [resA, resV, resR] = await Promise.all([
         api.getAirlines(),
-        api.getVendors(),
+        isCurrentStaff ? Promise.resolve({ success: true, vendors: [] }) : api.getVendors(),
         api.getRoutes()
       ]);
       setMasterData({
-        airlines: resA.success ? resA.airlines : [],
-        vendors: resV.success ? resV.vendors : [],
-        routes: resR.success ? resR.routes : []
+        airlines: resA?.success ? resA.airlines : [],
+        vendors: resV?.success ? resV.vendors : [],
+        routes: resR?.success ? resR.routes : []
       });
     } catch (err) {
       console.error('Error fetching masters:', err);
@@ -230,9 +229,7 @@ export default function App() {
         const role = res.role || userRole || 'admin';
         setUserRole(role);
         localStorage.setItem('travelx_user_role', role);
-        if (role !== 'staff' && !isStaffRoute) {
-          loadMasters();
-        }
+        loadMasters();
       } else {
         localStorage.removeItem('travelx_admin_token');
         localStorage.removeItem('travelx_user_role');
@@ -365,7 +362,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Center: The ONLY 2 Tabs for Staff */}
+            {/* Center: Tabs for Staff */}
             <div className="flex items-center bg-slate-950/90 p-1 rounded-xl border border-slate-800 shadow-inner self-start sm:self-center">
               <button
                 type="button"
@@ -392,6 +389,19 @@ export default function App() {
                 <span>🌐</span>
                 <span>2. B2B Agent Portal</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setStaffTab('publish')}
+                className={`px-4 py-2 rounded-lg text-xs font-black transition flex items-center space-x-2 cursor-pointer ${
+                  staffTab === 'publish'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <span>✈️</span>
+                <span>3. Special Fares & Broadcast</span>
+              </button>
             </div>
 
             {/* Right Controls: Logout */}
@@ -407,7 +417,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Main Staff Body - strictly Tab 1 (Booking Requests) or Tab 2 (B2B Agent Portal) */}
+        {/* Main Staff Body - Tab 1 (Booking Requests), Tab 2 (B2B Agent Portal), Tab 3 (Special Fares & Broadcast) */}
         <main className="flex-1 w-full mx-auto max-w-full">
           <div style={{ display: staffTab === 'requests' ? 'block' : 'none' }}>
             <BookingRequestsDesk 
@@ -418,6 +428,16 @@ export default function App() {
 
           <div style={{ display: staffTab === 'portal' ? 'block' : 'none' }}>
             <AgentPortal isStaffEmbedded={true} />
+          </div>
+
+          <div style={{ display: staffTab === 'publish' ? 'block' : 'none' }}>
+            <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4">
+              <PublishDesk 
+                masterData={masterData} 
+                onFaresChanged={handleRatesChanged} 
+                isStaffMode={true} 
+              />
+            </div>
           </div>
         </main>
       </div>

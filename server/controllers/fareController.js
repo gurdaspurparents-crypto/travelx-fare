@@ -1073,6 +1073,21 @@ exports.getAllFares = (req, res) => {
       }
     }
 
+    if (req.auth?.role === 'staff') {
+      fares = fares.map(f => ({
+        ...f,
+        vendor_id: null,
+        vendor_name: '',
+        vendor_phone: '',
+        last_old_fare: null,
+        last_new_fare: null,
+        last_fare_diff: null,
+        net_fare: f.publish_fare || f.calculated_publish_fare || f.net_fare,
+        margin_amount: 0,
+        calculated_margin: 0
+      }));
+    }
+
     // Lightweight live stats for KPI cards
     const summaryStats = db.prepare(`
       SELECT 

@@ -51,6 +51,19 @@ exports.getBestFares = (req, res) => {
       }
     }
 
+    if (req.auth?.role === 'staff') {
+      const sanitized = bestFares.map(f => ({
+        ...f,
+        vendor_id: null,
+        vendor_name: '',
+        all_vendors: [],
+        net_fare: f.publish_fare || f.calculated_publish_fare || f.net_fare,
+        margin_amount: 0,
+        calculated_margin: 0
+      }));
+      return res.json({ success: true, count: sanitized.length, bestFares: sanitized });
+    }
+
     return res.json({ success: true, count: bestFares.length, bestFares });
   } catch (err) {
     console.error('Error fetching best fares:', err);

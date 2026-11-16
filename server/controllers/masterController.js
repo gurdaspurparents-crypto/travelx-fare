@@ -48,6 +48,9 @@ exports.updateAirline = (req, res) => {
 
 exports.getAllVendors = (req, res) => {
   try {
+    if (req.auth?.role === 'staff') {
+      return res.json({ success: true, vendors: [] });
+    }
     const vendors = db.prepare(`
       SELECT 
         v.*,

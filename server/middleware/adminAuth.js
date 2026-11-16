@@ -83,19 +83,22 @@ function requireAdmin(req, res, next) {
 
   req.auth = auth;
 
-  // If role is staff, restrict access to Booking Desk & Agents only
+  // If role is staff, restrict access to Booking Desk, Agents, Special Fares & Master Data
   if (auth.role === 'staff') {
     const path = req.path;
     const isStaffAllowed =
       path.startsWith('/api/bookings') ||
       path.startsWith('/api/agents') ||
       path.startsWith('/api/auth/admin/session') ||
+      path.startsWith('/api/fares') ||
+      path.startsWith('/api/compare') ||
+      path.startsWith('/api/masters') ||
       path === '/api/health';
 
     if (!isStaffAllowed) {
       return res.status(403).json({
         success: false,
-        error: 'Staff access restricted to Booking Inquiries Desk only'
+        error: 'Staff access restricted'
       });
     }
   }

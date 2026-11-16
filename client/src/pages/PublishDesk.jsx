@@ -11,7 +11,7 @@ import { formatRouteName, getCityName, getCanonicalAirportCode, compareRoutesUpD
 import { groupFaresByDateRanges, formatWhatsAppBroadcast } from '../utils/dateGroupingHelper';
 import { exportPublishDeskToExcel } from '../utils/excelExportHelper';
 
-export default function PublishDesk({ onFaresChanged, masterData = {} }) {
+export default function PublishDesk({ onFaresChanged, masterData = {}, isStaffMode = false }) {
   const [fares, setFares] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -305,7 +305,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
       setStatus({ type: 'error', text: 'No fares on sheet to export.' });
       return;
     }
-    exportPublishDeskToExcel(displayedFares, consolidatedList);
+    exportPublishDeskToExcel(displayedFares, consolidatedList, { hideVendor: isStaffMode });
     setStatus({ 
       type: 'success', 
       text: `📥 Excel downloaded! Includes ${displayedFares.length} fares for selected sector(s).` 
@@ -827,14 +827,16 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                     <th className="px-3.5 py-2.5 text-left border-r border-blue-800/60 font-bold">
                       {tableViewMode === 'CONSOLIDATED' ? 'Dates Available' : 'Travel Date'}
                     </th>
-                    <th className="px-3.5 py-2.5 text-left border-r border-blue-800/60 font-bold w-32">Vendor</th>
+                    {!isStaffMode && (
+                      <th className="px-3.5 py-2.5 text-left border-r border-blue-800/60 font-bold w-32">Vendor</th>
+                    )}
                     <th className="px-3 py-2.5 text-center w-12 font-bold">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-300/60">
                   {displayedFares.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-16 text-center text-slate-400 bg-white">
+                      <td colSpan={isStaffMode ? 6 : 7} className="px-4 py-16 text-center text-slate-400 bg-white">
                         <p className="font-semibold text-slate-600 mb-1">
                           {!isAllSectorsSelected
                             ? 'No fares match the selected sector filter.'
@@ -897,7 +899,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
 
                           <td className="px-4 py-2.5 text-right font-black text-slate-950 font-mono text-xs whitespace-nowrap border-r border-slate-300/60">
                             <div>₹{publish.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                            {margin > 0 && (
+                            {!isStaffMode && margin > 0 && (
                               <div className="text-[10px] font-semibold text-emerald-800 tracking-tight">
                                 (Net ₹{net.toLocaleString('en-IN')} + ₹{margin})
                               </div>
@@ -917,11 +919,13 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                           </td>
 
                           {/* Vendor Column */}
-                          <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60" title={streakItem.vendor_name || 'Direct'}>
-                            <span className="font-extrabold text-slate-900 text-xs px-2 py-0.5 rounded bg-white/70 border border-slate-300/70 shadow-2xs max-w-[220px] inline-block truncate align-middle">
-                              🏢 {streakItem.vendor_name || 'Direct'}
-                            </span>
-                          </td>
+                          {!isStaffMode && (
+                            <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60" title={streakItem.vendor_name || 'Direct'}>
+                              <span className="font-extrabold text-slate-900 text-xs px-2 py-0.5 rounded bg-white/70 border border-slate-300/70 shadow-2xs max-w-[220px] inline-block truncate align-middle">
+                                🏢 {streakItem.vendor_name || 'Direct'}
+                              </span>
+                            </td>
+                          )}
 
                           <td className="px-3 py-2.5 text-center">
                             <button
@@ -961,7 +965,7 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
 
                           <td className="px-4 py-2.5 text-right font-black text-slate-950 font-mono text-xs whitespace-nowrap border-r border-slate-300/60">
                             <div>₹{publish.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                            {margin > 0 && (
+                            {!isStaffMode && margin > 0 && (
                               <div className="text-[10px] font-semibold text-emerald-800 tracking-tight">
                                 (Net ₹{net.toLocaleString('en-IN')} + ₹{margin})
                               </div>
@@ -973,11 +977,13 @@ export default function PublishDesk({ onFaresChanged, masterData = {} }) {
                           </td>
 
                           {/* Vendor Column */}
-                          <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60">
-                            <span className="font-extrabold text-slate-900 text-xs px-2 py-0.5 rounded bg-white/70 border border-slate-300/70 shadow-2xs">
-                              🏢 {f.vendor_name || 'Direct'}
-                            </span>
-                          </td>
+                          {!isStaffMode && (
+                            <td className="px-3.5 py-2.5 whitespace-nowrap border-r border-slate-300/60">
+                              <span className="font-extrabold text-slate-900 text-xs px-2 py-0.5 rounded bg-white/70 border border-slate-300/70 shadow-2xs">
+                                🏢 {f.vendor_name || 'Direct'}
+                              </span>
+                            </td>
+                          )}
 
                           <td className="px-3 py-2.5 text-center">
                             <button

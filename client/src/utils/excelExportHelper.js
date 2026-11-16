@@ -161,7 +161,8 @@ function applyBottomFooter(ws, startRow) {
  * - Clean corporate typography & accounting alignment (Fares formatted as #,##0.00)
  * - Elegant, polished contact & policy footer card
  */
-export async function exportPublishDeskToExcel(faresList = [], consolidatedList = []) {
+export async function exportPublishDeskToExcel(faresList = [], consolidatedList = [], options = {}) {
+  const hideVendor = Boolean(options?.hideVendor);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Travelx Special Fare Manager';
   workbook.created = new Date();
@@ -173,7 +174,13 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
     views: [{ showGridLines: true }]
   });
 
-  wsConsolidated.columns = [
+  wsConsolidated.columns = hideVendor ? [
+    { key: 'sno', width: 11 },
+    { key: 'airlines', width: 28 },
+    { key: 'origin_dest', width: 34 },
+    { key: 'fare', width: 22 },
+    { key: 'dates', width: 48 }
+  ] : [
     { key: 'sno', width: 11 },
     { key: 'airlines', width: 28 },
     { key: 'origin_dest', width: 34 },
@@ -186,15 +193,17 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
   // 1. Top Unified Header Banner with TravelX Logo (Row 1)
   applyTopBanner(workbook, wsConsolidated);
 
-  // Side Column Header: Vendor Name (Merged G1:G2, matching user screenshot)
-  wsConsolidated.mergeCells('G1:G2');
-  const vendorHeader1 = wsConsolidated.getCell('G1');
-  vendorHeader1.value = 'Vendor Name';
-  vendorHeader1.fill = tableHeaderBlue;
-  vendorHeader1.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
-  vendorHeader1.alignment = { vertical: 'middle', horizontal: 'center' };
-  vendorHeader1.border = thinGridBorder;
-  wsConsolidated.getCell('G2').border = thinGridBorder;
+  if (!hideVendor) {
+    // Side Column Header: Vendor Name (Merged G1:G2, matching user screenshot)
+    wsConsolidated.mergeCells('G1:G2');
+    const vendorHeader1 = wsConsolidated.getCell('G1');
+    vendorHeader1.value = 'Vendor Name';
+    vendorHeader1.fill = tableHeaderBlue;
+    vendorHeader1.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
+    vendorHeader1.alignment = { vertical: 'middle', horizontal: 'center' };
+    vendorHeader1.border = thinGridBorder;
+    wsConsolidated.getCell('G2').border = thinGridBorder;
+  }
 
   // 2. Table Column Headers (Row 2, matching user screenshot: Calibri 20pt Bold White)
   const headerRow1 = wsConsolidated.getRow(2);
@@ -278,13 +287,15 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
       cell.border = thinGridBorder;
     }
 
-    // Col G: Vendor Name (Side column for internal agency identification)
-    const c7 = row.getCell(7);
-    c7.value = item.vendor_name || '';
-    c7.font = dataFont;
-    c7.fill = currentFill;
-    c7.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-    c7.border = thinGridBorder;
+    if (!hideVendor) {
+      // Col G: Vendor Name (Side column for internal agency identification)
+      const c7 = row.getCell(7);
+      c7.value = item.vendor_name || '';
+      c7.font = dataFont;
+      c7.fill = currentFill;
+      c7.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      c7.border = thinGridBorder;
+    }
 
     currentRow++;
   });
@@ -300,7 +311,13 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
     views: [{ showGridLines: true }]
   });
 
-  wsDetailed.columns = [
+  wsDetailed.columns = hideVendor ? [
+    { key: 'sno', width: 11 },
+    { key: 'airlines', width: 28 },
+    { key: 'origin_dest', width: 34 },
+    { key: 'fare', width: 22 },
+    { key: 'travel_date', width: 24 }
+  ] : [
     { key: 'sno', width: 11 },
     { key: 'airlines', width: 28 },
     { key: 'origin_dest', width: 34 },
@@ -313,15 +330,17 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
   // 1. Top Unified Header Banner with TravelX Logo (Row 1)
   applyTopBanner(workbook, wsDetailed);
 
-  // Side Column Header: Vendor Name (Merged G1:G2)
-  wsDetailed.mergeCells('G1:G2');
-  const vendorHeader2 = wsDetailed.getCell('G1');
-  vendorHeader2.value = 'Vendor Name';
-  vendorHeader2.fill = tableHeaderBlue;
-  vendorHeader2.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
-  vendorHeader2.alignment = { vertical: 'middle', horizontal: 'center' };
-  vendorHeader2.border = thinGridBorder;
-  wsDetailed.getCell('G2').border = thinGridBorder;
+  if (!hideVendor) {
+    // Side Column Header: Vendor Name (Merged G1:G2)
+    wsDetailed.mergeCells('G1:G2');
+    const vendorHeader2 = wsDetailed.getCell('G1');
+    vendorHeader2.value = 'Vendor Name';
+    vendorHeader2.fill = tableHeaderBlue;
+    vendorHeader2.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
+    vendorHeader2.alignment = { vertical: 'middle', horizontal: 'center' };
+    vendorHeader2.border = thinGridBorder;
+    wsDetailed.getCell('G2').border = thinGridBorder;
+  }
 
   // 2. Table Column Headers (Row 2, matching user screenshot: Calibri 20pt Bold White)
   const headerRow2 = wsDetailed.getRow(2);
@@ -386,13 +405,15 @@ export async function exportPublishDeskToExcel(faresList = [], consolidatedList 
       cell.border = thinGridBorder;
     }
 
-    // Col G: Vendor Name
-    const detVendor = row.getCell(7);
-    detVendor.value = f.vendor_name || f['Vendor / Source'] || '';
-    detVendor.font = dataFont;
-    detVendor.fill = currentFill;
-    detVendor.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-    detVendor.border = thinGridBorder;
+    if (!hideVendor) {
+      // Col G: Vendor Name
+      const detVendor = row.getCell(7);
+      detVendor.value = f.vendor_name || f['Vendor / Source'] || '';
+      detVendor.font = dataFont;
+      detVendor.fill = currentFill;
+      detVendor.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      detVendor.border = thinGridBorder;
+    }
 
     curDetailedRow++;
   });
