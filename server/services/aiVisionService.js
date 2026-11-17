@@ -822,10 +822,12 @@ let lastWorkingGeminiModel = null;
  */
 async function getGeminiCandidateModels(apiKey) {
   const fallbackModels = [
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-001',
-    'gemini-2.5-flash',
     'gemini-2.0-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-001',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-flash-8b',
     'gemini-1.5-flash',
     'gemini-1.5-pro'
   ];
@@ -864,14 +866,15 @@ async function getGeminiCandidateModels(apiKey) {
             !m.includes('live')
           );
 
-        // Rank vision-capable models: high-speed Flash models first
+        // Rank vision-capable models: high-speed Flash Lite first (least congested, no high-demand errors)
         const score = (name) => {
+          if (name === 'gemini-2.0-flash-lite' || name.includes('2.0-flash-lite')) return 350;
+          if (name.includes('flash-lite')) return 340;
           if (name === 'gemini-2.0-flash') return 300;
           if (name === 'gemini-2.5-flash') return 295;
           if (name.includes('2.0-flash')) return 290;
           if (name.includes('2.5-flash')) return 285;
-          if (name.includes('flash') && !name.includes('lite') && !name.includes('preview')) return 280;
-          if (name.includes('flash-lite')) return 250;
+          if (name.includes('flash') && !name.includes('preview')) return 280;
           if (name.includes('flash')) return 220;
           if (name.includes('pro')) return 150;
           return 50;
@@ -938,10 +941,12 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferre
   // Dynamically discover all active models for this user's API Key from Google
   const liveModels = await getGeminiCandidateModels(apiKey);
   const defaultModels = [
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-001',
-    'gemini-2.5-flash',
     'gemini-2.0-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-001',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-flash-8b',
     'gemini-1.5-flash',
     'gemini-1.5-pro'
   ];
@@ -1015,6 +1020,10 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferre
         try { errJson = JSON.parse(errText); } catch (_) {}
         const msg = errJson?.error?.message || `Gemini API Error (${response.status}): ${errText}`;
         lastError = new Error(msg);
+        if (isGeminiCapacityError(response.status, msg)) {
+          console.warn(`⚠️ Model ${modelId} experiencing high demand, pausing 800ms before trying next candidate...`);
+          await new Promise(r => setTimeout(r, 800));
+        }
         queueSuggestedModel(models, model, msg);
         const queuePlain = /thinking/i.test(msg) && !plain && !models.includes(`${modelId}#plain`);
         if (queuePlain) {

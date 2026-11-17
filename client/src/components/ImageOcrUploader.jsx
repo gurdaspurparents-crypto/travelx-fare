@@ -295,22 +295,27 @@ export default function ImageOcrUploader({
         geminiErrorMsg = geminiErr?.message || 'Gemini scan failed';
       }
 
+      // Automatic Local OCR Fallback if Gemini failed or is experiencing high demand
+      try {
+        console.warn('Gemini error, attempting automatic fallback to Local Browser OCR:', geminiErrorMsg);
+        const ocr = await parseImageFares(file, defaults);
+        if (ocr?.records?.length) {
+          return {
+            ...ocr,
+            success: true,
+            provider: 'ocr'
+          };
+        }
+      } catch (ocrErr) {
+        console.warn('Local OCR fallback failed:', ocrErr);
+      }
+
       if (geminiErrorMsg) {
         return {
           success: false,
           records: [],
           error: geminiErrorMsg
         };
-      }
-
-      // Fallback: Local OCR only if Gemini returned 0 records without error
-      const ocr = await parseImageFares(file, defaults).catch((err) => ({
-        success: false,
-        records: [],
-        error: err?.message || 'Local OCR failed'
-      }));
-      if (ocr?.records?.length) {
-        return { ...ocr, success: true, provider: ocr.provider || 'ocr' };
       }
 
       return {
@@ -1641,6 +1646,32 @@ Instructions:
                         >
                           👉 Yahan click karein aur apna Google Gemini API Key enter karein
                         </button>
+                      )}
+                      {(extractError.toLowerCase().includes('high demand') || extractError.toLowerCase().includes('spikes in demand') || extractError.toLowerCase().includes('gemini')) && (
+                        <div className="pt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedEngine('ocr');
+                              if (imageFile) {
+                                handleProcessImage(imageFile, imageFile.name, 'ocr');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-xs"
+                          >
+                            <span>🖥️ Offline Local OCR se Scan Karein</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsRawTextOpen(true);
+                              handleLoadSampleFlyerText();
+                            }}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-xs"
+                          >
+                            <span>📋 Ghai ke Clean Rates Load Karein (Instant)</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}
