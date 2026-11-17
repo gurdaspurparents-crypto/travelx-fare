@@ -93,11 +93,6 @@ const DEFAULT_VERIFIED_SCHEDULES = [
     stops: 'Non Stop',
     remarks: 'Daily Direct - SpiceJet Evening Schedule'
   },
-    destination_terminal: 'T2',
-    aircraft: 'Boeing 737 MAX 8',
-    stops: 'Non Stop',
-    remarks: 'Daily Morning Direct - SpiceJet Schedule'
-  },
   // Dubai (DXB) ➔ Amritsar (ATQ) Return
   {
     flight_number: 'IX 192',
