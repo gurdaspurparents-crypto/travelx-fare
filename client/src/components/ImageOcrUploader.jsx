@@ -386,10 +386,19 @@ export default function ImageOcrUploader({
           type: 'success',
           text: `🎉 Scanned! Extracted ${sorted.length} total fares across ${filePreviewsRef.current.length} screenshot(s).`
         });
+        setExtractError('');
       } else {
-        const failText = 'Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.';
+        const firstError = filePreviewsRef.current.find(p => p.error)?.error;
+        const failText = firstError 
+          ? `Flyer scan failed: ${firstError}`
+          : 'Failed to extract fares from the uploaded flyer(s). Please verify the images or try a different engine.';
         setExtractError(failText);
         setStatus({ type: 'error', text: failText });
+        if (firstError && (firstError.toLowerCase().includes('api key') || firstError.includes('KEY_REQUIRED'))) {
+          setTempOpenAiKey(openAiKey);
+          setTempGeminiKey(geminiKey);
+          setIsKeyModalOpen(true);
+        }
       }
     }
   };
@@ -658,29 +667,28 @@ export default function ImageOcrUploader({
   };
 
   const handleLoadSampleFlyerText = () => {
-    const flyerText = `AIR INDIA express AMRITSAR DUBAI
-14 SEP 22000
-15 SEP & 16 SEP & 17 SEP & 18 SEP 20800
-19 SEP & 20 SEP 19500
-21 SEP & 22 SEP 18500
-23 SEP TO 02 OCT (ALL DATES) 17800
-03 OCT TO 15 OCT (ALL DATES) 17500
+    const flyerText = `AIR INDIA EXPRESS AMRITSAR DUBAI
+23 NOV 21500 (05.25 AM - 08.30 AM)
+24 NOV TO 30 NOV (ALL DATES) 21500 (05.25 AM - 08.30 AM)
+01 DEC TO 10 DEC (ALL DATES) 23000 (19.20 - 22.25)
 
-AIR INDIA express AMRITSAR SHARJAH
-15 SEP 21500
-16 SEP & 17 SEP & 18 SEP 20500
-19 SEP & 20 SEP 19500
-22 SEP TO 30 SEP (ALL DATES) 18000
-01 OCT TO 15 OCT (ALL DATES) 17500
+AIR INDIA EXPRESS AMRITSAR SHARJAH
+22 NOV & 23 NOV & 24 NOV 21000 (14.05 - 17.05) (IX 115)
+25 NOV TO 30 NOV (ALL DATES) 21000 (14.05 - 17.05) (IX 115)
+01 DEC TO 10 DEC (ALL DATES) 22000 (14.05 - 17.05) (IX 115)
 
-IndiGo AMRITSAR SHARJAH
-13 SEP & 14 SEP 22000
-15 SEP 21500
-16 SEP & 17 SEP & 18 SEP 20500
-19 SEP & 20 SEP 19500
-21 SEP & 22 SEP & 23 SEP 18500
-24 SEP TO 02 OCT (ALL DATES) 17800
-03 OCT TO 29 OCT (ALL DATES) 17000
+INDIGO AMRITSAR SHARJAH
+21 NOV & 22 NOV & 23 NOV 21000 (11.55 - 14.50)
+24 NOV & 25 NOV & 26 NOV 21000 (11.55 - 14.50)
+28 NOV & 29 NOV & 30 NOV 21000 (11.55 - 14.50)
+01 DEC & 02 DEC 21500 (11.55 - 14.50)
+03 DEC 24300 (11.55 - 14.50)
+07-08-09-10 DEC 24000 (11.55 - 14.50)
+
+AIR INDIA EXPRESS AMRITSAR ABUDHABI
+21 NOV & 22 NOV 20500 18.55 - 22.25 (IX 191)
+26 NOV & 28 NOV & 29 NOV 20000 18.55 - 22.25 (IX 191)
+03-05-06-10-12-13 DEC 21800 23.10 - 02.15 (IX 191)
 BAGGAGE: 30 + 07 KG (NON REFUNDABLE)`;
 
     setRawTextEdit(flyerText);
@@ -1045,7 +1053,7 @@ Instructions:
               className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <Key className="w-3.5 h-3.5 text-amber-300" />
-              <span>{openAiKey ? '⚙️ API Key Saved' : '🔑 Set AI API Key'}</span>
+              <span>{(selectedEngine === 'gemini' ? geminiKey : openAiKey) ? '⚙️ API Key Saved' : '🔑 Set AI API Key'}</span>
             </button>
           </div>
         </div>
@@ -1619,9 +1627,22 @@ Instructions:
                     Neeche button par click karein — Google Gemini flyer se sabhi <strong>100+ dates aur fares</strong> nikal kar is table mein daal dega!
                   </p>
                   {extractError && (
-                    <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 max-w-md mx-auto text-left">
-                      {extractError}
-                    </p>
+                    <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 max-w-md mx-auto text-left space-y-1">
+                      <div>{extractError}</div>
+                      {(extractError.toLowerCase().includes('api key') || extractError.includes('KEY_REQUIRED') || extractError.includes('quota')) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempOpenAiKey(openAiKey);
+                            setTempGeminiKey(geminiKey);
+                            setIsKeyModalOpen(true);
+                          }}
+                          className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline block cursor-pointer"
+                        >
+                          👉 Yahan click karein aur apna Google Gemini API Key enter karein
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <button

@@ -308,21 +308,65 @@ function expandTravelDates(raw, year) {
 function parseModelPayload(rawText) {
   let text = String(rawText || '').trim();
   text = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
-  const start = text.indexOf('{');
-  const arrStart = text.indexOf('[');
-  if (start === -1 || (arrStart !== -1 && arrStart < start)) {
-    const a0 = text.indexOf('[');
-    const a1 = text.lastIndexOf(']');
-    if (a0 !== -1 && a1 > a0) text = text.slice(a0, a1 + 1);
-  } else {
-    const end = text.lastIndexOf('}');
-    if (end > start) text = text.slice(start, end + 1);
+
+  let parsed = null;
+  try {
+    const start = text.indexOf('{');
+    const arrStart = text.indexOf('[');
+    let candidate = text;
+    if (start === -1 || (arrStart !== -1 && arrStart < start)) {
+      const a0 = text.indexOf('[');
+      const a1 = text.lastIndexOf(']');
+      if (a0 !== -1 && a1 > a0) candidate = text.slice(a0, a1 + 1);
+    } else {
+      const end = text.lastIndexOf('}');
+      if (end > start) candidate = text.slice(start, end + 1);
+    }
+    parsed = JSON.parse(candidate);
+  } catch (e1) {
+    // If truncated at token limit, attempt closing array / object
+    try {
+      const lastBrace = text.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        const candidate = text.slice(0, lastBrace + 1) + ']}';
+        parsed = JSON.parse(candidate);
+      }
+    } catch (_) {}
+
+    // If still failing, extract individual JSON objects with regex
+    if (!parsed) {
+      const regex = /\{[^{}]*?"travel_date"[^{}]*?\}/g;
+      const matches = text.match(regex);
+      if (matches && matches.length > 0) {
+        const recovered = [];
+        for (const m of matches) {
+          try {
+            const obj = JSON.parse(m);
+            if (obj.travel_date && (obj.net_fare || obj.fare || obj.price)) {
+              recovered.push(obj);
+            }
+          } catch (_) {}
+        }
+        if (recovered.length > 0) {
+          parsed = { records: recovered };
+        }
+      }
+    }
   }
-  const parsed = JSON.parse(text);
+
+  if (!parsed) {
+    throw new Error('Unable to parse JSON payload');
+  }
+
   if (Array.isArray(parsed)) return { records: parsed, flyerText: '' };
   const records = parsed.records || parsed.fares || parsed.rows || parsed.data || [];
   const flyerText = String(parsed.flyer_text || parsed.transcript || parsed.text || parsed.raw_text || '').trim();
-  return { records: Array.isArray(records) ? records : [], flyerText };
+  return {
+    records: Array.isArray(records) ? records : [],
+    flyerText,
+    baggage: parsed.baggage || '',
+    is_refundable: parsed.is_refundable || parsed.refundable || ''
+  };
 }
 
 function pickNumericFare(item) {
@@ -927,7 +971,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferre
       const genConfig = {
         responseMimeType: 'application/json',
         temperature: 0.1,
-        maxOutputTokens: 4096
+        maxOutputTokens: 8192
       };
 
       // Turn off / minimize thinking tokens to ensure sub-2-second OCR response
@@ -950,6 +994,7 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferre
             {
               parts: [
                 { text: VISION_SYSTEM_PROMPT },
+                { text: 'Extract all flight rates from this airline flyer image across ALL sectors and dates. Return structured JSON matching the schema.' },
                 {
                   inlineData: {
                     mimeType: mimeType,
