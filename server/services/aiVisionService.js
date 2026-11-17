@@ -789,7 +789,7 @@ function getPersistedWorkingModel() {
     const row = database.prepare("SELECT value FROM app_settings WHERE key = 'last_working_gemini_model'").get();
     if (row && row.value && typeof row.value === 'string' && row.value.trim()) {
       const val = row.value.trim();
-      if (val.startsWith('gemini-') && !val.includes('3.') && !val.includes('2.5')) {
+      if (val.startsWith('gemini-')) {
         return val;
       }
     }
@@ -822,10 +822,11 @@ let lastWorkingGeminiModel = null;
  */
 async function getGeminiCandidateModels(apiKey) {
   const fallbackModels = [
-    'gemini-1.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash-001',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
     'gemini-1.5-pro'
   ];
 
@@ -839,7 +840,7 @@ async function getGeminiCandidateModels(apiKey) {
 
   try {
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 5000);
+    const timer = setTimeout(() => abort.abort(), 6000);
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${trimmedKey}`, {
       signal: abort.signal
     });
@@ -865,15 +866,14 @@ async function getGeminiCandidateModels(apiKey) {
 
         // Rank vision-capable models: high-speed Flash models first
         const score = (name) => {
-          if (name === 'gemini-1.5-flash') return 300;
-          if (name === 'gemini-2.0-flash') return 290;
-          if (name === 'gemini-1.5-flash-latest') return 280;
-          if (name.includes('1.5-flash')) return 270;
-          if (name.includes('2.0-flash')) return 260;
-          if (name.includes('flash') && !name.includes('preview') && !name.includes('exp')) return 250;
-          if (name.includes('flash')) return 200;
-          if (name.includes('1.5-pro')) return 150;
-          if (name.includes('pro')) return 100;
+          if (name === 'gemini-2.0-flash') return 300;
+          if (name === 'gemini-2.5-flash') return 295;
+          if (name.includes('2.0-flash')) return 290;
+          if (name.includes('2.5-flash')) return 285;
+          if (name.includes('flash') && !name.includes('lite') && !name.includes('preview')) return 280;
+          if (name.includes('flash-lite')) return 250;
+          if (name.includes('flash')) return 220;
+          if (name.includes('pro')) return 150;
           return 50;
         };
 
@@ -935,23 +935,24 @@ async function parseImageWithGemini(imageBase64, apiKey, defaults = {}, preferre
   const dbModel = getPersistedWorkingModel();
   const topPriority = preferredModel || lastWorkingGeminiModel || dbModel;
 
-  // Fast prioritized models: start with topPriority or robust flash models
+  // Dynamically discover all active models for this user's API Key from Google
+  const liveModels = await getGeminiCandidateModels(apiKey);
   const defaultModels = [
-    'gemini-1.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash-001',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
     'gemini-1.5-pro'
   ];
 
-  let models;
+  let models = (liveModels && liveModels.length > 0) ? [...liveModels] : [...defaultModels];
+
   if (topPriority) {
     const cleanPriority = String(topPriority).replace(/#plain$/, '');
-    models = [cleanPriority, ...defaultModels.filter(m => m !== cleanPriority)];
-  } else if (cachedGeminiModels && cachedGeminiModels.length > 0) {
-    models = [...cachedGeminiModels];
-  } else {
-    models = [...defaultModels];
+    if (models.includes(cleanPriority)) {
+      models = [cleanPriority, ...models.filter(m => m !== cleanPriority)];
+    }
   }
 
   let lastError = null;
