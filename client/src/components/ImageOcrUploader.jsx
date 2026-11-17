@@ -266,7 +266,11 @@ export default function ImageOcrUploader({
       if (!effectiveKey) {
         throw new Error('KEY_REQUIRED_GEMINI');
       }
-      const preferredModel = localStorage.getItem('travelx_last_working_gemini_model') || null;
+      let preferredModel = localStorage.getItem('travelx_last_working_gemini_model') || null;
+      if (preferredModel && (preferredModel.includes('3.') || preferredModel.includes('2.5') || preferredModel.includes('3.8'))) {
+        localStorage.removeItem('travelx_last_working_gemini_model');
+        preferredModel = null;
+      }
       const base64Data = await compressImageForScan(file);
       let geminiResult = null;
       let geminiErrorMsg = '';
