@@ -314,7 +314,7 @@ export const api = {
       }
     }
 
-    const totalDel = (deletedCount || prepDeletedCount);
+    const totalDel = deletedCount || 0;
     return {
       success: savedTotal > 0,
       saved_count: savedTotal,
