@@ -69,18 +69,80 @@ const CITY_TO_IATA = {
   muscat: 'MCT',
   abudhabi: 'AUH',
   'abu dhabi': 'AUH',
+  auh: 'AUH',
   bahrain: 'BAH',
+  bah: 'BAH',
   colombo: 'CMB',
+  cmb: 'CMB',
   kathmandu: 'KTM',
+  ktm: 'KTM',
   dhaka: 'DAC',
+  dac: 'DAC',
   milan: 'MXP',
   millan: 'MXP',
   malpensa: 'MXP',
   mil: 'MXP',
+  mxp: 'MXP',
   rome: 'ROM',
   fco: 'ROM',
-  toronto: 'YYZ'
+  rom: 'ROM',
+  toronto: 'YYZ',
+  trto: 'YYZ',
+  yyz: 'YYZ',
+  'ras al khaimah': 'RKT',
+  rkt: 'RKT',
+  fujairah: 'FJR',
+  fjr: 'FJR',
+  vancouver: 'YVR',
+  yvr: 'YVR',
+  calgary: 'YYC',
+  yyc: 'YYC',
+  melbourne: 'MEL',
+  mel: 'MEL',
+  sydney: 'SYD',
+  syd: 'SYD',
+  london: 'LHR',
+  lhr: 'LHR',
+  birmingham: 'BHX',
+  bhx: 'BHX',
+  frankfurt: 'FRA',
+  fra: 'FRA',
+  paris: 'CDG',
+  cdg: 'CDG',
+  amsterdam: 'AMS',
+  ams: 'AMS',
+  tashkent: 'TAS',
+  tas: 'TAS',
+  almaty: 'ALA',
+  ala: 'ALA',
+  baku: 'GYD',
+  gyd: 'GYD',
+  tbilisi: 'TBS',
+  tbs: 'TBS'
 };
+
+/**
+ * Normalizes any raw airport string (city name, 3-letter IATA code, or alias)
+ * into a canonical 3-letter uppercase IATA code (e.g. 'Amritsar' -> 'ATQ', 'Dubai' -> 'DXB', 'MIL' -> 'MXP')
+ */
+function extractCleanAirportCode(input) {
+  if (!input) return '';
+  const s = String(input).trim().toLowerCase();
+  if (CITY_TO_IATA[s]) return CITY_TO_IATA[s];
+  const upper = String(input).trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(upper)) {
+    if (upper === 'MIL') return 'MXP';
+    if (upper === 'FCO') return 'ROM';
+    if (upper === 'TRTO') return 'YYZ';
+    return upper;
+  }
+  for (const [cityName, iata] of Object.entries(CITY_TO_IATA)) {
+    if (cityName.length >= 3 && s.includes(cityName)) {
+      return iata;
+    }
+  }
+  return upper.slice(0, 3);
+}
 
 // Airline names to code mapping
 const AIRLINE_NAME_MAP = [
@@ -865,5 +927,7 @@ module.exports = {
   parseWhatsAppFareText,
   parseDateString,
   normalizeAirlineCode,
-  KNOWN_AIRLINES
+  extractCleanAirportCode,
+  KNOWN_AIRLINES,
+  CITY_TO_IATA
 };

@@ -1,7 +1,7 @@
 const db = require('../config/database');
 const { calculateMargin } = require('../services/marginCalculator');
 const { evaluateVendorAdjustment } = require('../services/vendorPricingEngine');
-const { parseWhatsAppFareText, parseDateString, normalizeAirlineCode } = require('../services/whatsappParser');
+const { parseWhatsAppFareText, parseDateString, normalizeAirlineCode, extractCleanAirportCode } = require('../services/whatsappParser');
 const { parseImageWithOpenAI, parseImageWithGemini } = require('../services/aiVisionService');
 const flightScheduleService = require('../services/flightScheduleService');
 
@@ -548,11 +548,7 @@ exports.parseImageWithAI = async (req, res) => {
 };
 
 function canonicalAirport(code) {
-  const c = String(code || '').trim().toUpperCase();
-  if (c === 'MIL') return 'MXP';
-  if (c === 'FCO') return 'ROM';
-  if (c === 'TRTO') return 'YYZ';
-  return c;
+  return extractCleanAirportCode(code);
 }
 
 function matchAirline(dbAir, dbFlt, targetAir) {
@@ -587,17 +583,18 @@ function deletePreviousSectorFares(vendorId, sectors = [], options = {}) {
   `);
   const deleteStmt = db.prepare('DELETE FROM fares WHERE id = ?');
 
-  // Extract unique sectors (Origin -> Destination)
+  // Extract unique sectors (Origin -> Destination -> Airline)
   const sectorList = [];
   const seen = new Set();
   for (const s of sectors) {
-    const orig = canonicalAirport(s.origin || '');
-    const dest = canonicalAirport(s.destination || '');
+    const orig = extractCleanAirportCode(s.origin || '');
+    const dest = extractCleanAirportCode(s.destination || '');
+    const air = s.airline_code ? normalizeAirlineCode(s.airline_code, '', '').toUpperCase() : '';
     if (!orig || !dest) continue;
-    const k = `${orig}_${dest}`;
+    const k = `${orig}_${dest}_${air}`;
     if (!seen.has(k)) {
       seen.add(k);
-      sectorList.push({ origin: orig, destination: dest, airline_code: s.airline_code });
+      sectorList.push({ origin: orig, destination: dest, airline_code: air });
     }
   }
 
@@ -625,7 +622,7 @@ function deletePreviousSectorFares(vendorId, sectors = [], options = {}) {
     );
 
     for (const ef of existingFares) {
-      if (options.strictAirline && sec.airline_code && !matchAirline(ef.airline_code, ef.flight_number, sec.airline_code)) {
+      if (sec.airline_code && !matchAirline(ef.airline_code, ef.flight_number, sec.airline_code)) {
         continue;
       }
       try {
@@ -685,6 +682,7 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
     const fallbackV = db.prepare('SELECT id FROM vendors WHERE is_active = 1 ORDER BY id ASC LIMIT 1').get() ||
                       db.prepare('SELECT id FROM vendors ORDER BY id ASC LIMIT 1').get();
     if (fallbackV) effectiveVendorId = fallbackV.id;
+    else return [];
   }
 
   const deletedRecords = [];
@@ -703,8 +701,8 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
     for (const f of fares) {
       if (!f.travel_date || !f.airline_code || !f.origin || !f.destination) continue;
       const air = normalizeAirlineCode(f.airline_code, f.flight_number, 'AI').toUpperCase();
-      const orig = f.origin.trim().toUpperCase();
-      const dest = f.destination.trim().toUpperCase();
+      const orig = extractCleanAirportCode(f.origin);
+      const dest = extractCleanAirportCode(f.destination);
       const cab = (f.cabin || 'ECONOMY').trim().toUpperCase();
       const cleanD = parseDateString(f.travel_date, currentYear) || String(f.travel_date).trim();
       const key = `${air}_${orig}_${dest}_${cab}_${cleanD}`;
@@ -718,7 +716,11 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
     `).all(effectiveVendorId);
 
     for (const ef of allVendorFares) {
-      const efKey = `${(ef.airline_code || '').trim().toUpperCase()}_${(ef.origin || '').trim().toUpperCase()}_${(ef.destination || '').trim().toUpperCase()}_${(ef.cabin || 'ECONOMY').trim().toUpperCase()}_${ef.travel_date}`;
+      const efAir = normalizeAirlineCode(ef.airline_code, ef.flight_number, 'AI').toUpperCase();
+      const efOrig = extractCleanAirportCode(ef.origin);
+      const efDest = extractCleanAirportCode(ef.destination);
+      const efCab = (ef.cabin || 'ECONOMY').trim().toUpperCase();
+      const efKey = `${efAir}_${efOrig}_${efDest}_${efCab}_${ef.travel_date}`;
       if (!incomingKeySet.has(efKey)) {
         try {
           historyStmt.run(ef.id, effectiveVendorId, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
@@ -730,22 +732,26 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
       }
     }
   } else {
+    // Mode: 'sector' (Sector + Airline Precision)
+    // Group incoming fares by (Origin, Destination, Airline)
     const sectorMap = new Map();
     for (const f of fares) {
       if (!f.travel_date || !f.origin || !f.destination) continue;
-      const origin = canonicalAirport(f.origin.trim().toUpperCase());
-      const dest = canonicalAirport(f.destination.trim().toUpperCase());
+      const origin = extractCleanAirportCode(f.origin);
+      const dest = extractCleanAirportCode(f.destination);
+      const airline = normalizeAirlineCode(f.airline_code, f.flight_number, 'AI').toUpperCase();
       const cleanDate = parseDateString(f.travel_date, currentYear) || String(f.travel_date).trim();
-      const key = `${origin}_${dest}`;
+      if (!origin || !dest || !cleanDate) continue;
 
+      const key = `${origin}_${dest}_${airline}`;
       if (!sectorMap.has(key)) {
-        sectorMap.set(key, { origin, destination: dest, dates: new Set() });
+        sectorMap.set(key, { origin, destination: dest, airline_code: airline, dates: new Set() });
       }
       sectorMap.get(key).dates.add(cleanDate);
     }
 
     const existingStmt = db.prepare(`
-      SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number 
+      SELECT id, travel_date, net_fare, airline_code, origin, destination, flight_number, cabin
       FROM fares
       WHERE vendor_id = ?
         AND (
@@ -757,20 +763,36 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
         )
     `);
 
-    for (const sector of sectorMap.values()) {
+    for (const sec of sectorMap.values()) {
       const existingFares = existingStmt.all(
         effectiveVendorId,
-        sector.origin, sector.destination,
-        sector.origin, sector.destination,
-        sector.origin, sector.destination,
-        sector.destination, sector.origin,
-        sector.destination, sector.origin
+        sec.origin, sec.destination,
+        sec.origin, sec.destination,
+        sec.origin, sec.destination,
+        sec.destination, sec.origin,
+        sec.destination, sec.origin
       );
 
       for (const ef of existingFares) {
-        if (!sector.dates.has(ef.travel_date)) {
+        // Enforce strict airline matching so other airlines on same sector remain completely untouched
+        if (!matchAirline(ef.airline_code, ef.flight_number, sec.airline_code)) {
+          continue;
+        }
+
+        // If this existing active date is not in the incoming update set, IT IS SOLD OUT!
+        if (!sec.dates.has(ef.travel_date)) {
           try {
-            historyStmt.run(ef.id, effectiveVendorId, ef.airline_code, ef.origin, ef.destination, ef.travel_date, ef.flight_number || '', ef.net_fare, -ef.net_fare);
+            historyStmt.run(
+              ef.id,
+              effectiveVendorId,
+              ef.airline_code,
+              ef.origin,
+              ef.destination,
+              ef.travel_date,
+              ef.flight_number || '',
+              ef.net_fare,
+              -ef.net_fare
+            );
           } catch (hErr) {
             console.warn('Could not record delete history:', hErr.message);
           }
@@ -779,6 +801,11 @@ function runVendorInventorySync(vendor_id, fares, replace_mode = 'sector') {
         }
       }
     }
+  }
+
+  if (deletedRecords.length > 0) {
+    console.log(`[InventorySync] Auto-removed ${deletedRecords.length} sold-out/missing dates for vendor ${effectiveVendorId}`);
+    safeInvalidateFaresCache();
   }
 
   return deletedRecords;
@@ -870,7 +897,7 @@ exports.saveBulkParsedFares = (req, res) => {
   }, { bulkMode: true }));
 
   const bulkTx = db.transaction(() => {
-    if ((clear_sectors_first || (replace_missing_dates && !skip_inventory_sync)) && fares.length > 0) {
+    if (clear_sectors_first && fares.length > 0) {
       const numDel = deletePreviousSectorFares(effectiveVendorId, fares);
       if (numDel > 0) {
         deletedRecords = [{ count: numDel }];
@@ -884,6 +911,10 @@ exports.saveBulkParsedFares = (req, res) => {
       } catch (err) {
         errors.push({ row: i + 1, date: f.travel_date, error: err.message });
       }
+    }
+
+    if (replace_missing_dates && !skip_inventory_sync && fares.length > 0) {
+      deletedRecords = runVendorInventorySync(effectiveVendorId, fares, replace_mode);
     }
   });
 

@@ -1873,7 +1873,7 @@ Instructions:
                         className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
                       />
                       <span className="font-semibold text-[11px] text-amber-900">
-                        🔄 Auto-delete missing dates (Flyer Sync)
+                        🔄 Auto-remove sold-out dates (Flyer Sync)
                       </span>
                     </label>
                   </div>

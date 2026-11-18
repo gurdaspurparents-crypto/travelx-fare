@@ -198,46 +198,22 @@ export const api = {
 
     await waitForBackend(onProgress);
 
-    // Extract unique sectors (Origin -> Destination) to clear previous rates for these specific sectors before uploading
+    // Extract unique sectors (Origin -> Destination -> Airline)
     const uniqueSectors = [];
     const seenSecKeys = new Set();
     for (const f of fares) {
       if (!f.origin || !f.destination) continue;
       const o = String(f.origin).trim().toUpperCase();
       const d = String(f.destination).trim().toUpperCase();
-      const k = `${o}_${d}`;
+      const air = String(f.airline_code || '').trim().toUpperCase();
+      const k = `${o}_${d}_${air}`;
       if (!seenSecKeys.has(k)) {
         seenSecKeys.add(k);
-        uniqueSectors.push({ origin: o, destination: d });
+        uniqueSectors.push({ origin: o, destination: d, airline_code: air });
       }
     }
 
-    let prepDeletedCount = 0;
-    if (replace_missing_dates && uniqueSectors.length > 0) {
-      if (onProgress) {
-        onProgress({
-          phase: 'prepare',
-          label: `Clearing previous rates for updated sector(s)…`
-        });
-      }
-      try {
-        const prepRes = await safeFetch('/api/fares/prepare-vendor-sectors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            vendor_id,
-            sectors: uniqueSectors
-          })
-        }, 2, 20000, false);
-        if (prepRes?.success) {
-          prepDeletedCount = prepRes.deleted_count || 0;
-        }
-      } catch (prepErr) {
-        console.warn('Prepare vendor sectors error:', prepErr);
-      }
-    }
-
-    const postRows = (rows, isFirstChunk = false) =>
+    const postRows = (rows) =>
       safeFetch('/api/fares/bulk-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -248,7 +224,7 @@ export const api = {
           replace_missing_dates: false,
           replace_mode,
           skip_inventory_sync: true,
-          clear_sectors_first: isFirstChunk && replace_missing_dates,
+          clear_sectors_first: false,
           summary_only: true
         })
       }, 2, 20000, false);
@@ -347,7 +323,7 @@ export const api = {
       deleted_count: totalDel,
       deleted_dates: deletedDates,
       replace_missing_dates,
-      message: `Saved ${savedTotal} fares${totalDel > 0 ? ` (${totalDel} previous sector fares replaced)` : ''}`
+      message: `Saved ${savedTotal} fares${totalDel > 0 ? ` (${totalDel} sold-out dates removed)` : ''}`
     };
   },
 
